@@ -340,10 +340,10 @@ function vs_ws_parse_frames()
         switch (opcode)
         {
             case 1: // text
-                array_push(ws.frames, { op: 1, buf: payload });
-                break;
             case 2: // binary
-                array_push(ws.frames, { op: 2, buf: payload });
+                // Hand payload ownership to the mod dispatcher (it parses the
+                // [len][playerId] prefix / JSON control frame and deletes buf).
+                vs_online_on_ws_frame(opcode, payload);
                 break;
             case 9: // ping -> pong
                 vs_ws_send_frame(0xA, payload);

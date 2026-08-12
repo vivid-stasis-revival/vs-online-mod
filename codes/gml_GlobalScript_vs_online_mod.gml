@@ -133,11 +133,10 @@ function vs_online_init()
     }
 }
 
-// --- packet out (M3 wires the real WebSocket transport) --------------------
+// --- packet out (M3: WebSocket binary frame to the lobby relay) -------------
 
 // Called from the patched send_packet while on the custom server.
 function vs_online_send_packet(_type, _buffer)
 {
-    // M0 stub — M3 replaces this with a WebSocket binary frame to the lobby relay.
-    show_debug_message("VS Online: send_packet type=" + string(_type) + " not wired yet (M3)");
+    vs_lobby_send_packet(_type, _buffer);
 }

@@ -21,5 +21,29 @@
         "Find": "global.highscore_file = \"profile\" + string(cursor_pos + 1) + \"/highscore_table\";",
         "Value": "global.highscore_file = vs_online_highscore_file(\"profile\" + string(cursor_pos + 1) + \"/highscore_table\");",
         "Type": 0
+    },
+    {
+        "Entry": "gml_Object_obj_multiplayer_lobby_Create_0",
+        "Find": "steam_lobby_create(2, 8);",
+        "Value": "if (vs_online_is_custom()) { vs_lobby_create(true); } else { steam_lobby_create(2, 8); }",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_Object_obj_multiplayer_lobby_Create_0",
+        "Find": "var leave = steam_lobby_leave();",
+        "Value": "if (vs_online_is_custom()) { vs_lobby_leave(); } else { var leave = steam_lobby_leave(); }",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_Object_obj_multiplayer_lobby_Create_0",
+        "Find": "steam_lobby_list_request();",
+        "Value": "if (vs_online_is_custom()) { vs_lobby_join(string_upper(keyboard_string)); } else { steam_lobby_list_request(); }",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_Object_obj_multiplayer_lobby_Create_0",
+        "Find": "if (steam_lobby_get_lobby_id() > 0)",
+        "Value": "if (vs_online_is_custom() ? vs_lobby_in_lobby() : steam_lobby_get_lobby_id() > 0)",
+        "Type": 1
     }
 ]
