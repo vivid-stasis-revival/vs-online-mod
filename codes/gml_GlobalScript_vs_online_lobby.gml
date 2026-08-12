@@ -15,6 +15,52 @@ function vs_lobby_in_lobby()
     return vs_ws_is_open();
 }
 
+// --- steam_* shims (used via codepatches so the WP UI reads server state) ---
+
+function vs_lobby_lobby_id()
+{
+    if (vs_online_is_custom())
+    {
+        return (instance_exists(o_st_handle) && o_st_handle.lobbyId != undefined) ? o_st_handle.lobbyId : 0;
+    }
+    return steam_lobby_get_lobby_id();
+}
+
+function vs_lobby_is_owner()
+{
+    if (vs_online_is_custom())
+    {
+        return instance_exists(o_st_handle)
+            && o_st_handle.vs_hostId != undefined
+            && vs_online_player_id() == o_st_handle.vs_hostId;
+    }
+    return steam_lobby_is_owner();
+}
+
+function vs_lobby_owner_id()
+{
+    if (vs_online_is_custom())
+    {
+        return (instance_exists(o_st_handle) && o_st_handle.vs_hostId != undefined) ? o_st_handle.vs_hostId : "";
+    }
+    return steam_lobby_get_owner_id();
+}
+
+// The game's self-id; on the custom server it is the server playerId.
+function vs_online_custom_id()
+{
+    if (vs_online_is_custom())
+    {
+        return vs_online_player_id();
+    }
+    return steam_get_user_steam_id();
+}
+
+function vs_online_is_connected()
+{
+    return vs_online_is_custom() && vs_online_player_id() != "";
+}
+
 // --- member struct ---------------------------------------------------------
 
 // Build a game-style member from a server MemberView JSON object.
@@ -246,6 +292,7 @@ function vs_lobby_handle_control(_j)
                 o_st_handle.currentMember = o_st_handle.getMember(you);
                 o_st_handle.vs_hostId = _j.hostId;
                 vs_lobby_refresh_host_flags(_j.hostId);
+                send_packet(SendPlayerInfoPacket); // mirror the Steam "lobby_created/joined" flow
             }
             if (instance_exists(obj_multiplayer_lobby))
             {

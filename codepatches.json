@@ -22,6 +22,20 @@
         "Value": "global.highscore_file = vs_online_highscore_file(\"profile\" + string(cursor_pos + 1) + \"/highscore_table\");",
         "Type": 0
     },
+
+    {
+        "Entry": "gml_GlobalScript_receive_packet",
+        "Find": "steam_lobby_get_owner_id()",
+        "Value": "vs_lobby_owner_id()",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_GlobalScript_AddSongPacket",
+        "Find": "steam_lobby_get_owner_id()",
+        "Value": "vs_lobby_owner_id()",
+        "Type": 0
+    },
+
     {
         "Entry": "gml_Object_obj_multiplayer_lobby_Create_0",
         "Find": "steam_lobby_create(2, 8);",
@@ -37,13 +51,84 @@
     {
         "Entry": "gml_Object_obj_multiplayer_lobby_Create_0",
         "Find": "steam_lobby_list_request();",
-        "Value": "if (vs_online_is_custom()) { vs_lobby_join(string_upper(keyboard_string)); } else { steam_lobby_list_request(); }",
+        "Value": "if (vs_online_is_custom()) { if (keyboard_check(vk_shift)) { vs_lobby_matchmake(); } else { vs_lobby_join(string_upper(keyboard_string)); } } else { steam_lobby_list_request(); }",
         "Type": 1
     },
     {
         "Entry": "gml_Object_obj_multiplayer_lobby_Create_0",
-        "Find": "if (steam_lobby_get_lobby_id() > 0)",
-        "Value": "if (vs_online_is_custom() ? vs_lobby_in_lobby() : steam_lobby_get_lobby_id() > 0)",
+        "Find": "steam_lobby_get_lobby_id()",
+        "Value": "vs_lobby_lobby_id()",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_Object_obj_multiplayer_lobby_Create_0",
+        "Find": "steam_lobby_is_owner()",
+        "Value": "vs_lobby_is_owner()",
+        "Type": 0
+    },
+
+    {
+        "Entry": "gml_Object_obj_multiplayer_lobby_Step_0",
+        "Find": "steam_lobby_is_owner()",
+        "Value": "vs_lobby_is_owner()",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_Object_obj_multiplayer_lobby_Step_0",
+        "Find": "steam_lobby_get_lobby_id()",
+        "Value": "vs_lobby_lobby_id()",
+        "Type": 0
+    },
+
+    {
+        "Entry": "gml_Object_obj_multiplayer_lobby_Draw_64",
+        "Find": "steam_lobby_is_owner()",
+        "Value": "vs_lobby_is_owner()",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_Object_obj_multiplayer_lobby_Draw_64",
+        "Find": "steam_lobby_get_lobby_id()",
+        "Value": "vs_lobby_lobby_id()",
+        "Type": 0
+    },
+
+    {
+        "Entry": "gml_Object_obj_multiplayer_lobby_Draw_0",
+        "Find": "steam_lobby_get_lobby_id()",
+        "Value": "vs_lobby_lobby_id()",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_Object_obj_multiplayer_lobby_Draw_0",
+        "Find": "steam_is_user_logged_on()",
+        "Value": "vs_online_is_connected()",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_Object_obj_multiplayer_lobby_Draw_0",
+        "Find": "draw_text(2, 170, \"Steamworks:\");",
+        "Value": "if (vs_online_is_custom()) { if (!vs_lobby_in_lobby()) { draw_set_halign(fa_center); draw_text_o(160, 174, \"Hold Shift + Paste Code to join a random lobby\"); draw_set_halign(fa_left); } draw_text(2, 170, \"Server:\"); } else { draw_text(2, 170, \"Steamworks:\"); }",
+        "Type": 1
+    },
+
+    {
+        "Entry": "gml_Object_obj_multiplayer_waiting_room_Step_0",
+        "Find": "steam_lobby_is_owner()",
+        "Value": "vs_lobby_is_owner()",
+        "Type": 0
+    },
+
+    {
+        "Entry": "gml_Object_o_st_handle_Create_0",
+        "Find": "steamId = steam_get_user_steam_id();",
+        "Value": "steamId = vs_online_custom_id();",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_Object_o_st_handle_Create_0",
+        "Find": "var memberCount = steam_lobby_get_member_count();",
+        "Value": "if (vs_online_is_custom()) exit; var memberCount = steam_lobby_get_member_count();",
         "Type": 1
     }
 ]

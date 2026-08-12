@@ -129,6 +129,11 @@ function vs_online_init()
         vs_online_ensure_identity(function(_ok, _data)
         {
             show_debug_message("VS Online: identity " + (_ok ? ("ok " + vs_online_player_id()) : "failed"));
+            // Keep the game's self-id in sync (member lookups use it).
+            if (instance_exists(o_st_handle))
+            {
+                o_st_handle.steamId = vs_online_player_id();
+            }
         });
     }
 }
