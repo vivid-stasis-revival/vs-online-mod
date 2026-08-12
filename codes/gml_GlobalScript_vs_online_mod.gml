@@ -124,6 +124,13 @@ function vs_online_init()
 {
     vs_online_get_config();
     vs_ws_start_listener();
+    if (vs_online_is_custom())
+    {
+        vs_online_ensure_identity(function(_ok, _data)
+        {
+            show_debug_message("VS Online: identity " + (_ok ? ("ok " + vs_online_player_id()) : "failed"));
+        });
+    }
 }
 
 // --- packet out (M3 wires the real WebSocket transport) --------------------

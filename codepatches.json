@@ -15,5 +15,11 @@
         "Find": "steam_lobby_send_chat_message_buffer(buffer, buffer_get_size(buffer));",
         "ExternalFile": "send_packet.gml",
         "Type": 1
+    },
+    {
+        "Entry": "gml_Object_o_profile_select_Step_0",
+        "Find": "global.highscore_file = \"profile\" + string(cursor_pos + 1) + \"/highscore_table\";",
+        "Value": "global.highscore_file = vs_online_highscore_file(\"profile\" + string(cursor_pos + 1) + \"/highscore_table\");",
+        "Type": 0
     }
 ]
