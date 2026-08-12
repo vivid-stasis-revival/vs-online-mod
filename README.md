@@ -45,7 +45,7 @@ vs-online-mod/
 | 里程碑 | 内容 | 状态 |
 |---|---|---|
 | M0 | 骨架 + bool 开关 + vsonline 配置读取 | ✅ |
-| M1 | 纯 GML WebSocket 库（raw TCP 握手/帧/掩码/ping-pong） | ⏳ |
+| M1 | 纯 GML WebSocket 库（raw TCP 握手/帧/掩码/ping-pong） | ✅ |
 | M2 | 身份 + 凭据存储 + 成绩后缀隔离 + 排行榜/成就/好友 | ⏳ |
 | M3 | 大厅（REST + WS 中继），改造 send_packet/receive_packet + o_st_handle | ⏳ |
 | M4 | 谱面商店（all songs 本地包 + 服务器分页包 + 搜索 + 下载/SHA 更新）+ 头像 hash 回退 | ⏳ |

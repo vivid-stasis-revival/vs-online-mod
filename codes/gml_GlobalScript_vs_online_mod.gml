@@ -123,6 +123,7 @@ function vs_online_add_options()
 function vs_online_init()
 {
     vs_online_get_config();
+    vs_ws_start_listener();
 }
 
 // --- packet out (M3 wires the real WebSocket transport) --------------------
