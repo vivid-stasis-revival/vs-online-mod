@@ -37,7 +37,12 @@ for (var i = 0; i < array_length(songs); i++)
     var line = (isSel ? "> " : "  ") + s.name + "  -  " + s.artist;
     if (variable_struct_exists(s, "chartCount"))
     {
-        line += "  [" + string(s.chartCount) + "]";
+        line += "  [" + string(s.chartCount) + " diff";
+        if (variable_struct_exists(s, "scoreCount"))
+        {
+            line += ", " + string(s.scoreCount) + " plays";
+        }
+        line += "]";
     }
     draw_text(x0 + 2, ty + (i * rowh), line);
     if (isSel)
@@ -45,6 +50,11 @@ for (var i = 0; i < array_length(songs); i++)
         var st = downloading ? "downloading..." : (selected_dl ? (selected_update ? "UPDATE AVAILABLE" : "downloaded") : "not downloaded");
         draw_set_color(selected_update ? c_aqua : c_lime);
         draw_text(x0 + 2, ty + (i * rowh) + 15, st);
+        if (variable_struct_exists(s, "topScore") && s.topScore > 0)
+        {
+            draw_set_color(c_gray);
+            draw_text(x0 + 2, ty + (i * rowh) + 27, "top score: " + string(s.topScore));
+        }
     }
 }
 
