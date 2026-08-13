@@ -186,13 +186,21 @@ function vs_online_download_scores(_chartId, _difficulty, _sha1, _start, _end, _
     });
 }
 
-// TODO(friends-leaderboard): vs-server-go main has no /charts/scores/friends
-// endpoint yet. A separate agent handles this; leave the stub so it is never
-// called against a broken endpoint.
-function vs_online_download_friends_scores(_chartId, _difficulty, _on_done)
+// GET /charts/scores/friends?chartId=&difficulty=&sha1=  (auth)
+// -> { entries:[{rank,score,playerId,uploadedAt,name?,avatar?}], sha1 }
+// Friends + self only.
+function vs_online_download_friends_scores(_chartId, _difficulty, _sha1, _on_done)
 {
-    show_debug_message("VS Online: friends leaderboard not implemented yet");
-    _on_done(undefined);
+    var url = "/api/v1/charts/scores/friends?chartId=" + _chartId
+            + "&difficulty=" + _difficulty;
+    if (_sha1 != undefined && _sha1 != "")
+    {
+        url += "&sha1=" + _sha1;
+    }
+    vs_online_get_json(url, true, function(ok, data, status)
+    {
+        _on_done(ok ? data : undefined);
+    });
 }
 
 // --- score suffix isolation ------------------------------------------------
