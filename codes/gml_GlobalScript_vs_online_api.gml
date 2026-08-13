@@ -152,35 +152,47 @@ function vs_online_clear_achievement(_name)
     vs_http_request(url, "DELETE", "", "", function(_ok, _text, _status) { });
 }
 
-// --- leaderboards ----------------------------------------------------------
+// --- per-chart leaderboards (/charts/scores) -------------------------------
+// Name-based /leaderboards/* are deprecated on vs-server-go main (501). Scores
+// are per-chart + per-difficulty, versioned by the chart's sha1:
+//   POST /charts/scores {chartId, difficulty, sha1, score, data}
+//   GET  /charts/scores?chartId=&difficulty=&sha1=&start=&end=
+//        -> { entries:[{rank,score,playerId,uploadedAt}], sha1 }
 
-function vs_online_upload_score(_name, _score, _forceUpdate)
+function vs_online_upload_score(_chartId, _difficulty, _sha1, _score, _data)
 {
-    vs_online_post_json("/api/v1/leaderboards/" + _name + "/scores",
-        { score: _score, forceUpdate: _forceUpdate },
-        function(_ok, _data, _status) { });
+    var body = { chartId: _chartId, difficulty: _difficulty, sha1: _sha1, score: _score };
+    if (_data != undefined && _data != "")
+    {
+        body.data = _data;
+    }
+    vs_online_post_json("/api/v1/charts/scores", body, function(_ok, _data, _status) { });
 }
 
-// _on_done(data) where data is the JSON the game's parse_leaderboard_into
-// decodes ({ entries:[{rank,score,data,userID,name}...] } or { default:true }),
-// or undefined on failure.
-function vs_online_download_scores(_name, _start, _end, _on_done)
+// _on_done(data) = { entries:[...], sha1 } or undefined on failure.
+function vs_online_download_scores(_chartId, _difficulty, _sha1, _start, _end, _on_done)
 {
-    vs_online_get_json("/api/v1/leaderboards/" + _name + "/scores?start=" + string(_start) + "&end=" + string(_end),
-        false,
-        function(ok, data, status)
-        {
-            _on_done(ok ? data : undefined);
-        });
+    var url = "/api/v1/charts/scores?chartId=" + _chartId
+            + "&difficulty=" + _difficulty
+            + "&start=" + string(_start)
+            + "&end=" + string(_end);
+    if (_sha1 != undefined && _sha1 != "")
+    {
+        url += "&sha1=" + _sha1;
+    }
+    vs_online_get_json(url, false, function(ok, data, status)
+    {
+        _on_done(ok ? data : undefined);
+    });
 }
 
-function vs_online_download_friends_scores(_name, _on_done)
+// TODO(friends-leaderboard): vs-server-go main has no /charts/scores/friends
+// endpoint yet. A separate agent handles this; leave the stub so it is never
+// called against a broken endpoint.
+function vs_online_download_friends_scores(_chartId, _difficulty, _on_done)
 {
-    vs_online_get_json("/api/v1/leaderboards/" + _name + "/friends", true,
-        function(ok, data, status)
-        {
-            _on_done(ok ? data : undefined);
-        });
+    show_debug_message("VS Online: friends leaderboard not implemented yet");
+    _on_done(undefined);
 }
 
 // --- score suffix isolation ------------------------------------------------
