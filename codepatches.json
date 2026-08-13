@@ -130,5 +130,17 @@
         "Find": "var memberCount = steam_lobby_get_member_count();",
         "Value": "if (vs_online_is_custom()) exit; var memberCount = steam_lobby_get_member_count();",
         "Type": 1
+    },
+    {
+        "Entry": "gml_GlobalScript_create_song_packs",
+        "Find": "global.chapter_a_songs = packs.cha.songs;",
+        "Value": "global.chapter_a_songs = packs.cha.songs; vs_online_add_web_pack();",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_GlobalScript_refresh_song_objects",
+        "Find": "global.selected_pack = (global.selected_pack + array_length(global.song_packs)) % array_length(global.song_packs);",
+        "Value": "global.selected_pack = (global.selected_pack + array_length(global.song_packs)) % array_length(global.song_packs); if (variable_struct_exists(global.song_packs[global.selected_pack], \"is_vs_web\")) { if (!instance_exists(vs_songstore_browser)) instance_create_depth(0, 0, 0, vs_songstore_browser); exit; }",
+        "Type": 1
     }
 ]

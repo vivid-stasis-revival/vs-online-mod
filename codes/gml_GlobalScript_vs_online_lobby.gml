@@ -63,9 +63,26 @@ function vs_online_is_connected()
 
 // --- member struct ---------------------------------------------------------
 
+// Deterministic avatar fallback: hash(name) -> a jacket from global.song_list.
+function vs_online_avatar_sprite(_name)
+{
+    if (!variable_global_exists("song_list") || array_length(global.song_list) == 0)
+    {
+        return undefined;
+    }
+    var idx = abs(string_hash(_name)) % array_length(global.song_list);
+    var song = global.song_list[idx];
+    if (song == undefined) return undefined;
+    var jk = song_get_info(song, "jacket", 0);
+    return (jk == undefined) ? undefined : jk;
+}
+
 // Build a game-style member from a server MemberView JSON object.
 function vs_lobby_build_member(_mv)
 {
+    // Server avatar is a URL we don't fetch yet; an empty avatar falls back to
+    // a deterministic jacket sprite (Plan: hash(name) -> jacket).
+    var hasAvatar = variable_struct_exists(_mv, "avatar") && _mv.avatar != "";
     return
     {
         id: _mv.playerId,
@@ -73,7 +90,7 @@ function vs_lobby_build_member(_mv)
         ready: variable_struct_exists(_mv, "ready") ? _mv.ready : 0,
         score: variable_struct_exists(_mv, "score") ? _mv.score : 0,
         scoreFlag: variable_struct_exists(_mv, "scoreFlag") ? _mv.scoreFlag : 1,
-        avatar: undefined,
+        avatar: hasAvatar ? undefined : vs_online_avatar_sprite(_mv.name),
         reportedScore: true,
         host: variable_struct_exists(_mv, "host") ? _mv.host : false,
         npc: false,

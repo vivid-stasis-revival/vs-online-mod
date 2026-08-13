@@ -48,6 +48,7 @@ vs-online-mod/
 | M1 | 纯 GML WebSocket 库（raw TCP 握手/帧/掩码/ping-pong） | ✅ |
 | M2 | REST 层 + 身份 + 凭据存储 + 成绩后缀隔离 + 排行榜/成就/好友 | ✅ |
 | M3 | 大厅（REST + WS 中继 + 完整 UI 打桩 + 随机匹配 Shift+Paste） | ✅ |
+| M4 | 谱面商店（Web Charts 虚拟曲包 + 搜索/分页 + sha1 差分下载/更新）+ 头像 hash 回退 | ✅ |
 | M2 | 身份 + 凭据存储 + 成绩后缀隔离 + 排行榜/成就/好友 | ⏳ |
 | M3 | 大厅（REST + WS 中继），改造 send_packet/receive_packet + o_st_handle | ⏳ |
 | M4 | 谱面商店（all songs 本地包 + 服务器分页包 + 搜索 + 下载/SHA 更新）+ 头像 hash 回退 | ⏳ |
