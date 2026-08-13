@@ -138,6 +138,11 @@
         "Type": 1
     },
     {
+        "Entry": "gml_Object_o_st_handle_Create_0",
+        "ExternalFile": "conflict_check.gml",
+        "Type": 2
+    },
+    {
         "Entry": "gml_GlobalScript_create_song_packs",
         "Find": "global.chapter_a_songs = packs.cha.songs;",
         "Value": "global.chapter_a_songs = packs.cha.songs; vs_online_add_web_pack();",
