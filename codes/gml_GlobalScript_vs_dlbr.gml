@@ -30,6 +30,7 @@ function vs_dlbr_set_status(_msg)
 function vs_dlbr_build_row(_song)
 {
     var ch = variable_struct_exists(_song, "chartId") ? _song.chartId : "";
+    if (ch != "" && !vs_songstore_has_chart(ch)) vs_songstore_cleanup_stub(ch);
     return
     {
         id: variable_struct_exists(_song, "id") ? _song.id : "",
@@ -285,7 +286,12 @@ function vs_dlbr_on_download(_ok)
     }
     else
     {
-        vs_dlbr_set_status("Failed - " + cur_chart);
+        var why = "";
+        if (variable_global_exists("vs_dlmgr_dl") && variable_struct_exists(global.vs_dlmgr_dl, "err") && global.vs_dlmgr_dl.err != "")
+        {
+            why = " - " + string(global.vs_dlmgr_dl.err);
+        }
+        vs_dlbr_set_status("Failed - " + cur_chart + why);
         vs_dlbr_fetch_page();
     }
 }
@@ -322,6 +328,11 @@ function vs_dlbr_do_selected_action()
     }
     else
     {
+        if (!vs_songstore_has_chart(r.chartId))
+        {
+            vs_dlbr_start_download(r);
+            return;
+        }
         if (!rr.checked) { vs_dlbr_check_row_index(ai); }
         vs_dlbr_set_status(r.chartId + " is a local chart without a download record - not overwritten.");
     }

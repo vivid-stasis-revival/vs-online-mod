@@ -11,9 +11,63 @@
 // starting it from inside the REST completion callback never fired done.
 // ============================================================================
 
+function vs_songstore_root()
+{
+    return working_directory + "Custom Songs/";
+}
+
+function vs_songstore_dir_has_chart(_dir)
+{
+    if (_dir == undefined || _dir == "") return false;
+    if (file_exists(_dir + "info.json")) return true;
+    var names = ["OPENING", "MIDDLE", "FINALE", "ENCORE", "PRELUDE"];
+    var i = 0;
+    repeat (5)
+    {
+        if (file_exists(_dir + names[i] + ".vsc") || file_exists(_dir + names[i] + ".vsb")) return true;
+        i++;
+    }
+    return false;
+}
+
 function vs_songstore_local_dir(_chartId)
 {
-    return "Custom Songs/" + _chartId + "/";
+    var a = vs_songstore_root() + _chartId + "/";
+    var b = "Custom Songs/" + _chartId + "/";
+    if (vs_songstore_dir_has_chart(a)) return a;
+    if (vs_songstore_dir_has_chart(b)) return b;
+    return a;
+}
+
+function vs_songstore_has_chart(_chartId)
+{
+    if (_chartId == undefined || _chartId == "") return false;
+    return vs_songstore_dir_has_chart(vs_songstore_root() + _chartId + "/")
+        || vs_songstore_dir_has_chart("Custom Songs/" + _chartId + "/");
+}
+
+function vs_songstore_ensure_dir(_dir)
+{
+    var root = vs_songstore_root();
+    if (!directory_exists(root)) directory_create(root);
+    if (!directory_exists(_dir)) directory_create(_dir);
+}
+
+function vs_songstore_cleanup_stub(_chartId)
+{
+    if (_chartId == undefined || _chartId == "" || vs_songstore_has_chart(_chartId)) return;
+    var paths = [vs_songstore_root() + _chartId + "/", "Custom Songs/" + _chartId + "/"];
+    var i = 0;
+    repeat (2)
+    {
+        var d = paths[i];
+        if (directory_exists(d) && !vs_songstore_dir_has_chart(d))
+        {
+            if (file_exists(d + ".vs_download.json")) file_delete(d + ".vs_download.json");
+            directory_destroy(d);
+        }
+        i++;
+    }
 }
 
 function vs_songstore_flatten_name(_name)
@@ -93,7 +147,58 @@ function vs_songstore_abs_url(_url)
         if (string_copy(u, 1, 1) != "/") u = "/" + u;
         u = vs_online_server_url() + u;
     }
-    return string_replace_all(u, " ", "%20");
+    return vs_songstore_encode_url(string_replace_all(u, " ", "%20"));
+}
+
+function vs_songstore_encode_url(_url)
+{
+    var u = string(_url);
+    var proto = "";
+    var rest = u;
+    var sp = string_pos("://", u);
+    if (sp > 0)
+    {
+        proto = string_copy(u, 1, sp + 2);
+        rest = string_copy(u, sp + 3, string_length(u));
+    }
+    var slash = string_pos("/", rest);
+    if (slash <= 0) return u;
+    var host = string_copy(rest, 1, slash - 1);
+    var path = string_copy(rest, slash, string_length(rest));
+    var query = "";
+    var qpos = string_pos("?", path);
+    if (qpos > 0)
+    {
+        query = string_copy(path, qpos, string_length(path));
+        path = string_copy(path, 1, qpos - 1);
+    }
+    var out = "";
+    var seg = "";
+    var i = 1;
+    var n = string_length(path);
+    while (i <= n)
+    {
+        var c = string_char_at(path, i);
+        if (c == "/")
+        {
+            if (seg != "") out += "/" + ((string_pos("%", seg) > 0) ? seg : vs_online_url_encode(seg));
+            else out += "/";
+            seg = "";
+        }
+        else seg += c;
+        i++;
+    }
+    if (seg != "") out += "/" + ((string_pos("%", seg) > 0) ? seg : vs_online_url_encode(seg));
+    return proto + host + out + query;
+}
+
+function vs_songstore_set_err(_msg)
+{
+    if (variable_global_exists("vs_dlmgr_dl"))
+    {
+        global.vs_dlmgr_dl.err = _msg;
+    }
+    show_debug_message("VS DL: " + string(_msg));
 }
 
 function vs_songstore_dl_init()
@@ -161,7 +266,7 @@ function vs_songstore_dl_pump()
     }
     global.vs_dl_gen += 1;
     var url = vs_songstore_abs_url(job.url);
-    var tmp = "vsonline_dl_" + string(global.vs_dl_gen) + ".bin";
+    var tmp = working_directory + "vsonline_dl_" + string(global.vs_dl_gen) + ".bin";
     if (file_exists(tmp)) file_delete(tmp);
     global.vs_dl_state.url = url;
     global.vs_dl_state.localPath = job.localPath;
@@ -173,7 +278,7 @@ function vs_songstore_dl_pump()
     global.vs_dl_state.rid = http_get_file(url, tmp);
     if (global.vs_dl_state.rid == undefined || global.vs_dl_state.rid < 0)
     {
-        show_debug_message("VS DL: http_get_file failed " + url);
+        vs_songstore_set_err("http_get_file failed");
         vs_songstore_dl_finish(false);
         return;
     }
@@ -191,7 +296,7 @@ function vs_songstore_dl_on_timeout()
     if (!global.vs_dl_busy) return;
     var st = global.vs_dl_state;
     if (st.gen != g) return;
-    show_debug_message("VS DL: timeout " + string(st.localPath) + " url=" + string(st.url));
+    vs_songstore_set_err("timeout " + string(st.url));
     var tmp = st.tmpPath;
     if (tmp != "" && file_exists(tmp)) file_delete(tmp);
     vs_songstore_dl_finish(false);
@@ -206,11 +311,13 @@ function vs_songstore_dl_commit(_ok)
     {
         if (tmp != "" && file_exists(tmp))
         {
+            vs_songstore_ensure_dir(filename_path(dest));
             if (file_exists(dest)) file_delete(dest);
             file_copy(tmp, dest);
             file_delete(tmp);
         }
         _ok = file_exists(dest);
+        if (!_ok) vs_songstore_set_err("could not write " + string(dest));
     }
     else if (tmp != "" && file_exists(tmp))
     {
@@ -264,6 +371,38 @@ function vs_songstore_on_http()
     {
         ok = false;
     }
+    if (!ok) vs_songstore_set_err("http " + string(httpStatus) + " for " + string(st.url));
     show_debug_message("VS DL: done " + string(st.localPath) + " ok=" + string(ok) + " http=" + string(httpStatus) + " st=" + string(gmStatus));
     vs_songstore_dl_finish(ok);
+}
+
+function vs_songstore_download_package(_songId, _chartId, _on_done)
+{
+    if (!variable_global_exists("vs_dl_pkg"))
+    {
+        global.vs_dl_pkg = { on_done: undefined, chartId: "" };
+    }
+    global.vs_dl_pkg.on_done = _on_done;
+    global.vs_dl_pkg.chartId = _chartId;
+    var url = vs_online_server_url() + "/api/v1/songs/" + _songId + "/package";
+    vs_songstore_download_file(url, working_directory + "vsonline_pkg.zip", vs_songstore_pkg_file_done);
+}
+
+function vs_songstore_pkg_file_done(_ok, _path)
+{
+    var cb = global.vs_dl_pkg.on_done;
+    var chartId = global.vs_dl_pkg.chartId;
+    global.vs_dl_pkg.on_done = undefined;
+    if (!_ok || _path == undefined || !file_exists(_path))
+    {
+        if (cb != undefined) cb(false, _path);
+        return;
+    }
+    var dest = vs_songstore_local_dir(chartId);
+    vs_songstore_ensure_dir(dest);
+    var n = zip_unzip(_path, dest);
+    file_delete(_path);
+    var ok = (n > 0) && vs_songstore_has_chart(chartId);
+    if (!ok) vs_songstore_set_err("unzip failed (" + string(n) + ")");
+    if (cb != undefined) cb(ok, dest);
 }

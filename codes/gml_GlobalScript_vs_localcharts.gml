@@ -20,6 +20,8 @@
 
 function vs_localcharts_dir()
 {
+    var abs = vs_songstore_root();
+    if (directory_exists(abs)) return abs;
     return "Custom Songs/";
 }
 

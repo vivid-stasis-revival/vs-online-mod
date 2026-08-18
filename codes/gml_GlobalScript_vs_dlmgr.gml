@@ -52,8 +52,7 @@ function vs_dlmgr_list(_query, _page, _on_done)
 // Is this chart downloaded locally? (folder existence — cheap, no network)
 function vs_dlmgr_downloaded(_chartId)
 {
-    if (_chartId == undefined || _chartId == "") return false;
-    return directory_exists("Custom Songs/" + _chartId + "/");
+    return vs_songstore_has_chart(_chartId);
 }
 
 // Full sha1 check of one chart: fetch server detail, diff against the local
@@ -109,7 +108,7 @@ function vs_dlmgr_row_status(_r)
 
 function vs_dlmgr_meta_path(_chartId)
 {
-    return "Custom Songs/" + _chartId + "/.vs_download.json";
+    return vs_songstore_local_dir(_chartId) + ".vs_download.json";
 }
 
 function vs_dlmgr_tracked(_chartId)
@@ -213,7 +212,7 @@ function vs_dlmgr_download(_songId, _chartId, _on_done)
 {
     if (!variable_global_exists("vs_dlmgr_dl"))
     {
-        global.vs_dlmgr_dl = { on_done: undefined, need: [], idx: 0, chartId: "", serverId: "", name: "", failed: false, cancel: false, fileGot: 0, fileTotal: 0, fileName: "" };
+        global.vs_dlmgr_dl = { on_done: undefined, need: [], idx: 0, chartId: "", serverId: "", name: "", failed: false, cancel: false, fileGot: 0, fileTotal: 0, fileName: "", err: "" };
     }
     global.vs_dlmgr_dl.on_done = _on_done;
     global.vs_dlmgr_dl.chartId = _chartId;
@@ -223,6 +222,7 @@ function vs_dlmgr_download(_songId, _chartId, _on_done)
     global.vs_dlmgr_dl.fileGot = 0;
     global.vs_dlmgr_dl.fileTotal = 0;
     global.vs_dlmgr_dl.fileName = "";
+    global.vs_dlmgr_dl.err = "";
     vs_songstore_detail(_songId, function(_ok, _detail)
     {
         var st = global.vs_dlmgr_dl;
@@ -233,22 +233,28 @@ function vs_dlmgr_download(_songId, _chartId, _on_done)
         }
         if (!_ok || _detail == undefined)
         {
+            vs_songstore_set_err("could not fetch song info");
             var cb = st.on_done;
             st.on_done = undefined;
             if (cb != undefined) { cb(false); }
             return;
         }
         st.name = variable_struct_exists(_detail, "name") ? _detail.name : st.chartId;
-        var dir = "Custom Songs/" + st.chartId + "/";
-        if (!directory_exists(dir)) { directory_create(dir); }
         st.need = vs_songstore_diff(_detail.files, st.chartId);
         st.idx = 0;
-        if (array_length(st.need) == 0)
+        if (array_length(st.need) == 0 && vs_songstore_has_chart(st.chartId))
         {
             vs_dlmgr_write_meta(st.chartId, st.serverId, st.name);
             var cb = st.on_done;
             st.on_done = undefined;
             if (cb != undefined) { cb(true); }
+            return;
+        }
+        if (!vs_songstore_has_chart(st.chartId))
+        {
+            st.need = [{ name: "package.zip" }];
+            st.fileName = "package.zip";
+            vs_songstore_download_package(st.serverId, st.chartId, vs_dlmgr_dl_pkg_done);
             return;
         }
         vs_dlmgr_dl_step();
@@ -272,9 +278,29 @@ function vs_dlmgr_dl_finish(_ok)
     {
         vs_dlmgr_write_meta(st.chartId, st.serverId, st.name);
     }
+    else
+    {
+        vs_songstore_cleanup_stub(st.chartId);
+    }
     var cb = st.on_done;
     st.on_done = undefined;
     if (cb != undefined) { cb(_ok && !st.cancel); }
+}
+
+function vs_dlmgr_dl_pkg_done(_ok, _path)
+{
+    var st = global.vs_dlmgr_dl;
+    if (st.cancel)
+    {
+        vs_dlmgr_dl_finish(false);
+        return;
+    }
+    if (!_ok)
+    {
+        st.failed = true;
+        if (st.err == "") vs_songstore_set_err("package download failed");
+    }
+    vs_dlmgr_dl_finish(_ok);
 }
 
 function vs_dlmgr_dl_file_done(_ok, _path)
