@@ -160,7 +160,7 @@ function vs_dlmgr_tracked(_chartId)
 function vs_dlmgr_write_meta(_chartId, _serverId, _name)
 {
     if (_chartId == undefined || _chartId == "") return;
-    var p = vs_dlmgr_meta_path(_chartId);
+    var p = vs_songstore_install_path(vs_dlmgr_meta_path(_chartId));
     vs_songstore_ensure_dir(vs_songstore_local_dir(_chartId));
     var isNew = !file_exists(p);
     var m =

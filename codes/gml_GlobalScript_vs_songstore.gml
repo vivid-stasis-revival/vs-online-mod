@@ -6,14 +6,42 @@
 //   - vs_songstore_diff        sha1-diff the server files[] against local
 //   - vs_songstore_download_file  download one file (http_get_file)
 //
-// Charts use the same relative "Custom Songs/" path as CSM.
-// http_get_file writes a temp file, then file_copy into Custom Songs/<id>/.
-// info.json is written last. HTTP starts on the next frame.
+// Charts use CSM's Custom Songs/<id>/ next to the exe.
+// http_get_file still lands in a temp file; file_copy writes the game folder
+// via program_directory (relative Custom Songs/ writes go to AppData).
+// Do not directory_create the relative path — that makes an AppData folder
+// that hides the Steam one from CSM. info.json is written last.
 // ============================================================================
 
 function vs_songstore_root()
 {
     return "Custom Songs/";
+}
+
+function vs_songstore_install_path(_rel)
+{
+    var r = string_replace_all(string(_rel), "\\", "/");
+    var p = program_directory;
+    if (p == undefined || p == "") return r;
+    p = string_replace_all(string(p), "\\", "/");
+    if (p != "" && string_char_at(p, string_length(p)) != "/") p += "/";
+    return p + r;
+}
+
+function vs_songstore_parent(_path)
+{
+    var p = string_replace_all(string(_path), "\\", "/");
+    var cut = string_last_pos("/", p);
+    if (cut <= 0) return "";
+    return string_copy(p, 1, cut);
+}
+
+function vs_songstore_clear_save_songs()
+{
+    var p = working_directory + "Custom Songs";
+    if (directory_exists(p)) directory_destroy(p);
+    p = working_directory + "Custom Songs/";
+    if (directory_exists(p)) directory_destroy(p);
 }
 
 function vs_songstore_dir_has_chart(_dir)
@@ -30,32 +58,34 @@ function vs_songstore_local_dir(_chartId)
 function vs_songstore_has_chart(_chartId)
 {
     if (_chartId == undefined || _chartId == "") return false;
-    return vs_songstore_dir_has_chart(vs_songstore_local_dir(_chartId));
+    vs_songstore_clear_save_songs();
+    var rel = vs_songstore_local_dir(_chartId);
+    return vs_songstore_dir_has_chart(rel) || vs_songstore_dir_has_chart(vs_songstore_install_path(rel));
 }
 
 function vs_songstore_ensure_dir(_dir)
 {
-    var root = vs_songstore_root();
+    var root = vs_songstore_install_path(vs_songstore_root());
     if (!directory_exists(root)) directory_create(root);
-    if (_dir != "" && _dir != root && !directory_exists(_dir)) directory_create(_dir);
+    if (_dir == undefined || _dir == "" || _dir == vs_songstore_root()) return;
+    var d = vs_songstore_install_path(_dir);
+    if (d != root && !directory_exists(d)) directory_create(d);
 }
 
 function vs_songstore_remove_chart(_chartId)
 {
     if (_chartId == undefined || _chartId == "") return;
-    var staging = vs_songstore_root() + _chartId + ".vs_partial/";
-    if (directory_exists(staging)) directory_destroy(staging);
-    var d = vs_songstore_local_dir(_chartId);
+    vs_songstore_clear_save_songs();
+    var d = vs_songstore_install_path(vs_songstore_local_dir(_chartId));
     if (directory_exists(d)) directory_destroy(d);
 }
 
 function vs_songstore_cleanup_stub(_chartId)
 {
     if (_chartId == undefined || _chartId == "") return;
-    var staging = vs_songstore_root() + _chartId + ".vs_partial/";
-    if (directory_exists(staging)) directory_destroy(staging);
+    vs_songstore_clear_save_songs();
     if (vs_songstore_has_chart(_chartId)) return;
-    var d = vs_songstore_local_dir(_chartId);
+    var d = vs_songstore_install_path(vs_songstore_local_dir(_chartId));
     if (directory_exists(d) && !vs_songstore_dir_has_chart(d))
     {
         if (file_exists(d + ".vs_download.json")) file_delete(d + ".vs_download.json");
@@ -426,10 +456,12 @@ function vs_songstore_dl_commit(_ok)
     {
         if (tmp != "" && file_exists(tmp))
         {
-            vs_songstore_ensure_dir(filename_path(dest));
-            if (file_exists(dest)) file_delete(dest);
-            file_copy(tmp, dest);
+            var put = vs_songstore_install_path(dest);
+            vs_songstore_ensure_dir(vs_songstore_parent(dest));
+            if (file_exists(put)) file_delete(put);
+            file_copy(tmp, put);
             file_delete(tmp);
+            dest = put;
         }
         _ok = file_exists(dest);
         if (!_ok) vs_songstore_set_err("could not write " + string(dest));
