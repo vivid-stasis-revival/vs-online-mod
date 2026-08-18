@@ -6,28 +6,24 @@
 //   - vs_songstore_diff        sha1-diff the server files[] against local
 //   - vs_songstore_download_file  download one file (http_get_file)
 //
+// Charts go in program_directory + "Custom Songs/" (the game folder CSM
+// scans). working_directory is the AppData save area and must not be used.
+// info.json is written last so CSM never loads a half-copied folder.
 // File HTTP is handled on the official HTTP event (vs_http_on_async also
-// calls vs_songstore_on_http). http_get_file is started on the next frame —
-// starting it from inside the REST completion callback never fired done.
+// calls vs_songstore_on_http). http_get_file starts on the next frame.
 // ============================================================================
 
+// CSM scans the game install dir with relative "Custom Songs/" and only
+// loads a folder that already has info.json. working_directory is the
+// AppData save area in GMS2 — do not write charts there.
 function vs_songstore_root()
 {
-    return working_directory + "Custom Songs/";
+    return program_directory + "Custom Songs/";
 }
 
 function vs_songstore_dir_has_chart(_dir)
 {
-    if (_dir == undefined || _dir == "") return false;
-    if (file_exists(_dir + "info.json")) return true;
-    var names = ["OPENING", "MIDDLE", "FINALE", "ENCORE", "PRELUDE"];
-    var i = 0;
-    repeat (5)
-    {
-        if (file_exists(_dir + names[i] + ".vsc") || file_exists(_dir + names[i] + ".vsb")) return true;
-        i++;
-    }
-    return false;
+    return (_dir != undefined && _dir != "" && file_exists(_dir + "info.json"));
 }
 
 function vs_songstore_local_dir(_chartId)
@@ -50,15 +46,22 @@ function vs_songstore_ensure_dir(_dir)
 {
     var root = vs_songstore_root();
     if (!directory_exists(root)) directory_create(root);
-    if (!directory_exists(_dir)) directory_create(_dir);
+    if (_dir != "" && _dir != root && !directory_exists(_dir)) directory_create(_dir);
 }
 
 function vs_songstore_cleanup_stub(_chartId)
 {
-    if (_chartId == undefined || _chartId == "" || vs_songstore_has_chart(_chartId)) return;
-    var paths = [vs_songstore_root() + _chartId + "/", "Custom Songs/" + _chartId + "/"];
+    if (_chartId == undefined || _chartId == "") return;
+    var staging = vs_songstore_root() + _chartId + ".vs_partial/";
+    if (directory_exists(staging)) directory_destroy(staging);
+    if (vs_songstore_has_chart(_chartId)) return;
+    var paths = [
+        vs_songstore_root() + _chartId + "/",
+        "Custom Songs/" + _chartId + "/",
+        working_directory + "Custom Songs/" + _chartId + "/"
+    ];
     var i = 0;
-    repeat (2)
+    repeat (3)
     {
         var d = paths[i];
         if (directory_exists(d) && !vs_songstore_dir_has_chart(d))
@@ -68,6 +71,80 @@ function vs_songstore_cleanup_stub(_chartId)
         }
         i++;
     }
+}
+
+function vs_songstore_list_names(_dir, _dirs)
+{
+    var out = [];
+    var n = file_find_first(_dir + "*", _dirs ? 16 : 0);
+    while (n != "")
+    {
+        if (n != "." && n != "..") array_push(out, n);
+        n = file_find_next();
+    }
+    file_find_close();
+    return out;
+}
+
+function vs_songstore_copy_tree(_src, _dst, _skip)
+{
+    if (!directory_exists(_src)) return;
+    vs_songstore_ensure_dir(_dst);
+    var files = vs_songstore_list_names(_src, false);
+    var i = 0;
+    repeat (array_length(files))
+    {
+        var f = files[i];
+        if (f != _skip && file_exists(_src + f) && !directory_exists(_src + f))
+        {
+            if (file_exists(_dst + f)) file_delete(_dst + f);
+            file_copy(_src + f, _dst + f);
+        }
+        i++;
+    }
+    var dirs = vs_songstore_list_names(_src, true);
+    i = 0;
+    repeat (array_length(dirs))
+    {
+        var d = dirs[i];
+        if (directory_exists(_src + d) || directory_exists(_src + d + "/"))
+        {
+            vs_songstore_copy_tree(_src + d + "/", _dst + d + "/", "");
+        }
+        i++;
+    }
+}
+
+function vs_songstore_install_from_zip(_zip, _chartId)
+{
+    var root = vs_songstore_root();
+    vs_songstore_ensure_dir(root);
+    var staging = root + _chartId + ".vs_partial/";
+    if (directory_exists(staging)) directory_destroy(staging);
+    directory_create(staging);
+    var n = zip_unzip(_zip, staging);
+    if (file_exists(_zip)) file_delete(_zip);
+    if (n <= 0)
+    {
+        if (directory_exists(staging)) directory_destroy(staging);
+        vs_songstore_set_err("unzip failed (" + string(n) + ")");
+        return false;
+    }
+    var dest = root + _chartId + "/";
+    vs_songstore_copy_tree(staging, dest, "info.json");
+    if (file_exists(staging + "info.json"))
+    {
+        if (file_exists(dest + "info.json")) file_delete(dest + "info.json");
+        file_copy(staging + "info.json", dest + "info.json");
+    }
+    if (directory_exists(staging)) directory_destroy(staging);
+    if (!file_exists(dest + "info.json"))
+    {
+        vs_songstore_set_err("package missing info.json");
+        vs_songstore_cleanup_stub(_chartId);
+        return false;
+    }
+    return true;
 }
 
 function vs_songstore_flatten_name(_name)
@@ -105,6 +182,7 @@ function vs_songstore_detail(_songId, _on_done)
 function vs_songstore_diff(_files, _chartId)
 {
     var need = [];
+    var info = undefined;
     if (_files == undefined) return need;
     var dir = vs_songstore_local_dir(_chartId);
     for (var i = 0; i < array_length(_files); i++)
@@ -120,9 +198,12 @@ function vs_songstore_diff(_files, _chartId)
         var localHash = file_exists(localPath) ? sha1_file(localPath) : "";
         if (string_lower(localHash) != string_lower(f.sha1))
         {
-            array_push(need, { name: f.name, url: f.url, localPath: localPath });
+            var item = { name: f.name, url: f.url, localPath: localPath };
+            if (string_lower(flat) == "info.json") info = item;
+            else array_push(need, item);
         }
     }
+    if (info != undefined) array_push(need, info);
     return need;
 }
 
@@ -398,11 +479,7 @@ function vs_songstore_pkg_file_done(_ok, _path)
         if (cb != undefined) cb(false, _path);
         return;
     }
-    var dest = vs_songstore_local_dir(chartId);
-    vs_songstore_ensure_dir(dest);
-    var n = zip_unzip(_path, dest);
-    file_delete(_path);
-    var ok = (n > 0) && vs_songstore_has_chart(chartId);
-    if (!ok) vs_songstore_set_err("unzip failed (" + string(n) + ")");
+    var dest = vs_songstore_root() + chartId + "/";
+    var ok = vs_songstore_install_from_zip(_path, chartId);
     if (cb != undefined) cb(ok, dest);
 }
