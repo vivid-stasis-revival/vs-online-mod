@@ -12,8 +12,9 @@
 // they never create the Steam folder CSM reads. After the temp file is
 // ready, cmd copies it using program_directory (the game folder from the
 // download log — not parameter_string(0), which became D:\).
-// Detect with file_exists on the relative path after deleting any AppData
-// Custom Songs shadow. info.json is written last.
+// Detect with file_exists on the relative path. Never delete
+// working_directory/Custom Songs — here that is the Steam folder.
+// Only an AppData Custom Songs shadow is safe to remove. info.json last.
 // ============================================================================
 
 function vs_songstore_root()
@@ -41,12 +42,42 @@ function vs_songstore_win_path(_p)
     return string_replace_all(string(_p), "/", "\\");
 }
 
+function vs_songstore_same_dir(_a, _b)
+{
+    var a = string_lower(string_replace_all(string(_a), "\\", "/"));
+    var b = string_lower(string_replace_all(string(_b), "\\", "/"));
+    if (a != "" && string_char_at(a, string_length(a)) != "/") a += "/";
+    if (b != "" && string_char_at(b, string_length(b)) != "/") b += "/";
+    return a != "/" && a == b;
+}
+
+function vs_songstore_save_dir()
+{
+    var la = environment_get_variable("LOCALAPPDATA");
+    if (la == undefined || la == "") return "";
+    la = string_replace_all(string(la), "\\", "/");
+    if (la != "" && string_char_at(la, string_length(la)) != "/") la += "/";
+    return la + "VIVIDSTASIS/";
+}
+
 function vs_songstore_tmp_abs(_tmp)
 {
     if (_tmp == undefined || _tmp == "") return "";
-    var t = string(_tmp);
-    if (string_pos(":", t) > 0) return t;
-    return working_directory + t;
+    var name = filename_name(string(_tmp));
+    var cands = [];
+    if (string_pos(":", string(_tmp)) > 0) array_push(cands, string(_tmp));
+    var save = vs_songstore_save_dir();
+    if (save != "") array_push(cands, save + name);
+    array_push(cands, working_directory + name);
+    array_push(cands, vs_songstore_install_path(name));
+    var i = 0;
+    repeat (array_length(cands))
+    {
+        if (cands[i] != "" && file_exists(cands[i])) return cands[i];
+        i++;
+    }
+    if (save != "") return save + name;
+    return working_directory + name;
 }
 
 function vs_songstore_parent(_path)
@@ -59,16 +90,18 @@ function vs_songstore_parent(_path)
 
 function vs_songstore_clear_save_songs()
 {
-    var p = working_directory + "Custom Songs";
+    var save = vs_songstore_save_dir();
+    var game = vs_songstore_install_path("");
+    if (save == "" || vs_songstore_same_dir(save, game)) return;
+    var p = save + "Custom Songs";
     if (directory_exists(p)) directory_destroy(p);
-    p = working_directory + "Custom Songs/";
+    p = save + "Custom Songs/";
     if (directory_exists(p)) directory_destroy(p);
 }
 
 function vs_songstore_file_ready(_rel)
 {
     if (_rel == undefined || _rel == "") return false;
-    vs_songstore_clear_save_songs();
     if (file_exists(_rel)) return true;
     return file_exists(vs_songstore_install_path(_rel));
 }
@@ -414,6 +447,17 @@ function vs_songstore_sweep_tmp()
         n = file_find_next();
     }
     file_find_close();
+    var save = vs_songstore_save_dir();
+    if (save != "")
+    {
+        n = file_find_first(save + "vsonline_dl_*.bin", 0);
+        while (n != "")
+        {
+            array_push(names, save + n);
+            n = file_find_next();
+        }
+        file_find_close();
+    }
     var i = 0;
     repeat (array_length(names))
     {
@@ -497,8 +541,11 @@ function vs_songstore_dl_pump()
     }
     global.vs_dl_gen += 1;
     var url = vs_songstore_abs_url(job.url);
+    var save = vs_songstore_save_dir();
     var tmp = "vsonline_dl_" + string(global.vs_dl_gen) + ".bin";
+    if (save != "") tmp = save + tmp;
     if (file_exists(tmp)) file_delete(tmp);
+    if (file_exists(filename_name(tmp))) file_delete(filename_name(tmp));
     global.vs_dl_state.url = url;
     global.vs_dl_state.localPath = job.localPath;
     global.vs_dl_state.tmpPath = tmp;
@@ -539,21 +586,34 @@ function vs_songstore_os_copy(_src, _dst)
     var src = vs_songstore_win_path(_src);
     var dst = vs_songstore_win_path(_dst);
     var dstDir = filename_dir(dst);
-    var bat = "vsonline_place.bat";
+    var save = vs_songstore_save_dir();
+    if (save == "") save = working_directory;
+    var bat = save + "vsonline_place.bat";
+    var logp = vs_songstore_win_path(save + "vsonline_place_cmd.log");
     var f = file_text_open_write(bat);
     if (f < 0)
     {
-        vs_songstore_log("could not write place bat");
+        vs_songstore_log("could not write place bat " + string(bat));
         return false;
     }
     file_text_write_string(f, "@echo off");
     file_text_writeln(f);
-    file_text_write_string(f, "mkdir \"" + dstDir + "\" >nul 2>nul");
+    file_text_write_string(f, "echo src=" + src + " > \"" + logp + "\"");
     file_text_writeln(f);
-    file_text_write_string(f, "copy /Y \"" + src + "\" \"" + dst + "\"");
+    file_text_write_string(f, "echo dst=" + dst + " >> \"" + logp + "\"");
+    file_text_writeln(f);
+    file_text_write_string(f, "if exist \"" + src + "\" (echo src_exists=1 >> \"" + logp + "\") else (echo src_exists=0 >> \"" + logp + "\")");
+    file_text_writeln(f);
+    file_text_write_string(f, "mkdir \"" + dstDir + "\" >> \"" + logp + "\" 2>&1");
+    file_text_writeln(f);
+    file_text_write_string(f, "copy /Y \"" + src + "\" \"" + dst + "\" >> \"" + logp + "\" 2>&1");
+    file_text_writeln(f);
+    file_text_write_string(f, "echo ERRORLEVEL=%ERRORLEVEL% >> \"" + logp + "\"");
+    file_text_writeln(f);
+    file_text_write_string(f, "if exist \"" + dst + "\" (echo placed=1 >> \"" + logp + "\") else (echo placed=0 >> \"" + logp + "\")");
     file_text_writeln(f);
     file_text_close(f);
-    execute_shell_simple(working_directory + bat, "", "open", 0);
+    execute_shell_simple(vs_songstore_win_path(bat), "", "open", 0);
     return true;
 }
 
@@ -562,12 +622,14 @@ function vs_songstore_place_start()
     var st = global.vs_dl_state;
     var tmp = st.tmpPath;
     var dest = st.localPath;
-    if (tmp == "" || !file_exists(tmp))
+    var src = vs_songstore_tmp_abs(tmp);
+    vs_songstore_log("paths wd=" + string(working_directory) + " pd=" + string(program_directory) + " save=" + vs_songstore_save_dir());
+    vs_songstore_log("tmp rel=" + string(tmp) + " exists=" + string(file_exists(tmp)) + " src=" + string(src) + " src_exists=" + string(file_exists(src)));
+    if (src == "" || !file_exists(src))
     {
         vs_songstore_log("place missing tmp " + string(tmp));
         return false;
     }
-    var src = vs_songstore_tmp_abs(tmp);
     var dst = vs_songstore_install_path(dest);
     if (dst == "" || dst == dest)
     {
@@ -615,6 +677,18 @@ function vs_songstore_dl_on_placed()
     {
         call_later(8, time_source_units_frames, vs_songstore_dl_on_placed);
         return;
+    }
+    var clog = vs_songstore_save_dir() + "vsonline_place_cmd.log";
+    if (file_exists(clog))
+    {
+        var cf = file_text_open_read(clog);
+        var raw = "";
+        if (cf >= 0)
+        {
+            while (!file_text_eof(cf)) { raw += file_text_readln(cf); }
+            file_text_close(cf);
+        }
+        vs_songstore_log("place cmd: " + raw);
     }
     vs_songstore_set_err("could not write " + vs_songstore_install_path(st.localPath));
     vs_songstore_dl_complete(false);
