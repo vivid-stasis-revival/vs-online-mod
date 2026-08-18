@@ -358,14 +358,18 @@ function vs_songstore_encode_url(_url)
         var c = string_char_at(path, i);
         if (c == "/")
         {
-            if (seg != "") out += "/" + ((string_pos("%", seg) > 0) ? seg : vs_online_url_encode(seg));
-            else out += "/";
-            seg = "";
+            // Skip empty segments so "/uploads/..." does not become "//uploads/...".
+            if (seg != "")
+            {
+                out += "/" + ((string_pos("%", seg) > 0) ? seg : vs_online_url_encode(seg));
+                seg = "";
+            }
         }
         else seg += c;
         i++;
     }
     if (seg != "") out += "/" + ((string_pos("%", seg) > 0) ? seg : vs_online_url_encode(seg));
+    if (out == "") out = "/";
     return proto + host + out + query;
 }
 

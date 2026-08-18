@@ -1,9 +1,12 @@
 // ============================================================================
 // vs_media.gml — lazy jacket + preview for Chart Downloader
 //
-// http_get_file into vs_jackets/ and vs_previews/, then sprite_add /
-// audio_create_stream. Only the selected row is requested. Completion is
-// handled on the official HTTP event via vs_media_on_http.
+// Cache files go in the save area (working_directory/vs_jackets|vs_previews).
+// http_get_file starts on the next frame — starting it from a JSON HTTP
+// callback (list load -> selected_refresh) never completes on this runner.
+// HTTP completion matches chart downloads: status 0, or status 1 with
+// sizeDownloaded >= contentLength. sprite_add / audio_create_stream run
+// the frame after the file is on disk.
 // ============================================================================
 
 function vs_media_init()
@@ -25,7 +28,18 @@ function vs_media_init()
         global.vs_media_scheduled = false;
         global.vs_jk_load_key = "";
         global.vs_jk_load_path = "";
+        global.vs_media_gen = 0;
+        global.vs_media_got = 0;
+        global.vs_media_total = 0;
     }
+}
+
+function vs_media_abs(_rel)
+{
+    if (_rel == undefined || _rel == "") return "";
+    var p = string(_rel);
+    if (string_pos(":", p) > 0) return p;
+    return working_directory + p;
 }
 
 function vs_media_ext(_url)
@@ -39,6 +53,16 @@ function vs_media_ext(_url)
     return ".png";
 }
 
+function vs_media_audio_ext(_url)
+{
+    var u = string_lower(string(_url));
+    var qpos = string_pos("?", u);
+    if (qpos > 0) u = string_copy(u, 1, qpos - 1);
+    if (vs_songstore_ends_with(u, ".mp3")) return ".mp3";
+    if (vs_songstore_ends_with(u, ".wav")) return ".wav";
+    return ".ogg";
+}
+
 function vs_media_file_key(_id)
 {
     var k = string_replace_all(string(_id), "/", "_");
@@ -50,7 +74,6 @@ function vs_media_jacket(_id)
 {
     vs_media_init();
     if (_id == undefined || _id == "") return -1;
-    if (variable_struct_exists(global.vs_jk_fail, _id)) return -1;
     if (variable_struct_exists(global.vs_jk_spr, _id))
     {
         return variable_struct_get(global.vs_jk_spr, _id);
@@ -79,7 +102,7 @@ function vs_media_request(_kind, _id, _url)
     }
     if (global.vs_media_busy && global.vs_media_id == _id && global.vs_media_kind == _kind) return;
     array_push(global.vs_media_q, { kind: _kind, id: _id, url: _url });
-    vs_media_pump();
+    vs_media_schedule();
 }
 
 function vs_media_audio_url(_previewUrl, _jacketUrl, _id)
@@ -130,76 +153,6 @@ function vs_media_try_play()
     global.vs_pv_inst = audio_play_sound(snd, 1, false);
 }
 
-function vs_media_pump()
-{
-    vs_media_init();
-    if (global.vs_media_busy) return;
-    if (array_length(global.vs_media_q) == 0) return;
-    var job = global.vs_media_q[0];
-    array_delete(global.vs_media_q, 0, 1);
-    var dir = (job.kind == "jacket") ? "vs_jackets/" : "vs_previews/";
-    if (!directory_exists(dir)) directory_create(dir);
-    var ext = (job.kind == "jacket") ? vs_media_ext(job.url) : ".ogg";
-    var dest = dir + vs_media_file_key(job.id) + ext;
-    if (job.kind == "jacket" && file_exists(dest))
-    {
-        global.vs_media_busy = true;
-        global.vs_media_kind = job.kind;
-        global.vs_media_id = job.id;
-        global.vs_media_path = dest;
-        vs_media_finish(true);
-        return;
-    }
-    var url = vs_songstore_abs_url(job.url);
-    global.vs_media_busy = true;
-    global.vs_media_kind = job.kind;
-    global.vs_media_id = job.id;
-    global.vs_media_path = dest;
-    global.vs_media_rid = http_get_file(url, dest);
-    if (global.vs_media_rid == undefined || global.vs_media_rid < 0)
-    {
-        vs_media_finish(false);
-        return;
-    }
-}
-
-function vs_media_finish(_ok)
-{
-    vs_media_init();
-    var key = global.vs_media_id;
-    var kind = global.vs_media_kind;
-    var path = global.vs_media_path;
-    global.vs_media_busy = false;
-    global.vs_media_rid = -1;
-    global.vs_media_kind = "";
-    global.vs_media_id = "";
-    global.vs_media_path = "";
-    if (_ok && file_exists(path))
-    {
-        if (kind == "jacket")
-        {
-            global.vs_jk_load_key = key;
-            global.vs_jk_load_path = path;
-        }
-        else
-        {
-            var snd = audio_create_stream(path);
-            if (snd != -1)
-            {
-                variable_struct_set(global.vs_pv_snd, key, snd);
-                vs_media_try_play();
-            }
-            else variable_struct_set(global.vs_pv_fail, key, true);
-        }
-    }
-    else if (key != "")
-    {
-        if (kind == "jacket") variable_struct_set(global.vs_jk_fail, key, true);
-        else variable_struct_set(global.vs_pv_fail, key, true);
-    }
-    vs_media_schedule();
-}
-
 function vs_media_schedule()
 {
     vs_media_init();
@@ -218,11 +171,95 @@ function vs_media_on_later()
         var path = global.vs_jk_load_path;
         global.vs_jk_load_key = "";
         global.vs_jk_load_path = "";
-        var spr = sprite_add(path, 1, false, false, 0, 0);
+        var spr = -1;
+        var abs = vs_media_abs(path);
+        if (file_exists(abs)) spr = sprite_add(abs, 1, false, false, 0, 0);
+        if ((spr == -1 || !sprite_exists(spr)) && file_exists(path)) spr = sprite_add(path, 1, false, false, 0, 0);
         if (spr != -1 && sprite_exists(spr)) variable_struct_set(global.vs_jk_spr, key, spr);
         else variable_struct_set(global.vs_jk_fail, key, true);
     }
-    vs_media_pump();
+    vs_media_start();
+}
+
+function vs_media_start()
+{
+    vs_media_init();
+    if (global.vs_media_busy) return;
+    if (array_length(global.vs_media_q) == 0) return;
+    var job = global.vs_media_q[0];
+    array_delete(global.vs_media_q, 0, 1);
+    var dir = (job.kind == "jacket") ? "vs_jackets/" : "vs_previews/";
+    if (!directory_exists(dir)) directory_create(dir);
+    var ext = (job.kind == "jacket") ? vs_media_ext(job.url) : vs_media_audio_ext(job.url);
+    var dest = dir + vs_media_file_key(job.id) + ext;
+    global.vs_media_busy = true;
+    global.vs_media_kind = job.kind;
+    global.vs_media_id = job.id;
+    global.vs_media_path = dest;
+    global.vs_media_got = 0;
+    global.vs_media_total = 0;
+    if (file_exists(vs_media_abs(dest)) || file_exists(dest))
+    {
+        vs_media_finish(true);
+        return;
+    }
+    var url = vs_songstore_abs_url(job.url);
+    global.vs_media_gen += 1;
+    global.vs_media_rid = http_get_file(url, dest);
+    if (global.vs_media_rid == undefined || global.vs_media_rid < 0)
+    {
+        vs_media_finish(false);
+        return;
+    }
+    call_later(60 * 30, time_source_units_frames, vs_media_on_timeout);
+    show_debug_message("VS Media: start " + string(job.kind) + " " + string(job.id) + " url=" + url);
+}
+
+function vs_media_on_timeout()
+{
+    vs_media_init();
+    if (!global.vs_media_busy) return;
+    vs_media_finish(false);
+}
+
+function vs_media_finish(_ok)
+{
+    vs_media_init();
+    var key = global.vs_media_id;
+    var kind = global.vs_media_kind;
+    var path = global.vs_media_path;
+    global.vs_media_busy = false;
+    global.vs_media_rid = -1;
+    global.vs_media_kind = "";
+    global.vs_media_id = "";
+    global.vs_media_path = "";
+    if (_ok && key != "")
+    {
+        if (kind == "jacket")
+        {
+            global.vs_jk_load_key = key;
+            global.vs_jk_load_path = path;
+        }
+        else
+        {
+            var snd = -1;
+            var abs = vs_media_abs(path);
+            if (file_exists(abs)) snd = audio_create_stream(abs);
+            if ((snd == -1 || snd == undefined) && file_exists(path)) snd = audio_create_stream(path);
+            if (snd != -1 && snd != undefined)
+            {
+                variable_struct_set(global.vs_pv_snd, key, snd);
+                vs_media_try_play();
+            }
+            else variable_struct_set(global.vs_pv_fail, key, true);
+        }
+    }
+    else if (key != "")
+    {
+        if (kind == "jacket") variable_struct_set(global.vs_jk_fail, key, true);
+        else variable_struct_set(global.vs_pv_fail, key, true);
+    }
+    vs_media_schedule();
 }
 
 function vs_media_load_folder(_key, _dir)
@@ -235,14 +272,16 @@ function vs_media_load_folder(_key, _dir)
     repeat (4)
     {
         var p = _dir + names[i];
-        if (file_exists(p))
+        var spr = -1;
+        if (file_exists(p)) spr = sprite_add(p, 1, false, false, 0, 0);
+        if ((spr == -1 || !sprite_exists(spr)) && file_exists(vs_media_abs(p)))
         {
-            var spr = sprite_add(p, 1, false, false, 0, 0);
-            if (spr != -1 && sprite_exists(spr))
-            {
-                variable_struct_set(global.vs_jk_spr, _key, spr);
-                return;
-            }
+            spr = sprite_add(vs_media_abs(p), 1, false, false, 0, 0);
+        }
+        if (spr != -1 && sprite_exists(spr))
+        {
+            variable_struct_set(global.vs_jk_spr, _key, spr);
+            return;
         }
         i++;
     }
@@ -256,9 +295,18 @@ function vs_media_on_http()
     var rid = ds_map_find_value(async_load, "id");
     if (rid == undefined || string(rid) != string(global.vs_media_rid)) return;
     var gmStatus = ds_map_find_value(async_load, "status");
-    if (gmStatus == 1) return;
+    var got = ds_map_find_value(async_load, "sizeDownloaded");
+    var tot = ds_map_find_value(async_load, "contentLength");
+    if (got != undefined) global.vs_media_got = real(got);
+    if (tot != undefined) global.vs_media_total = real(tot);
+    var doneProg = (global.vs_media_total > 0 && global.vs_media_got >= global.vs_media_total);
+    if (gmStatus == 1 && !doneProg)
+    {
+        return;
+    }
     var httpStatus = ds_map_find_value(async_load, "http_status");
     var httpOk = (httpStatus == undefined || (httpStatus >= 200 && httpStatus < 300));
-    var ok = (gmStatus >= 0) && httpOk && file_exists(global.vs_media_path);
+    var ok = ((gmStatus >= 0) || doneProg) && httpOk;
+    show_debug_message("VS Media: done " + string(global.vs_media_kind) + " " + string(global.vs_media_id) + " ok=" + string(ok) + " http=" + string(httpStatus) + " st=" + string(gmStatus));
     vs_media_finish(ok);
 }

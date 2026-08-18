@@ -98,6 +98,25 @@ function vs_dlbr_apply_filter()
     if (sel < 0) sel = 0;
 }
 
+function vs_dlbr_row_jacket(_r)
+{
+    if (_r == undefined) return "";
+    if (variable_struct_exists(_r, "jacketUrl") && _r.jacketUrl != "") return string(_r.jacketUrl);
+    var sid = "";
+    if (variable_struct_exists(_r, "id")) sid = string(_r.id);
+    if (sid == "") return "";
+    var fold = (variable_struct_exists(_r, "kind") && _r.kind == 2) ? "/uploads/shatters/" : "/uploads/songs/";
+    return vs_online_server_url() + fold + sid + "/jacket.png";
+}
+
+function vs_dlbr_row_audio(_r)
+{
+    if (_r == undefined) return "";
+    if (variable_struct_exists(_r, "previewUrl") && _r.previewUrl != "") return string(_r.previewUrl);
+    if (variable_struct_exists(_r, "musicUrl") && _r.musicUrl != "") return string(_r.musicUrl);
+    return vs_media_audio_url("", vs_dlbr_row_jacket(_r), variable_struct_exists(_r, "id") ? _r.id : "");
+}
+
 function vs_dlbr_selected_refresh()
 {
     if (array_length(rows) == 0)
@@ -107,7 +126,7 @@ function vs_dlbr_selected_refresh()
     }
     var r = rows[sel];
     vs_dlbr_set_status(vs_dlmgr_row_status(r));
-    vs_media_select(r.id, r.jacketUrl, (r.previewUrl != "") ? r.previewUrl : r.musicUrl);
+    vs_media_select(r.id, vs_dlbr_row_jacket(r), vs_dlbr_row_audio(r));
 }
 
 function vs_dlbr_current_web_row()
@@ -148,8 +167,7 @@ function vs_dlbr_toggle_preview_auto()
     var r = vs_dlbr_current_web_row();
     if (r != undefined)
     {
-        var audio = (variable_struct_exists(r, "previewUrl") && r.previewUrl != "") ? r.previewUrl : ((variable_struct_exists(r, "musicUrl")) ? r.musicUrl : "");
-        vs_media_select(r.id, r.jacketUrl, audio);
+        vs_media_select(r.id, vs_dlbr_row_jacket(r), vs_dlbr_row_audio(r));
     }
 }
 
@@ -1088,7 +1106,7 @@ function vs_dlbr_open_detail(_r, _local)
     }
     detail_id = _r.id;
     detail_chart = _r.chartId;
-    vs_media_select(_r.id, _r.jacketUrl, (_r.previewUrl != "") ? _r.previewUrl : _r.musicUrl);
+    vs_media_select(_r.id, vs_dlbr_row_jacket(_r), vs_dlbr_row_audio(_r));
     vs_songstore_fetch(variable_struct_exists(_r, "kind") ? _r.kind : 0, _r.id, vs_dlbr_on_detail);
 }
 
@@ -1104,6 +1122,10 @@ function vs_dlbr_on_detail(_ok, _data)
             return;
         }
         detail = _data;
+        var ju = variable_struct_exists(_data, "jacketUrl") ? _data.jacketUrl : "";
+        var pu = variable_struct_exists(_data, "previewUrl") ? _data.previewUrl : "";
+        var mu = variable_struct_exists(_data, "musicUrl") ? _data.musicUrl : "";
+        vs_media_select(detail_id, (ju != "") ? ju : vs_dlbr_row_jacket(vs_dlbr_detail_row()), (pu != "") ? pu : mu);
         var ai = vs_dlbr_row_all_index(detail_chart);
         if (ai < 0) return;
         var rr = rows_all[ai];
