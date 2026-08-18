@@ -660,15 +660,27 @@ function vs_dlbr_step()
     }
 }
 
+function vs_dlbr_clip_text(_s, _maxw)
+{
+    var s = string(_s);
+    if (_maxw <= 0 || string_width(s) <= _maxw) return s;
+    while (string_length(s) > 1 && string_width(s + "..") > _maxw)
+    {
+        s = string_copy(s, 1, string_length(s) - 1);
+    }
+    return s + "..";
+}
+
 function vs_dlbr_draw()
 {
     var cw = display_get_gui_width();
     var ch = display_get_gui_height();
-    var bw = min(560, max(420, floor(cw * 0.62)));
-    var bh = min(300, max(230, floor(ch * 0.52)));
-    var bx = (cw - bw) / 2;
-    var by = (ch - bh) / 2;
-    var rowh = 22;
+    var pad = 4;
+    var bw = max(80, cw - pad * 2);
+    var bh = max(60, ch - pad * 2);
+    var bx = pad;
+    var by = pad;
+    var rowh = 14;
 
     draw_set_alpha(0.72);
     draw_set_color(c_black);
@@ -676,7 +688,7 @@ function vs_dlbr_draw()
     draw_set_alpha(1);
 
     draw_set_color(make_color_rgb(12, 14, 18));
-    draw_rectangle(bx - 2, by - 2, bx + bw + 2, by + bh + 2, false);
+    draw_rectangle(bx, by, bx + bw, by + bh, false);
     draw_set_color(make_color_rgb(48, 52, 60));
     draw_rectangle(bx, by, bx + bw, by + bh, true);
 
@@ -684,13 +696,21 @@ function vs_dlbr_draw()
     draw_set_halign(fa_left);
     draw_set_valign(fa_top);
     draw_set_color(make_color_rgb(80, 220, 230));
-    draw_text(bx + 10, by + 5, "Chart Downloader");
+    draw_text(bx + 6, by + 2, "Downloader");
     draw_set_font(global.default_font);
 
-    vs_dlbr_draw_tabs(bx + 10, by + 18, bw - 20);
+    var pg = (view == 0)
+        ? ("[" + string(page) + "/" + string(maxpage) + "]")
+        : ("[" + string(array_length(local_rows)) + "/" + string(array_length(local_all)) + "]");
+    draw_set_halign(fa_right);
+    draw_set_color(make_color_rgb(180, 186, 196));
+    draw_text(bx + bw - 6, by + 3, pg);
+    draw_set_halign(fa_left);
 
-    var listTop = by + 34;
-    var listBot = by + bh - 36;
+    vs_dlbr_draw_tabs(bx + 6, by + 14, bw - 12);
+
+    var listTop = by + 26;
+    var listBot = by + bh - 24;
     var vis = max(1, floor((listBot - listTop) / rowh));
     var n = (view == 0) ? array_length(rows) : array_length(local_rows);
     var start_idx = max(0, sel - floor(vis / 2));
@@ -700,28 +720,25 @@ function vs_dlbr_draw()
     if (n == 0)
     {
         draw_set_color(c_white);
-        draw_text(bx + 14, listTop + 8, (view == 0) ? "No charts match." : "No custom charts in Custom Songs/.");
+        draw_text(bx + 8, listTop + 6, vs_dlbr_clip_text((view == 0) ? "No charts match." : "No custom charts.", bw - 16));
     }
     else
     {
         var i = start_idx;
         repeat (end_idx - start_idx)
         {
-            vs_dlbr_draw_bar(bx + 8, listTop + ((i - start_idx) * rowh), bw - 16, rowh - 3, i);
+            vs_dlbr_draw_bar(bx + 4, listTop + ((i - start_idx) * rowh), bw - 8, rowh - 2, i);
             i++;
         }
     }
 
-    var st = string(status);
-    if (string_length(st) > 64) st = string_copy(st, 1, 61) + "...";
+    var st = vs_dlbr_clip_text(string(status), bw - 12);
     draw_set_color(make_color_rgb(120, 210, 140));
-    draw_text(bx + 10, by + bh - 32, st);
+    draw_text(bx + 6, by + bh - 22, st);
 
-    var hint1 = searching ? "Enter confirm" : ((view == 0) ? "Enter details   Tab search   T catalog   F filter" : "Enter details   Tab search   T catalog");
-    var hint2 = searching ? "Esc cancel" : ((view == 0) ? "<> page   V local   Esc close" : "V web   Esc close");
+    var hint = searching ? "Enter  Esc" : ((view == 0) ? "Enter  Tab  T  F  <>  V  Esc" : "Enter  Tab  T  V  Esc");
     draw_set_color(make_color_rgb(120, 126, 136));
-    draw_text(bx + 10, by + bh - 20, hint1);
-    draw_text(bx + 10, by + bh - 11, hint2);
+    draw_text(bx + 6, by + bh - 12, vs_dlbr_clip_text(hint, bw - 12));
 
     if (detail_open) vs_dlbr_draw_detail();
     if (updating) vs_dlbr_draw_dl_popup();
@@ -735,8 +752,8 @@ function vs_dlbr_draw_dl_popup()
 {
     var cw = display_get_gui_width();
     var ch = display_get_gui_height();
-    var pw = 220;
-    var ph = 78;
+    var pw = min(220, max(80, cw - 8));
+    var ph = min(78, max(48, ch - 8));
     var px = (cw - pw) / 2;
     var py = (ch - ph) / 2;
     draw_set_alpha(0.55);
@@ -768,14 +785,13 @@ function vs_dlbr_draw_dl_popup()
     draw_set_font(fnt_monacovs);
     draw_set_halign(fa_center);
     draw_set_color(c_aqua);
-    draw_text(px + pw / 2, py + 4, title);
+    draw_text(px + pw / 2, py + 4, vs_dlbr_clip_text(title, pw - 12));
     draw_set_font(global.default_font);
     draw_set_halign(fa_left);
     draw_set_color(c_white);
-    draw_text(px + 8, py + 20, files);
+    draw_text(px + 8, py + 20, vs_dlbr_clip_text(files, pw - 16));
     draw_set_color(c_gray);
-    if (string_length(fname) > 28) fname = string_copy(fname, 1, 25) + "...";
-    draw_text(px + 8, py + 32, fname);
+    draw_text(px + 8, py + 32, vs_dlbr_clip_text(fname, pw - 16));
 
     var barx = px + 8;
     var bary = py + 46;
@@ -803,32 +819,28 @@ function vs_dlbr_on_close()
 
 function vs_dlbr_draw_tabs(_x, _y, _w)
 {
-    var names = ["SONGS", "BACKSTAGE", "SHATTER", "LOCAL"];
+    var names = ["SONG", "BACK", "SHTR", "LOC"];
     var tx = _x;
     var i = 0;
     repeat (4)
     {
         var on = (i == 3) ? (view == 1) : (view == 0 && catalog == i);
+        var lab = names[i];
+        var tw = string_width(lab) + 8;
+        if (tx + tw > _x + _w) break;
         draw_set_color(on ? make_color_rgb(80, 220, 230) : make_color_rgb(110, 116, 126));
-        draw_text(tx, _y, names[i]);
-        tx += string_width(names[i]) + 10;
+        draw_text(tx, _y, lab);
+        tx += tw;
         i++;
     }
-    var pg = (view == 0)
-        ? ("[" + string(page) + "/" + string(maxpage) + "]  " + vs_dlmgr_filter_name(filter))
-        : ("[" + string(array_length(local_rows)) + "/" + string(array_length(local_all)) + "]");
-    draw_set_halign(fa_right);
-    draw_set_color(make_color_rgb(180, 186, 196));
-    draw_text(_x + _w, _y, pg);
-    draw_set_halign(fa_left);
 }
 
 function vs_dlbr_draw_search()
 {
     var cw = display_get_gui_width();
     var ch = display_get_gui_height();
-    var pw = min(360, cw - 40);
-    var ph = 78;
+    var pw = min(260, max(80, cw - 8));
+    var ph = min(56, max(40, ch - 8));
     var px = (cw - pw) / 2;
     var py = (ch - ph) / 2;
     draw_set_alpha(0.62);
@@ -836,20 +848,18 @@ function vs_dlbr_draw_search()
     draw_rectangle(0, 0, cw, ch, false);
     draw_set_alpha(1);
     draw_set_color(c_black);
-    draw_rectangle(px - 2, py - 2, px + pw + 2, py + ph + 2, false);
+    draw_rectangle(px, py, px + pw, py + ph, false);
     draw_set_color(make_color_rgb(80, 220, 230));
     draw_rectangle(px, py, px + pw, py + ph, true);
     draw_set_font(fnt_monacovs);
     draw_set_halign(fa_left);
     draw_set_color(c_white);
-    draw_text(px + 12, py + 6, "Search");
+    draw_text(px + 8, py + 3, "Search");
     draw_set_font(global.default_font);
     draw_set_color(c_lime);
-    var q = query + "_";
-    if (string_length(q) > 42) q = string_copy(q, string_length(q) - 41, 42);
-    draw_text(px + 12, py + 28, q);
+    draw_text(px + 8, py + 18, vs_dlbr_clip_text(query + "_", pw - 16));
     draw_set_color(make_color_rgb(120, 126, 136));
-    draw_text(px + 12, py + 52, "Enter confirm   Esc cancel");
+    draw_text(px + 8, py + ph - 12, "Enter  Esc");
 }
 
 function vs_dlbr_mark(_r)
@@ -893,22 +903,19 @@ function vs_dlbr_draw_bar(_x, _y, _w, _h, _idx)
         draw_rectangle(_x, _y, _x + _w, _y + _h, true);
     }
     draw_set_color(isSel ? c_black : vs_dlbr_mark_color(mk, false));
-    draw_text(_x + 6, _y + 4, mk);
-    var nm = web ? r.name : r.name;
-    var ar = web ? r.artist : r.artist;
-    var line = nm;
-    if (ar != "") line += "  -  " + ar;
+    draw_text(_x + 4, _y + 2, mk);
+    var line = r.name;
+    if (r.artist != "") line += " - " + r.artist;
     if (web && variable_struct_exists(r, "kind") && r.kind == 2)
     {
         var dlab = r.diffName;
         if (r.diffNum != "") dlab = (dlab != "") ? (dlab + " " + r.diffNum) : r.diffNum;
-        if (dlab != "") line += "  [" + dlab + "]";
+        if (dlab != "") line += " [" + dlab + "]";
     }
-    else if (web && r.chartCount > 0) line += "  [" + string(r.chartCount) + "]";
-    if (web && r.hasBackstage) line += "  B";
-    if (string_length(line) > 52) line = string_copy(line, 1, 49) + "...";
+    else if (web && r.chartCount > 0) line += " [" + string(r.chartCount) + "]";
+    if (web && r.hasBackstage) line += " B";
     draw_set_color(isSel ? c_black : c_white);
-    draw_text(_x + 22, _y + 4, (isSel ? "> " : "  ") + line);
+    draw_text(_x + 16, _y + 2, vs_dlbr_clip_text((isSel ? "> " : "") + line, _w - 20));
 }
 
 function vs_dlbr_open_detail(_r, _local)
@@ -1118,8 +1125,8 @@ function vs_dlbr_draw_detail()
 {
     var cw = display_get_gui_width();
     var ch = display_get_gui_height();
-    var pw = min(420, cw - 40);
-    var ph = min(210, ch - 40);
+    var pw = min(300, max(80, cw - 8));
+    var ph = min(150, max(70, ch - 8));
     var px = (cw - pw) / 2;
     var py = (ch - ph) / 2;
 
@@ -1128,13 +1135,13 @@ function vs_dlbr_draw_detail()
     draw_rectangle(0, 0, cw, ch, false);
     draw_set_alpha(1);
     draw_set_color(make_color_rgb(14, 16, 20));
-    draw_rectangle(px - 2, py - 2, px + pw + 2, py + ph + 2, false);
+    draw_rectangle(px, py, px + pw, py + ph, false);
     draw_set_color(make_color_rgb(80, 220, 230));
     draw_rectangle(px, py, px + pw, py + ph, true);
 
-    var jx = px + 12;
-    var jy = py + 12;
-    var js = 72;
+    var jx = px + 6;
+    var jy = py + 6;
+    var js = min(40, ph - 36);
     draw_set_color(make_color_rgb(28, 30, 36));
     draw_rectangle(jx, jy, jx + js, jy + js, false);
     var spr = vs_media_jacket(detail_id);
@@ -1150,7 +1157,7 @@ function vs_dlbr_draw_detail()
         draw_set_halign(fa_left);
     }
 
-    var tx = jx + js + 12;
+    var tx = jx + js + 6;
     var name = detail_chart;
     var artist = "";
     var owner = "";
@@ -1165,121 +1172,106 @@ function vs_dlbr_draw_detail()
         if (variable_struct_exists(detail, "jacketArtist")) jacketBy = string(detail.jacketArtist);
         if (variable_struct_exists(detail, "chartId") && detail.chartId != "") detail_chart = detail.chartId;
     }
+    var textw = px + pw - tx - 6;
     draw_set_font(fnt_monacovs);
     draw_set_color(c_white);
-    if (string_length(name) > 28) name = string_copy(name, 1, 25) + "...";
-    draw_text(tx, py + 10, name);
+    draw_text(tx, py + 6, vs_dlbr_clip_text(name, textw));
     draw_set_font(global.default_font);
     draw_set_color(make_color_rgb(180, 186, 196));
-    draw_text(tx, py + 26, (artist != "") ? artist : " ");
+    draw_text(tx, py + 18, vs_dlbr_clip_text((artist != "") ? artist : " ", textw));
     draw_set_color(make_color_rgb(140, 146, 156));
     var meta = detail_chart;
-    if (owner != "") meta += "  ·  " + owner;
-    if (bpm != "") meta += "  ·  BPM " + bpm;
-    draw_text(tx, py + 40, meta);
-    if (jacketBy != "") draw_text(tx, py + 52, "Jacket  " + jacketBy);
+    if (owner != "") meta += "  " + owner;
+    if (bpm != "") meta += "  BPM " + bpm;
+    draw_text(tx, py + 28, vs_dlbr_clip_text(meta, textw));
+    if (jacketBy != "") draw_text(tx, py + 38, vs_dlbr_clip_text("Jacket " + jacketBy, textw));
 
-    var dy = py + 90;
+    var right = px + pw - 6;
+    var byb = py + ph - 22;
+    var dy = py + js + 10;
     draw_set_color(make_color_rgb(200, 204, 212));
-    if (detail_loading)
+    if (dy + 12 < byb)
     {
-        draw_text(px + 12, dy, "Loading charts...");
-    }
-    else if (detail != undefined && variable_struct_exists(detail, "charts") && is_array(detail.charts))
-    {
-        var charts = detail.charts;
-        var cx = px + 12;
-        var i = 0;
-        repeat (array_length(charts))
+        if (detail_loading)
         {
-            var c = charts[i];
-            var diff = variable_struct_exists(c, "difficulty") ? string(c.difficulty) : "";
-            var lab = string_upper(diff);
-            var num = "";
-            if (variable_struct_exists(c, "difficultyDisplay") && c.difficultyDisplay != "") num = string(c.difficultyDisplay);
-            else if (variable_struct_exists(c, "difficultyConstant")) num = string(c.difficultyConstant);
-            var nd = variable_struct_exists(c, "noteDesigner") ? string(c.noteDesigner) : "";
-            var pill = lab;
-            if (num != "") pill += " " + num;
-            var pw2 = string_width(pill) + 10;
-            draw_set_color(vs_dlbr_diff_color(diff));
-            draw_rectangle(cx, dy, cx + pw2, dy + 12, false);
-            draw_set_color(c_black);
-            draw_text(cx + 5, dy + 1, pill);
-            cx += pw2 + 6;
-            if (nd != "")
+            draw_text(px + 6, dy, vs_dlbr_clip_text("Loading...", right - px - 6));
+        }
+        else if (detail != undefined && variable_struct_exists(detail, "charts") && is_array(detail.charts))
+        {
+            var charts = detail.charts;
+            var cx = px + 6;
+            var i = 0;
+            repeat (array_length(charts))
             {
-                draw_set_color(make_color_rgb(160, 166, 176));
-                draw_text(cx, dy + 1, nd);
-                cx += string_width(nd) + 10;
+                var chd = charts[i];
+                var diff = variable_struct_exists(chd, "difficulty") ? string(chd.difficulty) : "";
+                var pill = string_upper(diff);
+                if (variable_struct_exists(chd, "difficultyDisplay") && chd.difficultyDisplay != "") pill += " " + string(chd.difficultyDisplay);
+                else if (variable_struct_exists(chd, "difficultyConstant")) pill += " " + string(chd.difficultyConstant);
+                var pw2 = string_width(pill) + 8;
+                if (cx + pw2 > right) break;
+                draw_set_color(vs_dlbr_diff_color(diff));
+                draw_rectangle(cx, dy, cx + pw2, dy + 11, false);
+                draw_set_color(c_black);
+                draw_text(cx + 4, dy + 1, pill);
+                cx += pw2 + 4;
+                i++;
             }
-            i++;
         }
-    }
-    else if (detail != undefined && variable_struct_exists(detail, "diffs") && is_array(detail.diffs))
-    {
-        var cx = px + 12;
-        var i = 0;
-        repeat (array_length(detail.diffs))
+        else if (detail != undefined && variable_struct_exists(detail, "diffs") && is_array(detail.diffs))
         {
-            var lab = string(detail.diffs[i]);
-            var pw2 = string_width(lab) + 10;
-            draw_set_color(vs_dlbr_diff_color(lab));
-            draw_rectangle(cx, dy, cx + pw2, dy + 12, false);
+            var cx = px + 6;
+            var i = 0;
+            repeat (array_length(detail.diffs))
+            {
+                var lab = string(detail.diffs[i]);
+                var pw2 = string_width(lab) + 8;
+                if (cx + pw2 > right) break;
+                draw_set_color(vs_dlbr_diff_color(lab));
+                draw_rectangle(cx, dy, cx + pw2, dy + 11, false);
+                draw_set_color(c_black);
+                draw_text(cx + 4, dy + 1, lab);
+                cx += pw2 + 4;
+                i++;
+            }
+        }
+        else if (detail != undefined && variable_struct_exists(detail, "difficultyName"))
+        {
+            var lab = string(detail.difficultyName);
+            if (variable_struct_exists(detail, "difficultyNumber") && detail.difficultyNumber != "") lab += " " + string(detail.difficultyNumber);
+            lab = vs_dlbr_clip_text(lab, right - px - 14);
+            var pw2 = string_width(lab) + 8;
+            draw_set_color(make_color_rgb(176, 107, 240));
+            draw_rectangle(px + 6, dy, px + 6 + pw2, dy + 11, false);
             draw_set_color(c_black);
-            draw_text(cx + 5, dy + 1, lab);
-            cx += pw2 + 6;
-            i++;
-        }
-        if (variable_struct_exists(detail, "pack"))
-        {
-            draw_set_color(make_color_rgb(140, 146, 156));
-            draw_text(px + 12, dy + 16, string(detail.pack));
-        }
-    }
-    else if (detail != undefined && variable_struct_exists(detail, "difficultyName"))
-    {
-        var lab = string(detail.difficultyName);
-        var num = variable_struct_exists(detail, "difficultyNumber") ? string(detail.difficultyNumber) : "";
-        if (num != "") lab += " " + num;
-        var pw2 = string_width(lab) + 10;
-        draw_set_color(make_color_rgb(176, 107, 240));
-        draw_rectangle(px + 12, dy, px + 12 + pw2, dy + 12, false);
-        draw_set_color(c_black);
-        draw_text(px + 17, dy + 1, lab);
-        if (variable_struct_exists(detail, "noteDesigner") && detail.noteDesigner != "")
-        {
-            draw_set_color(make_color_rgb(160, 166, 176));
-            draw_text(px + 24 + pw2, dy + 1, string(detail.noteDesigner));
+            draw_text(px + 10, dy + 1, lab);
         }
     }
 
     var btns = vs_dlbr_detail_buttons();
     var bn = array_length(btns);
-    var byb = py + ph - 28;
-    var bx = px + 12;
+    var bx = px + 6;
     var i = 0;
     repeat (bn)
     {
         var lab = btns[i].label;
-        var bw2 = string_width(lab) + 16;
+        var bw2 = string_width(lab) + 12;
+        if (bx + bw2 > right) break;
         var on = (i == detail_btn);
         if (on)
         {
             draw_set_color((btns[i].id == "yes" || btns[i].id == "del") ? make_color_rgb(241, 75, 107) : make_color_rgb(240, 210, 70));
-            draw_rectangle(bx, byb, bx + bw2, byb + 16, false);
+            draw_rectangle(bx, byb, bx + bw2, byb + 12, false);
             draw_set_color(c_black);
         }
         else
         {
             draw_set_color(make_color_rgb(40, 44, 52));
-            draw_rectangle(bx, byb, bx + bw2, byb + 16, false);
+            draw_rectangle(bx, byb, bx + bw2, byb + 12, false);
             draw_set_color(c_white);
         }
-        draw_text(bx + 8, byb + 3, lab);
-        bx += bw2 + 8;
+        draw_text(bx + 6, byb + 2, lab);
+        bx += bw2 + 4;
         i++;
     }
-    draw_set_color(make_color_rgb(120, 126, 136));
-    draw_text(px + 12, py + ph - 12, "<> button   Enter act   Esc back");
 }
