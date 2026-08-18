@@ -127,7 +127,7 @@
     {
         "Entry": "gml_Object_obj_multiplayer_lobby_Draw_0",
         "Find": "draw_text(2, 170, \"Steamworks:\");",
-        "Value": "if (vs_online_is_custom()) { if (!vs_lobby_in_lobby()) { draw_set_halign(fa_center); draw_text_o(160, 174, \"Hold Shift + Paste Code to join a random lobby\"); draw_set_halign(fa_left); } draw_text(2, 170, \"Server:\"); } else { draw_text(2, 170, \"Steamworks:\"); }",
+        "Value": "if (vs_online_is_custom()) { draw_text(2, 170, \"Server:\"); } else { draw_text(2, 170, \"Steamworks:\"); }",
         "Type": 1
     },
 
@@ -168,15 +168,391 @@
         "Type": 0
     },
     {
-        "Entry": "gml_Object_o_songselect_NEW_Create_0",
-        "Find": "global.selected_pack = 0;",
-        "Value": "global.selected_pack = (variable_global_exists(\"vs_local_jump_pack\") && global.vs_local_jump_pack >= 0) ? global.vs_local_jump_pack : 0;",
+        "Entry": "gml_Object_obj_pre_init_Create_0",
+        "Find": "global.highscore_file = \"highscore_table\";",
+        "Value": "global.highscore_file = vs_online_highscore_file(\"highscore_table\");",
         "Type": 0
     },
     {
-        "Entry": "gml_Object_o_songselect_NEW_Create_0",
-        "Find": "temporary_rs = 0;",
-        "Value": "temporary_rs = 0; if (variable_global_exists(\"vs_local_jump_pack\") && global.vs_local_jump_pack >= 0 && global.vs_local_jump_pos >= 0 && global.vs_local_jump_pos < array_length_1d(global.current_pack)) { cursor_pos = global.vs_local_jump_pos; for (var _lii = 0; _lii < array_length_1d(global.current_pack); _lii++) { with (song_object[_lii]) { difference = pos_id - o_songselect_NEW.cursor_pos; TweenEasyMove(x, y, 107 + (130 * difference), 33, 1, 5, EaseOutQuad); } } } global.vs_local_jump_pack = -1; global.vs_local_jump_pos = -1; global.vs_local_jump_diff = -1;",
+        "Entry": "gml_GlobalScript_define_options",
+        "Find": "global.highscore_file = arg0 ? \"highscore_table_dev\" : \"highscore_table\";",
+        "Value": "global.highscore_file = vs_online_highscore_file(arg0 ? \"highscore_table_dev\" : \"highscore_table\");",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_GlobalScript_define_options",
+        "Find": "global.highscore_file = r ? \"highscore_table_dev\" : \"highscore_table\";",
+        "Value": "global.highscore_file = vs_online_highscore_file(r ? \"highscore_table_dev\" : \"highscore_table\");",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_GlobalScript_define_options",
+        "Find": "return global.highscore_file == \"highscore_table_dev\";",
+        "Value": "return vs_online_highscore_is_dev();",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_GlobalScript_define_options",
+        "Find": "ini_write_real(\"dev\", \"separate_highscores\", (global.highscore_file == \"highscore_table\") ? 0 : 1);",
+        "Value": "ini_write_real(\"dev\", \"separate_highscores\", vs_online_highscore_is_dev() ? 1 : 0);",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_GlobalScript_upload_score",
+        "Find": "function upload_chart_score(arg0, arg1, arg2)\n{",
+        "Value": "function upload_chart_score(arg0, arg1, arg2)\n{\n    if (vs_online_is_custom()) { vs_online_upload_chart(arg0, arg1, arg2); return; }",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_GlobalScript_upload_score",
+        "Find": "function upload_score(arg0, arg1, arg2 = false)\n{",
+        "Value": "function upload_score(arg0, arg1, arg2 = false)\n{\n    if (vs_online_is_custom()) return;",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_GlobalScript_unlock_achievement",
+        "Find": "steam_set_achievement(arg0);",
+        "Value": "if (vs_online_is_custom()) { vs_online_unlock_achievement(arg0); } else { steam_set_achievement(arg0); }",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_Object_o_achievement_manager_confirm_Step_0",
+        "Find": "steam_clear_achievement(internal);",
+        "Value": "if (vs_online_is_custom()) { vs_online_clear_achievement(internal); } else { steam_clear_achievement(internal); }",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_Object_o_leaderboard_Create_0",
+        "Find": "downloadScores = function()\n{\n    data = [];\n    lbId = steam_download_scores(name, 1, maxScores);\n    canExtend = true;\n};",
+        "ExternalFile": "leaderboard_download.gml",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_Object_o_leaderboard_Create_0",
+        "Find": "downloadScoresFriends = function()\n{\n    data = [];\n    lbId = steam_download_friends_scores(name);\n    canExtend = false;\n};",
+        "ExternalFile": "leaderboard_friends.gml",
+        "Type": 1
+    },
+
+    {
+        "Entry": "gml_GlobalScript_unix_timestamp",
+        "Find": "if (arg0 != undefined || !steam_is_user_logged_on())",
+        "Value": "if (arg0 != undefined || vs_online_is_custom() || !steam_is_user_logged_on())",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_Object_initiategame_Create_0",
+        "Find": "blacklist = http_get_file(\"https://shrinereport.xyz/blacklist.vsd\", \"blacklist.vsd\");",
+        "Value": "blacklist = http_get_file(vs_online_is_custom() ? (vs_online_server_url() + \"/blacklist\") : \"https://shrinereport.xyz/blacklist.vsd\", \"blacklist.vsd\");",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_GlobalScript_rating_functions",
+        "Find": "        unlock_achievement(\"rating_13000\");\n    }\n}",
+        "Value": "        unlock_achievement(\"rating_13000\");\n    }\n    if (vs_online_is_custom()) vs_online_rating_refresh();\n}",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_GlobalScript_rating_functions",
+        "Find": "        array_push(global.rsw_ex_top10, new ex_rating_entry(0, 0, 0, 1, 0));\n    }\n}",
+        "Value": "        array_push(global.rsw_ex_top10, new ex_rating_entry(0, 0, 0, 1, 0));\n    }\n    if (vs_online_is_custom()) vs_online_rating_window_refresh();\n}",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_Object_obj_ratingWindow_Create_0",
+        "Find": "lbIdTop100 = steam_download_scores(\"rating\", 0, 100);\ndataFriends = [];\nlbIdFriends = steam_download_friends_scores(\"rating\");",
+        "Value": "if (vs_online_is_custom()) { lbIdTop100 = -1; dataFriends = []; lbIdFriends = -1; vs_online_rating_refresh(); } else { lbIdTop100 = steam_download_scores(\"rating\", 0, 100); dataFriends = []; lbIdFriends = steam_download_friends_scores(\"rating\"); }",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_Object_obj_multiplayer_lobby_Create_0",
+        "Find": "updateButtons();\n            send_packet(SendPlayerInfoPacket);\n            global.winner = \"\";\n            member_y_offset = 0;",
+        "Value": "updateButtons();\n            if (!vs_online_is_custom()) send_packet(SendPlayerInfoPacket);\n            global.winner = \"\";\n            member_y_offset = 0;",
+        "Type": 1
+    },
+
+    {
+        "Entry": "gml_Object_o_tamasatchi_master_Step_0",
+        "Find": "steam_upload_score(\"bmode_tamasatchi\", stats[UnknownEnum.Value_4]);",
+        "Value": "if (!vs_online_is_custom()) steam_upload_score(\"bmode_tamasatchi\", stats[UnknownEnum.Value_4]);",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_Object_o_newstore_Step_0",
+        "Find": "steam_upload_score_ext(\"bmode_balatori\", tc_score, true);",
+        "Value": "if (!vs_online_is_custom()) steam_upload_score_ext(\"bmode_balatori\", tc_score, true);",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_Object_o_leaderboard_startlw_Create_0",
+        "Find": "steam_upload_score(\"wws_connected\", 1);",
+        "Value": "if (!vs_online_is_custom()) steam_upload_score(\"wws_connected\", 1);",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_Object_o_leaderboard_startlw_Create_0",
+        "Find": "lbId = steam_download_scores(name, arg0, arg0 + maxScores);",
+        "Value": "lbId = vs_online_is_custom() ? -1 : steam_download_scores(name, arg0, arg0 + maxScores);",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_Object_o_leaderboard_rating_debug_Create_0",
+        "Find": "lbId = steam_download_scores(name, arg0, arg0 + maxScores);",
+        "Value": "lbId = vs_online_is_custom() ? -1 : steam_download_scores(name, arg0, arg0 + maxScores);",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_Object_o_ch0_argvote_Step_0",
+        "Find": "steam_upload_score_ext(\"crosssplitarg\", image_index + 1, true);",
+        "Value": "if (!vs_online_is_custom()) steam_upload_score_ext(\"crosssplitarg\", image_index + 1, true);",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_Object_o_c0_sentinelwindow_Step_0",
+        "Find": "steam_upload_score(\"sentinel_ascent\", dataTop100[0].score + donateAmount);",
+        "Value": "if (!vs_online_is_custom()) steam_upload_score(\"sentinel_ascent\", dataTop100[0].score + donateAmount);",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_Object_o_c0_sentinelwindow_Create_0",
+        "Find": "lbIdTop100 = steam_download_scores_around_user(\"sentinel_ascent\", 0, 1);",
+        "Value": "lbIdTop100 = vs_online_is_custom() ? -1 : steam_download_scores_around_user(\"sentinel_ascent\", 0, 1);",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_Object_o_c0_sentinel_bar_KeyPress_116",
+        "Find": "lbIdTop100 = steam_download_scores(\"sentinel_ascent\", 2, 101);",
+        "Value": "lbIdTop100 = vs_online_is_custom() ? -1 : steam_download_scores(\"sentinel_ascent\", 2, 101);",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_Object_o_c0_sentinel_bar_Create_0",
+        "Find": "lbIdTop100 = steam_download_scores(\"sentinel_ascent\", 2, 101);",
+        "Value": "lbIdTop100 = vs_online_is_custom() ? -1 : steam_download_scores(\"sentinel_ascent\", 2, 101);",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_Object_o_c0_sentinel_bar_Alarm_0",
+        "Find": "lbIdTop100 = steam_download_scores(\"sentinel_ascent\", 2, 101);",
+        "Value": "lbIdTop100 = vs_online_is_custom() ? -1 : steam_download_scores(\"sentinel_ascent\", 2, 101);",
+        "Type": 0
+    },
+
+    {
+        "Entry": "gml_Object_o_2023res_songwindow_Draw_0",
+        "Find": "var members = o_st_handle.lobbyMembers;",
+        "Value": "var members = o_st_handle.lobbyMembers;array_sort(members, function(arg0, arg1){return arg1.score - arg0.score;});",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_Object_obj_multiplayer_lobby_Create_0",
+        "Find": "var s = o_st_handle.songQueue[0];",
+        "Value": "var s = o_st_handle.songQueue[0];var song = struct_copy(global.song_list[s.songId]);if (variable_struct_exists(global.song_list[s.songId], \"enc_data\")) song.allowed_difficulties = (s.difficulty == 3) ? [3] : [0, 1, 2];",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_Object_obj_multiplayer_lobby_Create_0",
+        "Find": "select_difficulties: false",
+        "Value": "select_difficulties: !(variable_struct_exists(global.song_list[s.songId], \"enc_data\") && s.difficulty == 3)",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_Object_obj_multiplayer_lobby_Create_0",
+        "Find": "song: global.song_list[s.songId]",
+        "Value": "song: song",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_Object_obj_multiplayer_lobby_Create_0",
+        "Find": "is_active = false;",
+        "Value": "global.songselect_difficulty = difficulties[selected_difficulty].id;is_active = false;",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_GlobalScript_StartGamePacket",
+        "Find": "song.difficulty",
+        "Value": "global.songselect_difficulty",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_Object_obj_multiplayer_lobby_Create_0",
+        "Find": "steam_lobby_list_add_string_filter(\"code\", string_upper(keyboard_string), 0);",
+        "Value": "if (!input_check(10)) steam_lobby_list_add_string_filter(\"code\", string_upper(keyboard_string), 0); joining = 1;",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_Object_obj_multiplayer_lobby_Create_0",
+        "ExternalFile": "bwp_lobby_init.gml",
+        "Type": 3
+    },
+    {
+        "Entry": "gml_Object_obj_multiplayer_lobby_Draw_0",
+        "Find": "if (entering_code)",
+        "Value": "draw_set_color(c_white);draw_set_halign(fa_center);draw_text_o(160, startY + totalHeight + 7, string(\"Total Lobbies: {0}\\nHold Shift and Press \\\"Paste Code\\\" to join random lobby\", lobbyCount)); if (entering_code)",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_Object_obj_multiplayer_lobby_Create_0",
+        "Find": "var _lb_ID = steam_lobby_list_get_lobby_id(i);",
+        "Value": "var _lb_ID = steam_lobby_list_get_lobby_id((i + randomJoinOffset) % _lb_count);",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_Object_obj_multiplayer_lobby_Create_0",
+        "Find": "var _lb_count = steam_lobby_list_get_count();",
+        "Value": "var _lb_count = steam_lobby_list_get_count(); if(_lb_count > 0) randomJoinOffset = (randomJoinOffset + 1) % _lb_count;",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_Object_obj_multiplayer_lobby_Other_69",
+        "Find": "populateLobbies();",
+        "Value": "if (joining) {populateLobbies(); joining = 0;} else lobbyCount = steam_lobby_list_get_count();",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_Object_obj_multiplayer_lobby_Step_0",
+        "Find": "2 + (vs_lobby_is_owner() * 2)",
+        "Value": "(vs_lobby_is_owner()?array_length(menu_actions_host):array_length(menu_actions_player))-1",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_Object_obj_multiplayer_lobby_Draw_64",
+        "Find": "for (var i = 0; i < 5; i++)",
+        "Value": "for (var i = 0; i < array_length(menu_actions_host); i++)",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_Object_obj_multiplayer_lobby_Draw_64",
+        "Find": "for (var i = 0; i < 3; i++)",
+        "Value": "for (var i = 0; i < array_length(menu_actions_player); i++)",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_GlobalScript_register_packet_types",
+        "Find": "register_packet_type(61, SendStickerPacket);",
+        "Value": "register_packet_type(61, SendStickerPacket);register_packet_type(101, SuggestSongPacket);",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_Object_o_st_handle_Other_69",
+        "Find": "if (_success == 1)",
+        "Value": "if (_success == 1 && o_st_handle.getMember(data.user_id) != undefined)",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_Object_o_st_handle_Create_0",
+        "Find": "addMember = function(arg0)",
+        "ExternalFile": "bwp_add_member.gml",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_Object_o_st_handle_Create_0",
+        "ExternalFile": "bwp_suggest_init.gml",
+        "Type": 2
+    },
+    {
+        "Entry": "gml_Object_obj_multiplayer_lobby_Draw_64",
+        "ExternalFile": "bwp_suggest_draw.gml",
+        "Type": 3
+    },
+    {
+        "Entry": "gml_Object_o_songselect_main_Create_0",
+        "Find": "send_packet(AddSongPacket, ",
+        "Value": "send_packet(vs_lobby_is_owner() ? AddSongPacket : SuggestSongPacket, ",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_Object_obj_multiplayer_lobby_Step_0",
+        "Find": "if (!stickersActive)",
+        "ExternalFile": "bwp_suggest_input.gml",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_Object_obj_multiplayer_lobby_Create_0",
+        "ExternalFile": "bwp_suggest_button.gml",
+        "Type": 3
+    },
+    {
+        "Entry": "gml_Object_o_st_handle_Other_69",
+        "Find": "score:",
+        "Value": "score_:",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_Object_o_score_updater_Create_0",
+        "Find": "score:",
+        "Value": "score_:",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_GlobalScript_UpdateScorePacket",
+        "Find": "arg0.score",
+        "Value": "struct_get_fallback(arg0, \"score_\", struct_get_fallback(arg0, \"score\", 0))",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_Object_obj_multiplayer_lobby_Create_0",
+        "Find": "case \"choosesong\":",
+        "Value": "case \"choosesong\":send_packet(SendReadyPacket, false);",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_GlobalScript_AddSongPacket",
+        "Find": "o_st_handle.songQueue = [arg0];",
+        "Value": "o_st_handle.songQueue = [arg0];global.songselect_difficulty = arg0.difficulty;",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_Object_o_songselect_newconfirm_Create_0",
+        "Find": "var max_d = has_encore ? 4 : 3;",
+        "Value": "has_encore |= song.has_encore && global.multiplayerLobby;var max_d = has_encore ? 4 : 3;",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_GlobalScript_StartCountdownPacket",
+        "Find": "play_se(asset_get_index(@@string@@(\"sfx_count{0}\", arg0)));",
+        "Value": "play_se(vs_online_countdown_sound(arg0));",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_Object_o_score_updater_Draw_64",
+        "Value": "if (variable_global_exists(\"op_bwp_hide_leaderboard\") && global.op_bwp_hide_leaderboard == 1) exit;",
+        "Type": 2
+    },
+    {
+        "Entry": "gml_GlobalScript_StartGamePacket",
+        "Find": "results_room: scene_multiplayer_waiting_room",
+        "Value": "results_room: scene_multiplayer_waiting_room, start_sound: vs_online_start_sound()",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_GlobalScript_SendPlayerInfoPacket",
+        "Find": "return buffer;",
+        "Value": "buffer_write(buffer, buffer_bool, true);return buffer;",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_GlobalScript_SendPlayerInfoPacket",
+        "Find": "BasePacket(arg0, false, 3)",
+        "Value": "BasePacket(arg0, false, 3, 1)",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_GlobalScript_SendPlayerInfoPacket",
+        "Find": "buffer_delete(arg0);",
+        "Value": "try{obj.has_bwp = buffer_read(arg0, buffer_bool);}catch(e){obj.has_bwp = false;}buffer_delete(arg0);",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_GlobalScript_SendPlayerInfoPacket",
+        "Find": "member.class = arg0.class;",
+        "Value": "member.class = arg0.class;member.has_bwp = arg0.has_bwp;",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_Object_obj_multiplayer_lobby_Draw_64",
+        "Find": "draw_text_o(bx + ox + 32, by + oy + 22 + (i * 35), @@string@@(\"{0}\", member.rate));",
+        "Value": "draw_text_o(bx + ox + 32, by + oy + 22 + (i * 35), @@string@@(\"{0}\", member.rate));if (!vs_online_is_custom() && variable_struct_exists(member, \"has_bwp\") && member.has_bwp){draw_set_halign(fa_right);draw_set_color(c_lime);draw_text_o(bx + ox + 143, by + oy + 13 + (i * 35), \"Better WP\");}",
         "Type": 0
     }
 ]

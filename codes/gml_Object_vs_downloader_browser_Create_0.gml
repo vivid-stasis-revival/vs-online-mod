@@ -32,7 +32,8 @@ filter = 0;          // 0 all, 1 not downloaded, 2 downloaded, 3 updates
 
 rows_all = [];       // current server page rows (annotated, unfiltered)
 rows = [];           // filtered display rows
-local_rows = [];     // local view rows
+local_all = [];      // unfiltered local scan
+local_rows = [];     // local view rows (search-filtered)
 
 sel = 0;
 started = 0;         // input debounce after opening
@@ -415,14 +416,39 @@ self.toggle_view = function()
 };
 
 // --- local -----------------------------------------------------------------
-self.reload_local = function()
+self.apply_local_filter = function()
 {
-    local_rows = vs_localcharts_scan();
+    var src = local_all;
+    var q = string_lower(query);
+    var arr = [];
+    var n = array_length(src);
+    var i = 0;
+    repeat (n)
+    {
+        var r = src[i];
+        var keep = (q == "");
+        if (!keep)
+        {
+            keep = string_pos(q, string_lower(r.name)) > 0
+                || string_pos(q, string_lower(r.artist)) > 0
+                || string_pos(q, string_lower(r.chart_id)) > 0
+                || string_pos(q, string_lower(r.pack)) > 0;
+        }
+        if (keep) array_push(arr, r);
+        i++;
+    }
+    local_rows = arr;
     if (sel >= array_length(local_rows)) sel = array_length(local_rows) - 1;
     if (sel < 0) sel = 0;
+};
+
+self.reload_local = function()
+{
+    local_all = vs_localcharts_scan();
+    apply_local_filter();
     set_status((array_length(local_rows) > 0)
-        ? ("Local charts: " + string(array_length(local_rows)) + "  (Enter: jump to chart, R: reload)")
-        : "No local charts in Custom Songs/.");
+        ? ("Local charts: " + string(array_length(local_rows)) + "/" + string(array_length(local_all)) + "  (Enter: jump, Tab: search, R: reload)")
+        : (query == "" ? "No local charts in Custom Songs/." : "No local charts match \"" + query + "\"."));
 };
 
 self.jump_from_local = function()

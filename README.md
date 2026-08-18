@@ -6,7 +6,7 @@
 
 - **总开关**：设置里新增「Custom Server」选项。**关闭（默认）= 完全原版 Steam 行为**；开启 = 所有联网功能走自定义服务器。所有改动都经 `vs_online_is_custom()` 这一个动态 bool 门控。
 - **异步**：复用游戏自带的协程框架（`oCoroutineManager` + `CoroutineAwaitAsync("http"/"networking", cb)`）。
-- **WebSocket**：纯 GML 手写（raw TCP + 握手 + 帧 + 掩码），不依赖任何 DLL 扩展。
+- **WebSocket**：GameMaker 原生 `network_socket_wss` / `network_socket_ws`（TLS 由 runner 做）。
 - **成绩隔离**：自定义服务器时使用带后缀的独立存档文件，不污染原版成绩。
 
 ## 配置文件
@@ -15,14 +15,15 @@
 
 ```json
 {
-  "server": "http://localhost:8226"
+  "server": "https://online.vividstasis.cn"
 }
 ```
 
 字段：
 | 字段 | 说明 |
 |---|---|
-| `server` | vs-server-go 的 base URL（必填） |
+| `server` | REST base URL（必填，可以是 `https://`） |
+| `ws` | 大厅 WebSocket 地址（可选；不写则 `https://主机` → `wss://主机`，`http://` → `ws://`） |
 | `playerId` / `token` | 服务器身份（mod 自动写入） |
 | `refresh_token` | OAuth2 设备流刷新令牌（30 天，启动时自动旋转刷新） |
 | `email` | 账号邮箱（设备流登录时由 mod 写入） |
@@ -47,7 +48,7 @@
 ## 启动自动检查更新
 
 custom server + 已登录账号启动游戏时，身份刷新完成后会自动探测服务器连通性；
-连通则**静默逐个对比本地谱与服务器谱的 sha1**，统计有多少首需要更新，
+连通则调用 `POST /api/v1/charts/check-updates` 检查已记录下载是否有更新，
 结果写入日志并在 `global.vs_updates_available` 记录（游客不执行该检查）。
 
 
@@ -61,12 +62,19 @@ vs-online-mod/
 │   ├── mod_info.gml            #   注册到 global.vml_mods + 初始化
 │   ├── add_options.gml         #   define_options 注入「Custom Server」开关
 │   ├── send_packet.gml         #   send_packet 按 bool 分流
-│   └── home_downloader_button.gml  # 首页「Chart Downloader」入口（o_newmenu_main_Create_0）
+│   ├── home_downloader_button.gml  # 首页「Chart Downloader」入口
+│   ├── leaderboard_download.gml    #   选曲榜单走 /charts/scores
+│   ├── leaderboard_friends.gml     #   好友榜走 /charts/scores/friends
+│   └── bwp_*.gml                   #   吸收的 betterWP 联机增强
 ├── codes/                      # 新增 GML 代码条目
 │   ├── gml_GlobalScript_vs_online_mod.gml   # mod 核心（config/开关/选项）
+│   ├── gml_GlobalScript_vs_online_api.gml   # REST / 身份 / 成绩 / 成就 / B40
+│   ├── gml_GlobalScript_vs_online_lobby.gml # 大厅 REST + WS 中继
+│   ├── gml_GlobalScript_vs_ws.gml           # 原生 network_socket_wss / ws
 │   ├── gml_GlobalScript_vs_localcharts.gml  # 本地谱扫描/跳转选曲/重载
-│   ├── gml_GlobalScript_vs_dlmgr.gml        # 下载管理器 web 层（目录/搜索/差分/状态）
-│   └── gml_Object_vs_downloader_browser_*   # 下载管理器界面（Create/Step/Draw/Destroy）
+│   ├── gml_GlobalScript_vs_dlmgr.gml        # 下载管理器 web 层
+│   ├── gml_GlobalScript_SuggestSongPacket.gml
+│   └── gml_Object_vs_downloader_browser_*   # 下载管理器界面
 ├── objects/vs_downloader_browser.json
 └── sprites/sp_icon_vs_local_0.png           # 首页按钮图标
 ```
@@ -99,7 +107,7 @@ vs-online-mod/
 ## Local 页签 — 本地自制谱辅助（`V` 切换）
 
 - 列出 `Custom Songs/` 里的本地谱（CSM 格式，含下载器下载的谱、手动放入的自制谱），行首标 `D`/`L`。
-- `Enter` 跳转到选曲界面该曲位置；`R` 重新扫描 + 重载进选曲。
+- `Tab` 本地搜索（曲名 / 曲师 / chart_id / 曲包）；`Enter` 跳转到选曲界面该曲位置（`o_songselect_main` 的 `force_song_select`）；`R` 重新扫描。
 
 > 说明：下载文件直接落进 `Custom Songs/<chartId>/`（与 Custom Songs Mod 共享同一边），
 > 谱要能在选曲里游玩需同时启用 [Custom Songs Mod](https://github.com/vivid-stasis-revival)。
@@ -112,15 +120,15 @@ vs-online-mod/
 | 里程碑 | 内容 | 状态 |
 |---|---|---|
 | M0 | 骨架 + bool 开关 + vsonline 配置读取 | ✅ |
-| M1 | 纯 GML WebSocket 库（raw TCP 握手/帧/掩码/ping-pong） | ✅ |
+| M1 | 大厅 WebSocket（原生 `network_socket_wss` / `ws`） | ✅ |
 | M2 | REST 层 + 身份 + 凭据存储 + 成绩后缀隔离 + 排行榜/成就/好友 | ✅ |
 | M3 | 大厅（REST + WS 中继 + 完整 UI 打桩 + 随机匹配 Shift+Paste） | ✅ |
 | M4 | 谱面商店下载链路（REST + sha1 差分下载/更新）+ 头像 hash 回退 | ✅ |
 | M5 | 首页 Chart Downloader 下载管理器（web 目录/搜索/筛选/新旧检测/整页批量更新 + Local 页签） | ✅ |
 | M6 | 账号/游客策略（设置页 状态/登录/退出；游客禁止在线功能只可玩本地谱；启动自动刷新 token + 自动检查本地谱更新）、移除旧 Web Charts 曲包 | ✅ |
-| M2 | 身份 + 凭据存储 + 成绩后缀隔离 + 排行榜/成就/好友 | ⏳ |
-| M3 | 大厅（REST + WS 中继），改造 send_packet/receive_packet + o_st_handle | ⏳ |
-| M4 | 谱面商店（all songs 本地包 + 服务器分页包 + 搜索 + 下载/SHA 更新）+ 头像 hash 回退 | ⏳ |
+| M7 | 遗留收口：CSM 成绩上传、大厅进房同步、服务器 B40/Rating、黑名单、头像 URL、betterWP 吸收（Steam 全功能 / 自定义走服务器）、死代码清理 | ✅ |
+
+REST 用 **`https://`**。大厅用原生 **`wss://`**（默认与 REST 同主机）。Cloudflare Tunnel 源站可以是 `http://localhost`，公网走 HTTPS/WSS。本地明文可写 `"ws": "ws://127.0.0.1:8226"`。旧配置里的 `"ws": "http://…"` 会当成明文 `ws://`，走 Tunnel 的话请删掉 `ws` 或改成 `wss://`。
 
 ## 安装（测试）
 

@@ -74,7 +74,14 @@ else
 {
     // Local tab
     draw_set_color(c_white);
-    draw_text(bx + 6, by + 15, "LOCAL  (" + string(array_length(local_rows)) + " charts)");
+    var lhead = "LOCAL  (" + string(array_length(local_rows)) + "/" + string(array_length(local_all)) + ")";
+    if (query != "") lhead += "  q=\"" + query + "\"";
+    draw_text(bx + 6, by + 15, lhead);
+    if (searching)
+    {
+        draw_set_color(c_lime);
+        draw_text(bx + 6, by + 15, "Search: " + query + "_");
+    }
 
     var vis = 8;
     var start_idx = max(0, sel - 3);
@@ -116,7 +123,7 @@ draw_set_color(c_gray);
 draw_text(bx + 6, by + bh - 11,
     view == 0
         ? "Enter: dl/update  Tab: search  F: filter  K: check page  G: update page  <-/->: page  V: local  R: reload  Esc: back"
-        : "Enter: jump to chart  V: web  R: reload  Esc: back");
+        : "Enter: jump  Tab: search  V: web  R: reload  Esc: back");
 
 draw_set_halign(fa_left);
 draw_set_valign(fa_top);

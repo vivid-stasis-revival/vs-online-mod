@@ -25,7 +25,18 @@ function vs_songstore_local_dir(_chartId)
 // on download so what we write matches what CSM actually reads.
 function vs_songstore_flatten_name(_name)
 {
-    return string_replace(_name, "charts/", "");
+    if (_name == undefined) return "";
+    var n = string_replace_all(string(_name), "\\", "/");
+    n = string_replace(n, "charts/", "");
+    while (string_pos("/", n) > 0)
+    {
+        n = string_copy(n, string_pos("/", n) + 1, string_length(n));
+    }
+    if (n == "" || n == "." || n == ".." || string_pos("..", n) > 0)
+    {
+        return "";
+    }
+    return n;
 }
 
 // GET /songs/:id -> full detail (charts[] + files[] with per-file sha1).
@@ -55,7 +66,13 @@ function vs_songstore_diff(_files, _chartId)
     for (var i = 0; i < array_length(_files); i++)
     {
         var f = _files[i];
-        var localPath = dir + vs_songstore_flatten_name(f.name);
+        var flat = vs_songstore_flatten_name(f.name);
+        if (flat == "")
+        {
+            show_debug_message("VS Songstore: skip unsafe file name -> " + string(f.name));
+            continue;
+        }
+        var localPath = dir + flat;
         var localHash = file_exists(localPath) ? sha1_file(localPath) : "";
         if (string_lower(localHash) != string_lower(f.sha1))
         {
@@ -68,13 +85,26 @@ function vs_songstore_diff(_files, _chartId)
 // Download one file with http_get_file, awaiting the http async event.
 function vs_songstore_download_file(_url, _localPath, _on_done)
 {
-    if (!variable_global_exists("vs_dl_state"))
+    if (!variable_global_exists("vs_dl_q"))
     {
+        global.vs_dl_q = [];
+        global.vs_dl_busy = false;
         global.vs_dl_state = { rid: -1, url: "", localPath: "", on_done: undefined };
     }
-    global.vs_dl_state.url = _url;
-    global.vs_dl_state.localPath = _localPath;
-    global.vs_dl_state.on_done = _on_done;
+    array_push(global.vs_dl_q, { url: _url, localPath: _localPath, on_done: _on_done });
+    vs_songstore_dl_pump();
+}
+
+function vs_songstore_dl_pump()
+{
+    if (global.vs_dl_busy) return;
+    if (array_length(global.vs_dl_q) == 0) return;
+    global.vs_dl_busy = true;
+    var job = global.vs_dl_q[0];
+    array_delete(global.vs_dl_q, 0, 1);
+    global.vs_dl_state.url = job.url;
+    global.vs_dl_state.localPath = job.localPath;
+    global.vs_dl_state.on_done = job.on_done;
     __CoroutineBegin(function()
     {
         var st = global.vs_dl_state;
@@ -87,8 +117,11 @@ function vs_songstore_download_file(_url, _localPath, _on_done)
                 return false;
             }
             var cb = st.on_done;
+            var path = st.localPath;
             st.on_done = undefined;
-            if (cb != undefined) { cb(file_exists(st.localPath), st.localPath); }
+            global.vs_dl_busy = false;
+            if (cb != undefined) { cb(file_exists(path), path); }
+            vs_songstore_dl_pump();
             return true;
         });
     });

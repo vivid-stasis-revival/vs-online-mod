@@ -203,34 +203,6 @@ function vs_localcharts_pack_pos(_chart_id)
     return undefined;
 }
 
-// Resolve a server song by chartId (list it; takes the first hit).
-// _on_done(found, song|undefined) — "found" is true only when the server has
-// a song with exactly this chart_id.
-function vs_songstore_by_chart(_chartId, _on_done)
-{
-    if (!variable_global_exists("vs_store_list_cb"))
-    {
-        global.vs_store_list_cb = { query: "", page: 1, on_done: undefined };
-    }
-    global.vs_store_list_cb.query = _chartId;
-    global.vs_store_list_cb.on_done = _on_done;
-    vs_online_with_conn(function()
-    {
-        var q = global.vs_store_list_cb.query;
-        vs_online_get_json("/api/v1/songs?chartId=" + q + "&size=1", false,
-            function(_ok, _data, _status)
-            {
-                var cb = global.vs_store_list_cb.on_done;
-                global.vs_store_list_cb.on_done = undefined;
-                if (cb == undefined) return;
-                var found = _ok && _data != undefined
-                    && variable_struct_exists(_data, "songs")
-                    && array_length(_data.songs) > 0;
-                cb(found, (_ok && found) ? _data.songs[0] : undefined);
-            });
-    });
-}
-
 // Reload the local song data into the game:
 //   - always re-scan (manager list refreshes on its own)
 //   - when the Custom Songs Mod is loaded, rebuild global.song_list + packs
@@ -263,10 +235,15 @@ function vs_localcharts_jump(_chart_id)
     var loc = vs_localcharts_pack_pos(_chart_id);
     if (loc == undefined) return false;
 
-    global.vs_local_jump_pack = loc.pack_index;
-    global.vs_local_jump_pos = loc.pos;
-    global.vs_local_jump_diff = 0;
+    // o_songselect_main already honors force_song_select (finds pack + cursor).
+    global.force_song_select = loc.song_id;
+    global.last_freeplay_pack = loc.pack_index;
     global.songselect_difficulty = 0;
+
+    if (instance_exists(vs_downloader_browser))
+    {
+        instance_destroy(vs_downloader_browser);
+    }
 
     audio_stop_all();
     if (instance_exists(o_newmenu_main))
@@ -316,55 +293,64 @@ function vs_localcharts_auto_check()
     st.idx = 0;
     st.updates = [];
     st.done = false;
-    show_debug_message("VS Online: auto update check for " + string(array_length(st.list)) + " tracked local chart(s)...");
-    vs_localcharts_auto_step();
-}
-
-function vs_localcharts_auto_step()
-{
-    var st = global.vs_auto;
-    if (st.done) return;
-    if (st.idx >= array_length(st.list))
+    var charts = [];
+    for (var j = 0; j < array_length(tr); j++)
+    {
+        var c = tr[j];
+        var diffs = c.diffs;
+        var d = 0;
+        repeat (array_length(diffs))
+        {
+            var sha = vs_online_chart_sha1(c.chart_id, diffs[d]);
+            if (sha != "")
+            {
+                array_push(charts, { chartId: c.chart_id, difficulty: vs_online_diff_api(diffs[d]), sha1: sha });
+            }
+            d++;
+        }
+    }
+    show_debug_message("VS Online: auto update check for " + string(array_length(tr)) + " tracked chart(s), " + string(array_length(charts)) + " file(s)...");
+    if (array_length(charts) == 0)
     {
         st.done = true;
-        global.vs_updates_available = st.updates;
-        show_debug_message("VS Online: auto update check done - " + string(array_length(st.updates)) + " chart(s) need server updates.");
+        global.vs_updates_available = [];
         return;
     }
-    var c = st.list[st.idx];
-    st.idx++;
-    st.cur = c;
-    vs_online_get_json("/api/v1/songs?chartId=" + c.chart_id + "&size=1", false, function(_ok, _data, _status)
-    {
-        var st = global.vs_auto;
-        if (st.done) return;
-        if (_ok && _data != undefined && variable_struct_exists(_data, "songs") && array_length(_data.songs) > 0)
-        {
-            var s = _data.songs[0];
-            vs_localcharts_auto_detail(s.id);
-        }
-        else
-        {
-            vs_localcharts_auto_step();
-        }
-    });
+    vs_online_post_json("/api/v1/charts/check-updates", { charts: charts }, vs_localcharts_auto_done);
 }
 
-function vs_localcharts_auto_detail(_id)
+function vs_localcharts_auto_done(_ok, _data, _status)
 {
-    vs_songstore_detail(_id, function(_ok, _detail)
+    var st = global.vs_auto;
+    st.done = true;
+    var updates = [];
+    if (_ok && _data != undefined && variable_struct_exists(_data, "results") && is_array(_data.results))
     {
-        var st = global.vs_auto;
-        if (st.done) return;
-        var src = st.cur;
-        if (_ok && _detail != undefined && src != undefined)
+        var seen = {};
+        var i = 0;
+        repeat (array_length(_data.results))
         {
-            var need = vs_songstore_diff(_detail.files, src.chart_id);
-            if (array_length(need) > 0)
+            var r = _data.results[i];
+            if (r != undefined && variable_struct_exists(r, "needsUpdate") && r.needsUpdate)
             {
-                array_push(st.updates, { chart_id: src.chart_id, name: src.name, need: array_length(need) });
+                var cid = r.chartId;
+                if (!variable_struct_exists(seen, cid))
+                {
+                    variable_struct_set(seen, cid, true);
+                    var nm = cid;
+                    var k = 0;
+                    repeat (array_length(st.list))
+                    {
+                        if (st.list[k].chart_id == cid) { nm = st.list[k].name; break; }
+                        k++;
+                    }
+                    array_push(updates, { chart_id: cid, name: nm, need: 1 });
+                }
             }
+            i++;
         }
-        vs_localcharts_auto_step();
-    });
+    }
+    st.updates = updates;
+    global.vs_updates_available = updates;
+    show_debug_message("VS Online: auto update check done - " + string(array_length(updates)) + " chart(s) need server updates.");
 }

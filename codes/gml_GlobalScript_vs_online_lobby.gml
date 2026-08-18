@@ -58,7 +58,11 @@ function vs_online_custom_id()
 
 function vs_online_is_connected()
 {
-    return vs_online_is_custom() && vs_online_player_id() != "";
+    if (vs_online_is_custom())
+    {
+        return vs_online_player_id() != "";
+    }
+    return steam_is_user_logged_on();
 }
 
 // --- member struct ---------------------------------------------------------
@@ -77,12 +81,105 @@ function vs_online_avatar_sprite(_name)
     return (jk == undefined) ? undefined : jk;
 }
 
+function vs_online_avatar_cache()
+{
+    if (!variable_global_exists("vs_avatar_spr"))
+    {
+        global.vs_avatar_spr = {};
+        global.vs_avatar_q = [];
+        global.vs_avatar_busy = false;
+        global.vs_avatar_cur = "";
+        global.vs_avatar_req = -1;
+    }
+    return global.vs_avatar_spr;
+}
+
+function vs_online_avatar_ensure(_playerId, _url)
+{
+    if (_playerId == undefined || _playerId == "" || _url == undefined || _url == "") return undefined;
+    var cache = vs_online_avatar_cache();
+    if (variable_struct_exists(cache, _playerId))
+    {
+        return variable_struct_get(cache, _playerId);
+    }
+    var i = 0;
+    repeat (array_length(global.vs_avatar_q))
+    {
+        if (global.vs_avatar_q[i].id == _playerId) return undefined;
+        i++;
+    }
+    array_push(global.vs_avatar_q, { id: _playerId, url: _url });
+    vs_online_avatar_pump();
+    return undefined;
+}
+
+function vs_online_avatar_pump()
+{
+    vs_online_avatar_cache();
+    if (global.vs_avatar_busy) return;
+    if (array_length(global.vs_avatar_q) == 0) return;
+    var job = global.vs_avatar_q[0];
+    array_delete(global.vs_avatar_q, 0, 1);
+    global.vs_avatar_busy = true;
+    global.vs_avatar_cur = job.id;
+    if (!directory_exists("vs_avatars")) directory_create("vs_avatars");
+    var dest = "vs_avatars/" + job.id + ".png";
+    global.vs_avatar_req = http_get_file(job.url, dest);
+    __CoroutineBegin(function()
+    {
+        __CoroutineAwaitAsync("http", vs_online_avatar_http);
+    });
+    __CoroutineEnd();
+}
+
+function vs_online_avatar_http()
+{
+    if (async_load == -1)
+    {
+        vs_online_avatar_finish(false);
+        return true;
+    }
+    if (async_load[? "id"] != global.vs_avatar_req) return false;
+    var httpSt = ds_map_find_value(async_load, "http_status");
+    var st = ds_map_find_value(async_load, "status");
+    vs_online_avatar_finish(httpSt == 200 || st == 0);
+    return true;
+}
+
+function vs_online_avatar_finish(_ok)
+{
+    var pid = global.vs_avatar_cur;
+    var dest = "vs_avatars/" + pid + ".png";
+    if (_ok && file_exists(dest))
+    {
+        var spr = sprite_add(dest, 1, false, false, 0, 0);
+        if (spr != -1)
+        {
+            variable_struct_set(vs_online_avatar_cache(), pid, spr);
+            if (instance_exists(o_st_handle))
+            {
+                var m = o_st_handle.getMember(pid);
+                if (m != undefined) m.avatar = spr;
+            }
+        }
+    }
+    global.vs_avatar_busy = false;
+    global.vs_avatar_cur = "";
+    vs_online_avatar_pump();
+}
+
 // Build a game-style member from a server MemberView JSON object.
 function vs_lobby_build_member(_mv)
 {
-    // Server avatar is a URL we don't fetch yet; an empty avatar falls back to
-    // a deterministic jacket sprite (Plan: hash(name) -> jacket).
+    // Server avatar URL is fetched into a sprite; empty/failed falls back to
+    // a deterministic jacket (hash(name) -> song_list jacket).
     var hasAvatar = variable_struct_exists(_mv, "avatar") && _mv.avatar != "";
+    var av = vs_online_avatar_sprite(_mv.name);
+    if (hasAvatar)
+    {
+        var fetched = vs_online_avatar_ensure(_mv.playerId, _mv.avatar);
+        if (fetched != undefined) av = fetched;
+    }
     return
     {
         id: _mv.playerId,
@@ -90,7 +187,7 @@ function vs_lobby_build_member(_mv)
         ready: variable_struct_exists(_mv, "ready") ? _mv.ready : 0,
         score: variable_struct_exists(_mv, "score") ? _mv.score : 0,
         scoreFlag: variable_struct_exists(_mv, "scoreFlag") ? _mv.scoreFlag : 1,
-        avatar: hasAvatar ? undefined : vs_online_avatar_sprite(_mv.name),
+        avatar: av,
         reportedScore: true,
         host: variable_struct_exists(_mv, "host") ? _mv.host : false,
         npc: false,
@@ -234,25 +331,23 @@ function vs_lobby_leave()
     vs_lobby_reset();
 }
 
-// Fetch the list of discoverable (public) lobbies; _on_done(list|undefined).
-function vs_lobby_list(_on_done)
+function vs_lobby_refresh_count()
 {
-    if (!vs_online_is_account())
+    if (!vs_online_is_account()) return;
+    vs_online_get_json("/api/v1/lobbies", false, vs_lobby_count_done);
+}
+
+function vs_lobby_count_done(_ok, _data, _status)
+{
+    var n = 0;
+    if (_ok && _data != undefined && variable_struct_exists(_data, "lobbies") && is_array(_data.lobbies))
     {
-        if (_on_done != undefined) { _on_done(undefined); }
-        return;
+        n = array_length(_data.lobbies);
     }
-    if (!variable_global_exists("vs_lobby_cb"))
+    if (instance_exists(obj_multiplayer_lobby))
     {
-        global.vs_lobby_cb = { public: true, code: "", on_done: undefined };
+        obj_multiplayer_lobby.lobbyCount = n;
     }
-    global.vs_lobby_cb.on_done = _on_done;
-    vs_online_get_json("/api/v1/lobbies", false, function(_ok, _data, _status)
-    {
-        var cb = global.vs_lobby_cb.on_done;
-        global.vs_lobby_cb.on_done = undefined;
-        if (cb != undefined) { cb(_ok ? _data.lobbies : undefined); }
-    });
 }
 
 // --- state ----------------------------------------------------------------
@@ -313,7 +408,12 @@ function vs_online_on_ws_frame(_op, _payload)
             i++;
         }
         // payload position is now exactly at the packet type byte.
-        receive_packet(_payload, senderId); // receive_packet deletes _payload
+        var got = receive_packet(_payload, senderId);
+        // receive_packet only deletes on unknown/empty; we own this buffer.
+        if (got != undefined)
+        {
+            buffer_delete(_payload);
+        }
     }
     else if (_op == 1) // text = JSON control message
     {
@@ -374,19 +474,51 @@ function vs_lobby_handle_control(_j)
                     o_st_handle.lobbyMembers[i].order = i;
                     i++;
                 }
+                if (vs_lobby_is_owner())
+                {
+                    send_packet(SendQueuePacket);
+                    send_packet(SendPlayerInfoPacket);
+                    if (o_st_handle.currentMember != undefined)
+                    {
+                        send_packet(UpdateScorePacket,
+                        {
+                            score_: o_st_handle.currentMember.score,
+                            flag: o_st_handle.currentMember.scoreFlag
+                        });
+                    }
+                }
             }
             break;
         case "member_left":
             if (variable_struct_exists(_j, "playerId")) { vs_lobby_remove_member(_j.playerId); }
-            if (variable_struct_exists(_j, "hostId")) { o_st_handle.vs_hostId = _j.hostId; vs_lobby_refresh_host_flags(_j.hostId); }
+            if (variable_struct_exists(_j, "hostId") && instance_exists(o_st_handle))
+            {
+                o_st_handle.vs_hostId = _j.hostId;
+                vs_lobby_refresh_host_flags(_j.hostId);
+            }
             break;
         case "host_changed":
-            o_st_handle.vs_hostId = _j.hostId;
-            vs_lobby_refresh_host_flags(_j.hostId);
+            if (instance_exists(o_st_handle))
+            {
+                o_st_handle.vs_hostId = _j.hostId;
+                vs_lobby_refresh_host_flags(_j.hostId);
+            }
             break;
         case "kicked":
+            vs_lobby_reset();
+            show_message("You were kicked from the lobby.\n\n你已被踢出房间。");
+            if (instance_exists(obj_multiplayer_lobby))
+            {
+                with (obj_multiplayer_lobby) { updateButtons(); }
+            }
+            break;
         case "lobby_closed":
             vs_lobby_reset();
+            show_message("The lobby was closed.\n\n房间已关闭。");
+            if (instance_exists(obj_multiplayer_lobby))
+            {
+                with (obj_multiplayer_lobby) { updateButtons(); }
+            }
             break;
         case "error":
             show_debug_message("VS Online lobby error: " + string(_j.code) + " - " + string(_j.message));

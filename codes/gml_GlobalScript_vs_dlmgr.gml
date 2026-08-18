@@ -38,7 +38,7 @@ function vs_dlmgr_list(_query, _page, _on_done)
         var q = global.vs_dlmgr_cb.query;
         if (q != undefined && q != "")
         {
-            url += "&q=" + q;
+            url += "&q=" + vs_online_url_encode(q);
         }
         vs_online_get_json(url, false, function(_ok, _data, _status)
         {
@@ -210,11 +210,12 @@ function vs_dlmgr_download(_songId, _chartId, _on_done)
 {
     if (!variable_global_exists("vs_dlmgr_dl"))
     {
-        global.vs_dlmgr_dl = { on_done: undefined, need: [], idx: 0, chartId: "", serverId: "", name: "" };
+        global.vs_dlmgr_dl = { on_done: undefined, need: [], idx: 0, chartId: "", serverId: "", name: "", failed: false };
     }
     global.vs_dlmgr_dl.on_done = _on_done;
     global.vs_dlmgr_dl.chartId = _chartId;
     global.vs_dlmgr_dl.serverId = _songId;
+    global.vs_dlmgr_dl.failed = false;
     vs_songstore_detail(_songId, function(_ok, _detail)
     {
         var st = global.vs_dlmgr_dl;
@@ -249,17 +250,25 @@ function vs_dlmgr_dl_step()
     var st = global.vs_dlmgr_dl;
     if (st.idx >= array_length(st.need))
     {
-        vs_dlmgr_write_meta(st.chartId, st.serverId, st.name);
+        var ok = !st.failed;
+        if (ok)
+        {
+            vs_dlmgr_write_meta(st.chartId, st.serverId, st.name);
+        }
         var cb = st.on_done;
         st.on_done = undefined;
-        if (cb != undefined) { cb(true); }
+        if (cb != undefined) { cb(ok); }
         return;
     }
     var f = st.need[st.idx];
     vs_songstore_download_file(f.url, f.localPath, function(_ok, _path)
     {
         var st2 = global.vs_dlmgr_dl;
-        if (!_ok) { show_debug_message("VS DLMGR: download failed -> " + string(_path)); }
+        if (!_ok)
+        {
+            st2.failed = true;
+            show_debug_message("VS DLMGR: download failed -> " + string(_path));
+        }
         st2.idx++;
         vs_dlmgr_dl_step();
     });

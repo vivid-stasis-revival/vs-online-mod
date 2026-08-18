@@ -10,7 +10,8 @@
 //
 // Config file: <game save dir>/vsonline   (JSON, no extension)
 // {
-//   "server": "http://localhost:8226",        // vs-server-go base URL
+//   "server": "https://online.vividstasis.cn", // REST base URL
+//   "ws": "wss://online.vividstasis.cn",       // optional lobby WS (derived from server if omitted)
 //   "playerId": "...",                        // filled in by M2 (identity)
 //   "token": "...",                           // bearer token
 //   "refresh_token": "...",                   // device-flow refresh token
@@ -26,6 +27,11 @@ function vs_online_config_path()
     return working_directory + "vsonline";
 }
 
+function vs_online_default_server()
+{
+    return "https://online.vividstasis.cn";
+}
+
 // Read (and cache) the vsonline config. Creates a default file if missing.
 function vs_online_get_config()
 {
@@ -34,7 +40,7 @@ function vs_online_get_config()
         return variable_global_get("vs_online_config");
     }
 
-    var cfg = { server: "http://localhost:8226" };
+    var cfg = { server: vs_online_default_server() };
     var path = vs_online_config_path();
     if (file_exists(path))
     {
@@ -63,7 +69,7 @@ function vs_online_get_config()
 
     if (!variable_struct_exists(cfg, "server") || cfg.server == "")
     {
-        cfg.server = "http://localhost:8226";
+        cfg.server = vs_online_default_server();
     }
     global.vs_online_config = cfg;
     return cfg;
@@ -72,6 +78,47 @@ function vs_online_get_config()
 function vs_online_server_url()
 {
     return vs_online_get_config().server;
+}
+
+// Lobby uses native GameMaker WS. cfg.ws if set, otherwise same host as REST
+// (https:// → wss://, http:// → ws://).
+function vs_online_ws_url()
+{
+    var cfg = vs_online_get_config();
+    if (variable_struct_exists(cfg, "ws") && cfg.ws != "")
+    {
+        return vs_online_ws_normalize(cfg.ws);
+    }
+    return vs_online_ws_normalize(string(cfg.server));
+}
+
+function vs_online_ws_normalize(_url)
+{
+    var s = string(_url);
+    var low = string_lower(s);
+    if (string_pos("wss://", low) == 1 || string_pos("ws://", low) == 1)
+    {
+        return s;
+    }
+    if (string_pos("https://", low) == 1)
+    {
+        var rest = string_copy(s, 9, string_length(s) - 8);
+        if (string_ends_with(rest, ":443"))
+        {
+            rest = string_copy(rest, 1, string_length(rest) - 4);
+        }
+        return "wss://" + rest;
+    }
+    if (string_pos("http://", low) == 1)
+    {
+        var rest = string_copy(s, 8, string_length(s) - 7);
+        if (string_ends_with(rest, ":80"))
+        {
+            rest = string_copy(rest, 1, string_length(rest) - 3);
+        }
+        return "ws://" + rest;
+    }
+    return s;
 }
 
 // Rewrite the current config back to the file (used once credentials exist).
@@ -86,9 +133,22 @@ function vs_online_save_config()
 // --- mode switch -----------------------------------------------------------
 
 // True only when the player opted into the custom server.
+// Reads custom_profile.ini when the option global is not loaded yet
+// (obj_pre_init / define_options Dev Highscores run before our option row).
 function vs_online_is_custom()
 {
-    if (!(variable_global_exists("op_vs_custom_server") && variable_global_get("op_vs_custom_server") == 1))
+    var enabled = false;
+    if (variable_global_exists("op_vs_custom_server"))
+    {
+        enabled = (variable_global_get("op_vs_custom_server") == 1);
+    }
+    else
+    {
+        ini_open("custom_profile");
+        enabled = (ini_read_real("vsonline", "enabled", 0) == 1);
+        ini_close();
+    }
+    if (!enabled)
     {
         return false;
     }
@@ -175,6 +235,34 @@ function vs_online_add_options()
     };
     array_push(global.options_categories[ci].options, array_length(global.system_options));
     array_push(global.system_options, logoutOpt);
+
+    var bwpCat = { title: "Better Worldcross Play", options: [] };
+    array_push(global.options_categories, bwpCat);
+    var bi = array_length(global.options_categories) - 1;
+
+    var countdownOpt = {
+        name: "Countdown Sounds",
+        description: "Toggle different types of countdown sounds in worldcross play.",
+        type: 0,
+        values: ["Original", "Type 2", "Type 3"],
+        default_value: 0,
+        varname: "op_bwp_countdown_sound",
+        key: ["custom_profile", "betterWP", "countdown"]
+    };
+    array_push(global.options_categories[bi].options, array_length(global.system_options));
+    array_push(global.system_options, countdownOpt);
+
+    var hideLbOpt = {
+        name: "Hide Leaderboard",
+        description: "Hide the real-time Worldcross leaderboard during gameplay.",
+        type: 0,
+        values: ["Disabled", "Enabled"],
+        default_value: 0,
+        varname: "op_bwp_hide_leaderboard",
+        key: ["custom_profile", "betterWP", "hide_leaderboard"]
+    };
+    array_push(global.options_categories[bi].options, array_length(global.system_options));
+    array_push(global.system_options, hideLbOpt);
 }
 
 // --- account gate -----------------------------------------------------------
@@ -197,11 +285,12 @@ function vs_online_is_account()
 function vs_online_init()
 {
     vs_online_get_config();
+    if (!instance_exists(oCoroutineManager))
+    {
+        var _cm = instance_create_depth(0, 0, 0, oCoroutineManager);
+        _cm.persistent = true;
+    }
     vs_ws_start_listener();
-    // Local Charts jump state (consumed by the patched song-select create).
-    global.vs_local_jump_pack = -1;
-    global.vs_local_jump_pos = -1;
-    global.vs_local_jump_diff = -1;
     if (vs_online_is_custom())
     {
         vs_online_ensure_identity(function(_ok, _data)
@@ -221,6 +310,7 @@ function vs_online_init()
                     if (_conn)
                     {
                         vs_localcharts_auto_check();
+                        vs_online_rating_refresh();
                     }
                 });
             }
@@ -257,35 +347,61 @@ function vs_online_conn_state()
 // reading it"). Globals are always reachable from any callback.
 function vs_online_probe(_on_done)
 {
-    if (!variable_global_exists("vs_online_probe"))
+    if (!variable_global_exists("vs_probe_q"))
     {
-        global.vs_online_probe = { done: false, on_done: undefined };
+        global.vs_probe_q = [];
+        global.vs_probe_inflight = false;
+        global.vs_probe_gen = 0;
+        global.vs_probe_to = [];
+        global.vs_online_probe = { done: false, gen: 0 };
     }
-    var st = global.vs_online_probe;
-    st.done = false;
-    st.on_done = _on_done;
+    array_push(global.vs_probe_q, _on_done);
+    if (global.vs_probe_inflight)
+    {
+        return;
+    }
+    global.vs_probe_inflight = true;
+    global.vs_probe_gen += 1;
+    global.vs_online_probe.done = false;
+    global.vs_online_probe.gen = global.vs_probe_gen;
+    array_push(global.vs_probe_to, global.vs_probe_gen);
+    vs_online_get_json("/healthz", false, vs_online_probe_http);
+    call_later(60, time_source_units_frames, vs_online_probe_timeout);
+}
 
-    vs_online_get_json("/healthz", false, function(_ok, _data, _status)
+function vs_online_probe_settle(_good, _gen)
+{
+    if (!variable_global_exists("vs_online_probe")) return;
+    if (global.vs_online_probe.done) return;
+    if (_gen != undefined && _gen != global.vs_online_probe.gen) return;
+    global.vs_online_probe.done = true;
+    global.vs_probe_inflight = false;
+    global.vs_online_conn = _good ? 1 : -1;
+    var q = global.vs_probe_q;
+    global.vs_probe_q = [];
+    var i = 0;
+    repeat (array_length(q))
     {
-        var st = global.vs_online_probe;
-        if (st.done) { return; }               // timeout already settled it
-        st.done = true;
-        var good = _ok && _data != undefined && _data.ok;
-        global.vs_online_conn = good ? 1 : -1;
-        var cb = st.on_done;
-        st.on_done = undefined;
-        if (cb != undefined) { cb(good); }
-    });
-    call_later(60, time_source_units_frames, function()
+        if (q[i] != undefined) { q[i](_good); }
+        i++;
+    }
+}
+
+function vs_online_probe_http(_ok, _data, _status)
+{
+    var good = _ok && _data != undefined && variable_struct_exists(_data, "ok") && _data.ok;
+    vs_online_probe_settle(good, global.vs_online_probe.gen);
+}
+
+function vs_online_probe_timeout()
+{
+    var g = 0;
+    if (variable_global_exists("vs_probe_to") && array_length(global.vs_probe_to) > 0)
     {
-        var st = global.vs_online_probe;
-        if (st.done) { return; }               // response already arrived
-        st.done = true;
-        global.vs_online_conn = -1;
-        var cb = st.on_done;
-        st.on_done = undefined;
-        if (cb != undefined) { cb(false); }
-    });
+        g = global.vs_probe_to[0];
+        array_delete(global.vs_probe_to, 0, 1);
+    }
+    vs_online_probe_settle(false, g);
 }
 
 // Run _fn only while the custom server is reachable. In Steam mode this is a
@@ -320,25 +436,33 @@ function vs_online_with_conn(_fn)
         vs_online_show_error(_fn);
         return;
     }
-    if (!variable_global_exists("vs_online_with_conn_fn"))
+    if (!variable_global_exists("vs_with_conn_q"))
     {
-        global.vs_online_with_conn_fn = undefined;
+        global.vs_with_conn_q = [];
     }
-    global.vs_online_with_conn_fn = _fn;
-    vs_online_probe(function(_ok)
+    array_push(global.vs_with_conn_q, _fn);
+    if (array_length(global.vs_with_conn_q) == 1)
     {
-        var fn = global.vs_online_with_conn_fn;
-        global.vs_online_with_conn_fn = undefined;
-        if (fn == undefined) { return; }
-        if (_ok)
-        {
-            fn();
-        }
-        else
-        {
-            vs_online_show_error(fn);
-        }
-    });
+        vs_online_probe(vs_online_with_conn_probed);
+    }
+}
+
+function vs_online_with_conn_probed(_ok)
+{
+    var q = [];
+    if (variable_global_exists("vs_with_conn_q"))
+    {
+        q = global.vs_with_conn_q;
+        global.vs_with_conn_q = [];
+    }
+    var i = 0;
+    repeat (array_length(q))
+    {
+        if (q[i] == undefined) { i++; continue; }
+        if (_ok) { q[i](); }
+        else { vs_online_show_error(q[i]); }
+        i++;
+    }
 }
 
 // Guests / not-logged-in can't use online features. Tells the player and, when

@@ -1,23 +1,23 @@
-本 mod 用于给玩家提供一个在 steam 以外的服务器代替品，包含许多增强功能和优化改善。
+本 mod 用于给玩家提供一个在 Steam 以外的服务器代替品，包含许多增强功能和优化改善。
 具体提供 api 可参考 vs-server-go。
-本 mod 对游戏的所有更改都需要通过动态计算的一个 bool 变量决定；
-这个 bool 变量取决于玩家是否在 options 里选择了自定义服务器。
-否则就用回原来的 steam 路径。
-在这种情况下，由本 mod 提供的增强功能不可用；会和部分 mod 冲突，比如betterwp，需要实现他的部分功能以保证在 steam 服务器时行为一致，但如果启用自定义服务器就是用自己的逻辑。
-玩家头像如果为空，就适用 hash 名字算法从 global songlist 里面选一个 jacket 当做头像；
-使用自定义服务器时，应当使用属于服务器后缀的成绩存储，否则会污染原有的成绩存档；
-本 mod 需要兼容 is_custom 语法，但如果选择自定义服务器则从服务器获取 b40，无视他的语法；
-异步语法通过游戏的异步库进行支持；ws 则自行想办法实现；这些都是需要 bool 变量启用的
-成就机制也需要通过服务端同步；好友榜单也是；
-全部能通过服务器获取的东西都走服务器；
-要实现在选曲区域 allsongs 可以加载全部已经下载好的谱面，包括下载了没更新的；然后有一个特定包可以分页查看网站上的所有谱面，要有分页机制
-写一个搜索功能给所有包用，如果没有，自行选取选歌界面还没有用过的按键；
+
+所有改动都经 `vs_online_is_custom()` 一门控：关闭 = 原版 Steam 路径；开启 = vs-server-go。
+
+**Steam 模式**吸收 betterWP 的全部联机增强（随机房、房间数、推荐曲、结算按分排序、encore、倒计时音、藏榜、徽标）。**自定义模式**保留同一套 UI，随机加入 / 房间数走 `POST /lobbies/matchmake` 与 `GET /lobbies`。与独立 betterWP 同时安装会弹窗后 `game_end`。自定义模式不显示绿色 Better WP 徽标。
+
+自定义服务器时：
+- 成绩存档带服务器后缀，不污染 Steam 存档
+- 下载谱（`is_custom`）也上传 `/charts/scores`，B40 / Rating 读服务器投影
+- 黑名单走 `GET /blacklist`；时间用本机时钟；小游戏 Steam 榜不再上传/下载
+- 头像优先拉服务器 URL，失败再 hash 名字选 jacket
+- 好友在网页加，游戏只读好友榜
+- 已下载谱靠 Custom Songs Mod 进选曲；目录/搜索在首页 Chart Downloader（Web + Local）
+
+异步复用 `oCoroutineManager`（init 时若不存在则创建）。大厅 WS 为 GameMaker 原生 `wss://` / `ws://`。
 
 ===== M5 落地（首页 Chart Downloader 下载管理器）=====
 - Web 页签：对接 vs-server-go 目录（每页 100 首）、Tab 搜索(?q=)、F 筛选
   （全部/未下载/已下载/可更新）、选中谱自动 sha1 新旧检测、Enter 下载/更新、
-  K 整页检测、G 整页批量更新；绕开 Web Charts 曲包 50 首/页 + 只限服务端的限制。
-- Local 页签：本地自制谱列表 + 跳转选曲位置 + R 重载（配合 Custom Songs Mod）。
-- 搜索/筛选同时覆盖 web 与本地，满足“搜索功能给所有包用”的原需求。
-- （已移除选曲内旧「Web Charts」虚拟曲包 + vs_songstore_browser：50 首/页、无筛选、
-  且每次下载触发 CustomSongReader 全量重复加载；Web 谱图统一为首页下载管理器。）
+  K 整页检测、G 整页批量更新。
+- Local 页签：本地自制谱列表 + Tab 搜索 + 跳转选曲 + R 重载（配合 Custom Songs Mod）。
+- （已移除选曲内旧「Web Charts」虚拟曲包 + vs_songstore_browser。）

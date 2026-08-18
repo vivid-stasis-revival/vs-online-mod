@@ -8,27 +8,37 @@ if (instance_exists(vs_online_error)) exit;
 started++;
 if (started < 8) exit;   // debounce the keys that opened the overlay
 
-if (keyboard_check_pressed(vk_escape))
-{
-    instance_destroy();
-    exit;
-}
-
-// search input mode (Web tab)
+// search input mode (Web tab) — Esc here exits search, not the overlay
 if (searching)
 {
     query = keyboard_string;
     if (keyboard_check_pressed(vk_enter))
     {
         searching = false;
-        page = 1;
-        fetch_page();
+        if (view == 1)
+        {
+            apply_local_filter();
+            set_status((array_length(local_rows) > 0)
+                ? ("Local search: " + string(array_length(local_rows)) + "/" + string(array_length(local_all)))
+                : ("No local charts match \"" + query + "\"."));
+        }
+        else
+        {
+            page = 1;
+            fetch_page();
+        }
     }
     else if (keyboard_check_pressed(vk_escape) || keyboard_check_pressed(vk_tab))
     {
         searching = false;
         keyboard_string = query;
     }
+    exit;
+}
+
+if (keyboard_check_pressed(vk_escape))
+{
+    instance_destroy();
     exit;
 }
 
@@ -103,6 +113,7 @@ else // view == 1 (Local)
     {
         if (keyboard_check_pressed(ord("R"))) reload_local();
         else if (keyboard_check_pressed(ord("V"))) toggle_view();
+        else if (keyboard_check_pressed(vk_tab)) { searching = true; keyboard_string = query; }
         exit;
     }
 
@@ -127,5 +138,10 @@ else // view == 1 (Local)
     else if (keyboard_check_pressed(ord("R")))
     {
         reload_local();
+    }
+    else if (keyboard_check_pressed(vk_tab))
+    {
+        searching = true;
+        keyboard_string = query;
     }
 }
