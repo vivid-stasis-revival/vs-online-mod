@@ -103,7 +103,7 @@ function vs_localcharts_read_info(_dir, _pack)
     if (array_length(s.diffs) == 0) return undefined; // folder exists but no chart
 
     var he = struct_get_fallback(j, "has_encore", false);
-    s.has_encore = (he == true || he == 1 || he == "1.0");
+    if (he == true || he == 1 || he == "1.0") s.has_encore = true;
 
     s.song_id = vs_localcharts_song_id_in_list(s.chart_id);
     s.in_select = (s.song_id >= 0);
@@ -328,7 +328,16 @@ function vs_localcharts_jump(_chart_id)
     // o_songselect_main already honors force_song_select (finds pack + cursor).
     global.force_song_select = loc.song_id;
     global.last_freeplay_pack = loc.pack_index;
-    global.songselect_difficulty = 0;
+    // Encore-only customs have no OPENING/MIDDLE/FINALE files. Start on the
+    // first chart that actually exists so Play does not land on an empty 0.
+    var jumpDiff = 0;
+    var jumpSong = global.song_list[loc.song_id];
+    if (jumpSong != undefined)
+    {
+        var jumpDir = struct_get_fallback(jumpSong, "chart_load_dir", struct_get_fallback(jumpSong, "chart_path", ""));
+        jumpDiff = vs_csm_first_chart_diff(jumpDir);
+    }
+    global.songselect_difficulty = jumpDiff;
 
     if (instance_exists(vs_downloader_browser))
     {

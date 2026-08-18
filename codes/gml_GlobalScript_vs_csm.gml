@@ -244,6 +244,40 @@ function vs_csm_ensure_unlock(_song)
     _song.unlock.song_id = _song.song_id;
 }
 
+function vs_csm_has_encore_file(_dir)
+{
+    if (_dir == undefined || _dir == "") return false;
+    return file_exists(_dir + "ENCORE.vsc") || file_exists(_dir + "ENCORE.vsb");
+}
+
+function vs_csm_json_has_encore(_v)
+{
+    return (_v == true || _v == 1 || _v == "1.0" || _v == "true");
+}
+
+// Official select stores has_encore as the string "1.0" (from the vsd) and
+// compares with == / != "1.0". JSON bool true is truthy for `&&` checks but
+// fails those comparisons, so refresh_song_objects remaps ENCORE -> FINALE
+// and the old select never lets you cursor onto difficulty 3.
+function vs_csm_apply_has_encore(_song, _dir)
+{
+    var yes = vs_csm_has_encore_file(_dir);
+    if (!yes && variable_struct_exists(_song, "has_encore"))
+        yes = vs_csm_json_has_encore(_song.has_encore);
+    _song.has_encore = yes ? "1.0" : false;
+}
+
+function vs_csm_first_chart_diff(_dir)
+{
+    var names = ["OPENING", "MIDDLE", "FINALE", "ENCORE"];
+    for (var i = 0; i < 4; i++)
+    {
+        if (file_exists(_dir + names[i] + ".vsc") || file_exists(_dir + names[i] + ".vsb"))
+            return i;
+    }
+    return 0;
+}
+
 function readCustomSongPackInfo(dir)
 {
     var packInfo = vs_csm_read_json_file(dir + "songpack_info.json");
@@ -361,6 +395,7 @@ function readCustomSongInfo(dir, rel)
     songInfo.is_custom = true;
     songInfo.song_id = array_length(global.song_list);
     vs_csm_ensure_unlock(songInfo);
+    vs_csm_apply_has_encore(songInfo, dir);
 
     var audName = variable_struct_exists(songInfoSrc, "audio_id") ? songInfoSrc.audio_id : "music.ogg";
     var aud = vs_csm_add_stream(dir, audName);
