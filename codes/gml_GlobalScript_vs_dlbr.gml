@@ -1033,12 +1033,12 @@ function vs_dlbr_detail_buttons()
 
 function vs_dlbr_do_delete()
 {
-    var id = detail_chart;
-    vs_songstore_remove_chart(id);
+    var chartId = detail_chart;
+    vs_songstore_remove_chart(chartId);
     vs_dlbr_close_detail();
     vs_localcharts_refresh();
     vs_dlbr_fetch_page();
-    vs_dlbr_set_status("Deleted " + id);
+    vs_dlbr_set_status("Deleted " + chartId);
 }
 
 function vs_dlbr_detail_act(_id)
