@@ -160,32 +160,68 @@ function vs_lobby_refresh_host_flags(_hostId)
 }
 
 // --- REST entry points -----------------------------------------------------
+//
+// COMPILER NOTE: anonymous functions in loader-injected scripts cannot capture
+// enclosing arguments/`var` locals (they compile to `self.<name>` reads and
+// crash). Cross-callback state travels through dedicated global slots here.
 
 function vs_lobby_create(_public, _on_done)
 {
-    vs_online_post_json("/api/v1/lobbies", { public: _public }, function(ok, data, status)
+    if (!variable_global_exists("vs_lobby_cb"))
     {
-        if (ok) { vs_lobby_enter(data); }
-        if (_on_done != undefined) { _on_done(ok, data); }
+        global.vs_lobby_cb = { public: true, code: "", on_done: undefined };
+    }
+    global.vs_lobby_cb.public = _public;
+    global.vs_lobby_cb.on_done = _on_done;
+    vs_online_with_conn(function()
+    {
+        vs_online_post_json("/api/v1/lobbies", { public: global.vs_lobby_cb.public }, function(_ok, _data, _status)
+        {
+            var cb = global.vs_lobby_cb.on_done;
+            global.vs_lobby_cb.on_done = undefined;
+            if (_ok) { vs_lobby_enter(_data); }
+            if (cb != undefined) { cb(_ok, _data); }
+        });
     });
 }
 
 // Random matchmaking: join a random open public lobby, or create one.
 function vs_lobby_matchmake(_on_done)
 {
-    vs_online_post_json("/api/v1/lobbies/matchmake", {}, function(ok, data, status)
+    if (!variable_global_exists("vs_lobby_cb"))
     {
-        if (ok) { vs_lobby_enter(data); }
-        if (_on_done != undefined) { _on_done(ok, data); }
+        global.vs_lobby_cb = { public: true, code: "", on_done: undefined };
+    }
+    global.vs_lobby_cb.on_done = _on_done;
+    vs_online_with_conn(function()
+    {
+        vs_online_post_json("/api/v1/lobbies/matchmake", {}, function(_ok, _data, _status)
+        {
+            var cb = global.vs_lobby_cb.on_done;
+            global.vs_lobby_cb.on_done = undefined;
+            if (_ok) { vs_lobby_enter(_data); }
+            if (cb != undefined) { cb(_ok, _data); }
+        });
     });
 }
 
 function vs_lobby_join(_code, _on_done)
 {
-    vs_online_post_json("/api/v1/lobbies/join", { code: _code }, function(ok, data, status)
+    if (!variable_global_exists("vs_lobby_cb"))
     {
-        if (ok) { vs_lobby_enter(data); }
-        if (_on_done != undefined) { _on_done(ok, data); }
+        global.vs_lobby_cb = { public: true, code: "", on_done: undefined };
+    }
+    global.vs_lobby_cb.code = _code;
+    global.vs_lobby_cb.on_done = _on_done;
+    vs_online_with_conn(function()
+    {
+        vs_online_post_json("/api/v1/lobbies/join", { code: global.vs_lobby_cb.code }, function(_ok, _data, _status)
+        {
+            var cb = global.vs_lobby_cb.on_done;
+            global.vs_lobby_cb.on_done = undefined;
+            if (_ok) { vs_lobby_enter(_data); }
+            if (cb != undefined) { cb(_ok, _data); }
+        });
     });
 }
 
@@ -201,9 +237,21 @@ function vs_lobby_leave()
 // Fetch the list of discoverable (public) lobbies; _on_done(list|undefined).
 function vs_lobby_list(_on_done)
 {
-    vs_online_get_json("/api/v1/lobbies", false, function(ok, data, status)
+    if (!vs_online_is_account())
     {
-        _on_done(ok ? data.lobbies : undefined);
+        if (_on_done != undefined) { _on_done(undefined); }
+        return;
+    }
+    if (!variable_global_exists("vs_lobby_cb"))
+    {
+        global.vs_lobby_cb = { public: true, code: "", on_done: undefined };
+    }
+    global.vs_lobby_cb.on_done = _on_done;
+    vs_online_get_json("/api/v1/lobbies", false, function(_ok, _data, _status)
+    {
+        var cb = global.vs_lobby_cb.on_done;
+        global.vs_lobby_cb.on_done = undefined;
+        if (cb != undefined) { cb(_ok ? _data.lobbies : undefined); }
     });
 }
 

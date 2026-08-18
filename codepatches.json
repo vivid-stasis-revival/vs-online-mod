@@ -37,6 +37,13 @@
     },
 
     {
+        "Entry": "gml_Object_o_options2025_Step_0",
+        "Find": "if (input_check_pressed(",
+        "Value": "if (instance_exists(vs_auth_panel)) exit; if (input_check_pressed(",
+        "Type": 1
+    },
+
+    {
         "Entry": "gml_Object_obj_multiplayer_lobby_Create_0",
         "Find": "steam_lobby_create(2, 8);",
         "Value": "if (vs_online_is_custom()) { vs_lobby_create(true); } else { steam_lobby_create(2, 8); }",
@@ -84,6 +91,12 @@
         "Find": "steam_lobby_get_lobby_id()",
         "Value": "vs_lobby_lobby_id()",
         "Type": 0
+    },
+    {
+        "Entry": "gml_Object_obj_multiplayer_lobby_Step_0",
+        "Find": "if (!isReady)",
+        "Value": "if (instance_exists(vs_online_error)) exit; if (!isReady)",
+        "Type": 1
     },
 
     {
@@ -143,15 +156,27 @@
         "Type": 2
     },
     {
-        "Entry": "gml_GlobalScript_create_song_packs",
-        "Find": "global.chapter_a_songs = packs.cha.songs;",
-        "Value": "global.chapter_a_songs = packs.cha.songs; vs_online_add_web_pack();",
+        "Entry": "gml_Object_o_newmenu_main_Create_0",
+        "Find": "instance_create_depth(0, 0, -2000, o_newbanner);",
+        "ExternalFile": "home_downloader_button.gml",
         "Type": 1
     },
     {
-        "Entry": "gml_GlobalScript_refresh_song_objects",
-        "Find": "global.selected_pack = (global.selected_pack + array_length(global.song_packs)) % array_length(global.song_packs);",
-        "Value": "global.selected_pack = (global.selected_pack + array_length(global.song_packs)) % array_length(global.song_packs); if (variable_struct_exists(global.song_packs[global.selected_pack], \"is_vs_web\")) { if (!instance_exists(vs_songstore_browser)) instance_create_depth(0, 0, 0, vs_songstore_browser); exit; }",
-        "Type": 1
+        "Entry": "gml_Object_o_newmenu_Step_0",
+        "Find": "if (is_active)",
+        "Value": "if (instance_exists(vs_downloader_browser)) exit;\nif (is_active)",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_Object_o_songselect_NEW_Create_0",
+        "Find": "global.selected_pack = 0;",
+        "Value": "global.selected_pack = (variable_global_exists(\"vs_local_jump_pack\") && global.vs_local_jump_pack >= 0) ? global.vs_local_jump_pack : 0;",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_Object_o_songselect_NEW_Create_0",
+        "Find": "temporary_rs = 0;",
+        "Value": "temporary_rs = 0; if (variable_global_exists(\"vs_local_jump_pack\") && global.vs_local_jump_pack >= 0 && global.vs_local_jump_pos >= 0 && global.vs_local_jump_pos < array_length_1d(global.current_pack)) { cursor_pos = global.vs_local_jump_pos; for (var _lii = 0; _lii < array_length_1d(global.current_pack); _lii++) { with (song_object[_lii]) { difference = pos_id - o_songselect_NEW.cursor_pos; TweenEasyMove(x, y, 107 + (130 * difference), 33, 1, 5, EaseOutQuad); } } } global.vs_local_jump_pack = -1; global.vs_local_jump_pos = -1; global.vs_local_jump_diff = -1;",
+        "Type": 0
     }
 ]

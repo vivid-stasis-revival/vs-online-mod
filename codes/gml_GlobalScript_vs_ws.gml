@@ -171,8 +171,8 @@ function vs_ws_handle_net_event()
 {
     var ws = vs_ws_state();
     var type = async_load[? "type"];
-    var id = async_load[? "id"];
-    if (ws.socket < 0 || id != ws.socket)
+    var socketId = async_load[? "id"];   // 'id' is a GML builtin; can't shadow it as a local
+    if (ws.socket < 0 || socketId != ws.socket)
     {
         return; // not our socket
     }

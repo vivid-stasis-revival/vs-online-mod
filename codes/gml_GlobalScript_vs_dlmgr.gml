@@ -1,0 +1,279 @@
+// ============================================================================
+// vs_dlmgr.gml — Chart Downloader (Web Charts download manager)
+//
+// Downloads / updates custom charts from the live vs-server-go catalog into
+// "Custom Songs/" (CSM format), plus the matching Local tab.
+//
+//   - browse the server catalog (paginated, size=100) with search (?q=)
+//   - annotate each row with local state (downloaded / needs update via
+//     sha1 diff against the local folder)
+//   - single download/update, "check page", and "update page" batch actions
+//   - filters: All / Not downloaded / Downloaded / Updates available
+//
+// This talks to the SAME REST layer as vs_songstore and downloads into the
+// SAME folders, so charts picked up here immediately show up for the Custom
+// Songs Mod (and vice-versa). The old in-select "Web Charts" pack/browser was
+// removed in favour of this manager.
+//
+// COMPILER NOTE: anonymous functions in loader-injected scripts can't capture
+// enclosing arguments / `var` locals (they compile to `self.<name>` reads and
+// crash); cross-callback state travels through the dedicated global slots
+// below. The browser object drives everything else through its own instances.
+// ============================================================================
+
+// GET /api/v1/songs?q=&page=&size=100 -> {songs, total}.
+// _on_done(ok, data|undefined).
+function vs_dlmgr_list(_query, _page, _on_done)
+{
+    if (!variable_global_exists("vs_dlmgr_cb"))
+    {
+        global.vs_dlmgr_cb = { query: "", page: 1, on_done: undefined };
+    }
+    global.vs_dlmgr_cb.query = _query;
+    global.vs_dlmgr_cb.page = _page;
+    global.vs_dlmgr_cb.on_done = _on_done;
+    vs_online_with_conn(function()
+    {
+        var url = "/api/v1/songs?page=" + string(max(global.vs_dlmgr_cb.page, 1)) + "&size=100";
+        var q = global.vs_dlmgr_cb.query;
+        if (q != undefined && q != "")
+        {
+            url += "&q=" + q;
+        }
+        vs_online_get_json(url, false, function(_ok, _data, _status)
+        {
+            var cb = global.vs_dlmgr_cb.on_done;
+            global.vs_dlmgr_cb.on_done = undefined;
+            if (cb != undefined) { cb(_ok, _data); }
+        });
+    });
+}
+
+// Is this chart downloaded locally? (folder existence — cheap, no network)
+function vs_dlmgr_downloaded(_chartId)
+{
+    if (_chartId == undefined || _chartId == "") return false;
+    return directory_exists("Custom Songs/" + _chartId + "/");
+}
+
+// Full sha1 check of one chart: fetch server detail, diff against the local
+// folder. _on_done(ok, need|undefined) where `need` is the array of files
+// that are missing or changed (empty array => up to date).
+function vs_dlmgr_check(_songId, _chartId, _on_done)
+{
+    if (!variable_global_exists("vs_dlmgr_check_cb"))
+    {
+        global.vs_dlmgr_check_cb = { on_done: undefined };
+    }
+    global.vs_dlmgr_check_cb.on_done = _on_done;
+    vs_songstore_detail(_songId, function(_ok, _detail)
+    {
+        var cb = global.vs_dlmgr_check_cb.on_done;
+        global.vs_dlmgr_check_cb.on_done = undefined;
+        if (cb == undefined) return;
+        if (!_ok || _detail == undefined)
+        {
+            cb(false, undefined);
+            return;
+        }
+        cb(true, vs_songstore_diff(_detail.files, _chartId));
+    });
+}
+
+// Human text for a display row's sync state.
+function vs_dlmgr_row_status(_r)
+{
+    if (!_r.downloaded) return _r.chartId + "  -  not downloaded";
+    if (!_r.tracked)
+    {
+        if (_r.checked && _r.need == -3) return _r.chartId + "  -  local chart, differs from server - protected (not overwritten)";
+        return _r.chartId + "  -  local (no download record) - not overwritten";
+    }
+    if (_r.checked && _r.need > 0) return _r.chartId + "  -  UPDATE (" + string(_r.need) + " file" + (_r.need > 1 ? "s" : "") + ")";
+    if (_r.checked) return _r.chartId + "  -  up to date";
+    return _r.chartId + "  -  downloaded, checking...";
+}
+
+// --- download provenance / history ------------------------------------------
+//
+// How to tell a server-downloaded chart from a locally-made one that merely
+// shares the same id:
+//   tracked  == the song folder carries a marker (Custom Songs/<id>/.vs_download.json)
+//               -> WE downloaded/updated it.
+//   folder, untracked == a pre-existing local chart -> protected, never
+//               overwritten by a web download.
+// A persistent download log also lives at <game dir>/vsonline.downloads.json.
+
+function vs_dlmgr_meta_path(_chartId)
+{
+    return "Custom Songs/" + _chartId + "/.vs_download.json";
+}
+
+function vs_dlmgr_tracked(_chartId)
+{
+    if (_chartId == undefined || _chartId == "") return false;
+    return file_exists(vs_dlmgr_meta_path(_chartId));
+}
+
+// Write / refresh the per-chart download marker (called after a successful
+// download or update). Preserves the first-downloaded timestamp.
+function vs_dlmgr_write_meta(_chartId, _serverId, _name)
+{
+    if (_chartId == undefined || _chartId == "") return;
+    var p = vs_dlmgr_meta_path(_chartId);
+    var oldDownloadedAt = 0;
+    var isNew = true;
+    if (file_exists(p))
+    {
+        var f = file_text_open_read(p);
+        var raw = "";
+        while (!file_text_eof(f)) { raw += file_text_readln(f); }
+        file_text_close(f);
+        try
+        {
+            var j = json_parse(raw);
+            if (j != undefined && variable_struct_exists(j, "downloadedAt"))
+            {
+                oldDownloadedAt = j.downloadedAt;
+                isNew = false;
+            }
+        }
+        catch (_e) { }
+    }
+    var m =
+    {
+        chartId: _chartId,
+        serverId: _serverId,
+        name: _name,
+        downloadedAt: isNew ? date_current_datetime() : oldDownloadedAt,
+        updatedAt: date_current_datetime()
+    };
+    var fw = file_text_open_write(p);
+    file_text_write_string(fw, json_stringify(m));
+    file_text_close(fw);
+    vs_dlmgr_log(_chartId, _serverId, _name, isNew);
+}
+
+// Persistent download history (one entry per chart, most recent wins).
+function vs_dlmgr_log(_chartId, _serverId, _name, _isNew)
+{
+    var path = working_directory + "vsonline.downloads.json";
+    var list = [];
+    if (file_exists(path))
+    {
+        var f = file_text_open_read(path);
+        var raw = "";
+        while (!file_text_eof(f)) { raw += file_text_readln(f); }
+        file_text_close(f);
+        try
+        {
+            var j = json_parse(raw);
+            if (j != undefined && is_array(j)) { list = j; }
+        }
+        catch (_e) { }
+    }
+    var entry =
+    {
+        chartId: _chartId,
+        serverId: _serverId,
+        name: _name,
+        action: _isNew ? "downloaded" : "updated",
+        time: date_current_datetime()
+    };
+    array_insert(list, 0, entry);
+    // keep newest entry per chartId, cap the list
+    var seen = ds_map_create();
+    var out = [];
+    for (var i = 0; i < array_length(list); i++)
+    {
+        var e = list[i];
+        if (e != undefined && !ds_map_exists(seen, e.chartId))
+        {
+            ds_map_add(seen, e.chartId, true);
+            array_push(out, e);
+        }
+    }
+    ds_map_destroy(seen);
+    while (array_length(out) > 200) { array_delete(out, array_length(out) - 1, 1); }
+    var fw = file_text_open_write(path);
+    file_text_write_string(fw, json_stringify(out));
+    file_text_close(fw);
+}
+
+// Download / update one chart WITHOUT touching CSM's in-memory state:
+//   detail -> diff -> create folder -> serial-download changed files.
+// CSM is left untouched; the caller refreshes it cleanly afterwards
+// (vs_localcharts_refresh -> load_song_information rebuilds song_list once).
+// This deliberately does NOT call CustomSongReader(), which appends every
+// custom song again into global.song_list (would duplicate entries).
+function vs_dlmgr_download(_songId, _chartId, _on_done)
+{
+    if (!variable_global_exists("vs_dlmgr_dl"))
+    {
+        global.vs_dlmgr_dl = { on_done: undefined, need: [], idx: 0, chartId: "", serverId: "", name: "" };
+    }
+    global.vs_dlmgr_dl.on_done = _on_done;
+    global.vs_dlmgr_dl.chartId = _chartId;
+    global.vs_dlmgr_dl.serverId = _songId;
+    vs_songstore_detail(_songId, function(_ok, _detail)
+    {
+        var st = global.vs_dlmgr_dl;
+        if (!_ok || _detail == undefined)
+        {
+            var cb = st.on_done;
+            st.on_done = undefined;
+            if (cb != undefined) { cb(false); }
+            return;
+        }
+        st.name = variable_struct_exists(_detail, "name") ? _detail.name : _chartId;
+        var dir = "Custom Songs/" + _chartId + "/";
+        if (!directory_exists(dir)) { directory_create(dir); }
+        st.need = vs_songstore_diff(_detail.files, _chartId);
+        st.idx = 0;
+        if (array_length(st.need) == 0)
+        {
+            vs_dlmgr_write_meta(_chartId, _songId, st.name);
+            var cb = st.on_done;
+            st.on_done = undefined;
+            if (cb != undefined) { cb(true); }
+            return;
+        }
+        vs_dlmgr_dl_step();
+    });
+}
+
+// Serial-download driver for vs_dlmgr_download (state in global.vs_dlmgr_dl).
+// On completion writes the per-chart download marker + the history log.
+function vs_dlmgr_dl_step()
+{
+    var st = global.vs_dlmgr_dl;
+    if (st.idx >= array_length(st.need))
+    {
+        vs_dlmgr_write_meta(st.chartId, st.serverId, st.name);
+        var cb = st.on_done;
+        st.on_done = undefined;
+        if (cb != undefined) { cb(true); }
+        return;
+    }
+    var f = st.need[st.idx];
+    vs_songstore_download_file(f.url, f.localPath, function(_ok, _path)
+    {
+        var st2 = global.vs_dlmgr_dl;
+        if (!_ok) { show_debug_message("VS DLMGR: download failed -> " + string(_path)); }
+        st2.idx++;
+        vs_dlmgr_dl_step();
+    });
+}
+
+// Filter names for the F key cycle.
+function vs_dlmgr_filter_name(_f)
+{
+    switch (_f)
+    {
+        case 0: return "All";
+        case 1: return "Not downloaded";
+        case 2: return "Downloaded";
+        case 3: return "Updates available";
+    }
+    return "?";
+}
