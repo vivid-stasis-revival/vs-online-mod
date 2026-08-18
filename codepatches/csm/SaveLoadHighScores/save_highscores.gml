@@ -1,6 +1,4 @@
-    var _write_local = !(vs_online_is_custom() && vs_online_is_account());
-    if (_write_local)
-        ini_open(working_directory + "custom_highscore");
+    ini_open(working_directory + "custom_highscore");
 
     for (var i = 0; i < array_length(global.highscores.normal); i++)
     {
@@ -20,14 +18,7 @@
 
                 if (value != variable_struct_get(array_get(array_get(global.highscores_at_load.normal, i), d), array_get(prop, 0)))
                 {
-                    if (_write_local)
-                        ini_write_real(global.song_list[i].chart_id, diff_names[d] + prop[1], value);
-                    else if (array_get(prop, 0) == "score")
-                    {
-                        var sha = vs_online_chart_sha1(global.song_list[i].chart_id, diff_names[d]);
-                        if (sha != "")
-                            vs_online_upload_score(global.song_list[i].chart_id, diff_names[d], sha, round(value), "");
-                    }
+                    ini_write_real(global.song_list[i].chart_id, diff_names[d] + prop[1], value);
                     variable_struct_set(array_get(array_get(global.highscores_at_load.normal, i), d), array_get(prop, 0), value);
                 }
             }
@@ -39,28 +30,20 @@
         if (!struct_exists(global.shatter_list[i], "is_custom"))
             continue;
 
-        var props2 = [["score", ""], ["game_score", "_GAME"], ["max_combo", "_MAXCOMBO"], ["lamp", "_COMBO"], ["game_perc", "_GAMEPERC"]];
+        var props = [["score", ""], ["game_score", "_GAME"], ["max_combo", "_MAXCOMBO"], ["lamp", "_COMBO"], ["game_perc", "_GAMEPERC"]];
 
-        for (var p = 0; p < array_length(props2); p++)
+        for (var p = 0; p < array_length(props); p++)
         {
-            var prop2 = props2[p];
-            var value2 = variable_struct_get(array_get(global.highscores.shatter, i), array_get(prop2, 0));
+            var prop = props[p];
+            var value = variable_struct_get(array_get(global.highscores.shatter, i), array_get(prop, 0));
 
-            if (value2 != variable_struct_get(array_get(global.highscores_at_load.shatter, i), array_get(prop2, 0)))
+            if (value != variable_struct_get(array_get(global.highscores_at_load.shatter, i), array_get(prop, 0)))
             {
-                if (_write_local)
-                    ini_write_real(global.shatter_list[i].chart_id, global.shatter_list[i].difficulty_name + prop2[1], value2);
-                else if (array_get(prop2, 0) == "score")
-                {
-                    var sha2 = vs_online_chart_sha1(global.shatter_list[i].chart_id, global.shatter_list[i].difficulty_name);
-                    if (sha2 != "")
-                        vs_online_upload_score(global.shatter_list[i].chart_id, global.shatter_list[i].difficulty_name, sha2, round(value2), "");
-                }
-                variable_struct_set(array_get(global.highscores_at_load.shatter, i), array_get(prop2, 0), value2);
+                ini_write_real(global.shatter_list[i].chart_id, global.shatter_list[i].difficulty_name + prop[1], value);
+                variable_struct_set(array_get(global.highscores_at_load.shatter, i), array_get(prop, 0), value);
             }
         }
     }
 
-    if (_write_local)
-        ini_close();
+    ini_close();
     ini_open(global.highscore_file);

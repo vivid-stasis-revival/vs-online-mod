@@ -549,10 +549,6 @@ function vs_csm_scores_merge_apply(_job, _server)
             variable_struct_set(row, "score", _server);
         }
     }
-    else if (local_ > _server && _job.sha1 != "")
-    {
-        vs_online_upload_score(_job.chart_id, _job.diff, _job.sha1, round(local_), "");
-    }
 }
 
 function vs_csm_scores_merge_done(_ok, _data, _status)

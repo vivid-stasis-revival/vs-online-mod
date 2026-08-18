@@ -703,7 +703,7 @@
     {
         "Entry": "gml_Object_o_songselect_Draw_0",
         "Find": "draw_text(316 - artist_width, 2 + top_y, name);",
-        "Value": "draw_text(316 - artist_width, 2 + top_y, name); if (struct_exists(selected_song, \"is_custom\")) { var _oc = draw_get_color(); draw_set_color(make_color_rgb(80, 220, 255)); draw_text(2, 7 + top_y, \"C\"); draw_set_color(_oc); }",
+        "Value": "draw_text(316 - artist_width, 2 + top_y, name); if (struct_exists(selected_song, \"is_custom\")) {draw_sprite(sp_custom, 0, 2, 7 + top_y);}",
         "Type": 1
     },
     {
