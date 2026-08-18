@@ -112,7 +112,7 @@ function vs_songstore_dl_pump()
         __CoroutineAwaitAsync("http", function()
         {
             var st = global.vs_dl_state;
-            if (async_load[? "id"] != st.rid)
+            if (ds_map_find_value(async_load, "id") != st.rid)
             {
                 return false;
             }

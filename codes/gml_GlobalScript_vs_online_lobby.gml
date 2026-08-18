@@ -139,7 +139,7 @@ function vs_online_avatar_http()
         vs_online_avatar_finish(false);
         return true;
     }
-    if (async_load[? "id"] != global.vs_avatar_req) return false;
+    if (ds_map_find_value(async_load, "id") != global.vs_avatar_req) return false;
     var httpSt = ds_map_find_value(async_load, "http_status");
     var st = ds_map_find_value(async_load, "status");
     vs_online_avatar_finish(httpSt == 200 || st == 0);

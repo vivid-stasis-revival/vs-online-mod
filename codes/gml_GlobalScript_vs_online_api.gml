@@ -238,21 +238,21 @@ function vs_http_on_async()
         vs_http_complete(job, false, "", -1);
         return true;
     }
-    if (async_load[? "id"] != job.rid)
+    if (ds_map_find_value(async_load, "id") != job.rid)
     {
         return false;
     }
-    var gmStatus = async_load[? "status"];
+    var gmStatus = ds_map_find_value(async_load, "status");
     if (gmStatus == 1)
     {
         return false;
     }
-    var httpStatus = async_load[? "http_status"];
+    var httpStatus = ds_map_find_value(async_load, "http_status");
     if (httpStatus == undefined)
     {
         httpStatus = (gmStatus < 0) ? gmStatus : 200;
     }
-    var text = async_load[? "result"];
+    var text = ds_map_find_value(async_load, "result");
     var ok = (gmStatus >= 0 && httpStatus >= 200 && httpStatus < 300);
     show_debug_message("VS Online: HTTP done " + string(job.method) + " " + string(job.url) + " http=" + string(httpStatus) + " ok=" + string(ok));
     vs_http_complete(job, ok, text, httpStatus);

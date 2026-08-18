@@ -187,8 +187,8 @@ function vs_ws_reset()
 function vs_ws_handle_net_event()
 {
     var ws = vs_ws_state();
-    var type = async_load[? "type"];
-    var socketId = async_load[? "id"];
+    var type = ds_map_find_value(async_load, "type");
+    var socketId = ds_map_find_value(async_load, "id");
     if (ws.socket < 0 || socketId != ws.socket)
     {
         return;
@@ -196,7 +196,7 @@ function vs_ws_handle_net_event()
 
     if (type == network_type_non_blocking_connect)
     {
-        if (async_load[? "succeeded"])
+        if (ds_map_find_value(async_load, "succeeded"))
         {
             ws.state = 3;
             show_debug_message("VS WS: open " + ws.url);
@@ -232,8 +232,8 @@ function vs_ws_handle_net_event()
 // async buffer is freed when the event ends.
 function vs_ws_dispatch_payload()
 {
-    var dataBuf = async_load[? "buffer"];
-    var dataSize = async_load[? "size"];
+    var dataBuf = ds_map_find_value(async_load, "buffer");
+    var dataSize = ds_map_find_value(async_load, "size");
     if (dataSize < 0)
     {
         dataSize = 0;
@@ -242,7 +242,7 @@ function vs_ws_dispatch_payload()
     var msgType = 0;
     if (ds_map_exists(async_load, "message_type"))
     {
-        msgType = async_load[? "message_type"];
+        msgType = ds_map_find_value(async_load, "message_type");
     }
     var opcode = (msgType == 1) ? 1 : 2;
 
