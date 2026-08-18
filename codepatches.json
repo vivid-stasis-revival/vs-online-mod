@@ -157,7 +157,7 @@
     },
     {
         "Entry": "gml_Object_o_newmenu_main_Create_0",
-        "Find": "instance_create_depth(0, 0, -2000, o_newbanner);",
+        "Find": "createButton(\n{\n    icon_sprite: sp_icon_multiplayer,\n    alpha_obfuscate: 1,\n    button_text: \"Worldcross Play\",\n    \n    activate: function()\n    {\n        transitionToScene(scene_multiplayer_lobby, true, 1);\n    }\n});",
         "ExternalFile": "home_downloader_button.gml",
         "Type": 1
     },

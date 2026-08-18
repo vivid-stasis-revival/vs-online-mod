@@ -83,7 +83,7 @@ vs-online-mod/
 
 ## 谱面下载管理器（首页「Chart Downloader」）
 
-首页新增 **Chart Downloader** 入口（首页主菜单滚动到最下方即可看到），打开一个对接 vs-server-go 的**下载管理器**，双页签：
+首页 **Worldcross Play** 下面新增 **Chart Downloader** 入口，打开一个对接 vs-server-go 的**下载管理器**，双页签：
 
 **Web 页签（默认）— 对接线上目录**
 - 浏览服务器曲库目录：`/api/v1/songs` 每页 100 首，`←/→` 或 `PgUp/PgDn` 翻页，显示总数。

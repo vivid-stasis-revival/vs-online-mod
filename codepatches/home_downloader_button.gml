@@ -1,5 +1,14 @@
-// VS Online: Chart Downloader — home-menu entry
-instance_create_depth(0, 0, -2000, o_newbanner);
+createButton(
+{
+    icon_sprite: sp_icon_multiplayer,
+    alpha_obfuscate: 1,
+    button_text: "Worldcross Play",
+    
+    activate: function()
+    {
+        transitionToScene(scene_multiplayer_lobby, true, 1);
+    }
+});
 createButton(
 {
     icon_sprite: sp_icon_vs_local,
