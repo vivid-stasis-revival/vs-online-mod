@@ -929,7 +929,7 @@ function vs_dlbr_open_detail(_r, _local)
     detail = undefined;
     if (_local)
     {
-        detail_id = "";
+        detail_id = _r.chart_id;
         detail_chart = _r.chart_id;
         detail =
         {
@@ -945,6 +945,7 @@ function vs_dlbr_open_detail(_r, _local)
             diffs: _r.diffs,
             pack: _r.pack
         };
+        if (variable_struct_exists(_r, "chart_path")) vs_media_load_folder(_r.chart_id, _r.chart_path);
         return;
     }
     detail_id = _r.id;
@@ -1147,7 +1148,11 @@ function vs_dlbr_draw_detail()
     var spr = vs_media_jacket(detail_id);
     if (spr != -1 && sprite_exists(spr))
     {
+        draw_set_color(c_white);
+        draw_set_alpha(1);
+        gpu_set_tex_filter(true);
         draw_sprite_stretched(spr, 0, jx, jy, js, js);
+        gpu_set_tex_filter(false);
     }
     else
     {

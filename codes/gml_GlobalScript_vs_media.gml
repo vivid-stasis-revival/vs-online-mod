@@ -22,7 +22,28 @@ function vs_media_init()
         global.vs_media_path = "";
         global.vs_media_want_pv = "";
         global.vs_pv_inst = -1;
+        global.vs_media_scheduled = false;
+        global.vs_jk_load_key = "";
+        global.vs_jk_load_path = "";
     }
+}
+
+function vs_media_ext(_url)
+{
+    var u = string_lower(string(_url));
+    var qpos = string_pos("?", u);
+    if (qpos > 0) u = string_copy(u, 1, qpos - 1);
+    if (vs_songstore_ends_with(u, ".png")) return ".png";
+    if (vs_songstore_ends_with(u, ".jpg") || vs_songstore_ends_with(u, ".jpeg")) return ".jpg";
+    if (vs_songstore_ends_with(u, ".gif")) return ".gif";
+    return ".png";
+}
+
+function vs_media_file_key(_id)
+{
+    var k = string_replace_all(string(_id), "/", "_");
+    k = string_replace_all(k, "\\", "_");
+    return k;
 }
 
 function vs_media_jacket(_id)
@@ -102,8 +123,17 @@ function vs_media_pump()
     array_delete(global.vs_media_q, 0, 1);
     var dir = (job.kind == "jacket") ? "vs_jackets/" : "vs_previews/";
     if (!directory_exists(dir)) directory_create(dir);
-    var ext = (job.kind == "jacket") ? ".img" : ".ogg";
-    var dest = dir + job.id + ext;
+    var ext = (job.kind == "jacket") ? vs_media_ext(job.url) : ".ogg";
+    var dest = dir + vs_media_file_key(job.id) + ext;
+    if (job.kind == "jacket" && file_exists(dest))
+    {
+        global.vs_media_busy = true;
+        global.vs_media_kind = job.kind;
+        global.vs_media_id = job.id;
+        global.vs_media_path = dest;
+        vs_media_finish(true);
+        return;
+    }
     var url = vs_songstore_abs_url(job.url);
     global.vs_media_busy = true;
     global.vs_media_kind = job.kind;
@@ -132,9 +162,8 @@ function vs_media_finish(_ok)
     {
         if (kind == "jacket")
         {
-            var spr = sprite_add(path, 1, false, false, 0, 0);
-            if (spr != -1) variable_struct_set(global.vs_jk_spr, key, spr);
-            else variable_struct_set(global.vs_jk_fail, key, true);
+            global.vs_jk_load_key = key;
+            global.vs_jk_load_path = path;
         }
         else
         {
@@ -152,7 +181,55 @@ function vs_media_finish(_ok)
         if (kind == "jacket") variable_struct_set(global.vs_jk_fail, key, true);
         else variable_struct_set(global.vs_pv_fail, key, true);
     }
+    vs_media_schedule();
+}
+
+function vs_media_schedule()
+{
+    vs_media_init();
+    if (global.vs_media_scheduled) return;
+    global.vs_media_scheduled = true;
+    call_later(1, time_source_units_frames, vs_media_on_later);
+}
+
+function vs_media_on_later()
+{
+    vs_media_init();
+    global.vs_media_scheduled = false;
+    if (global.vs_jk_load_path != "")
+    {
+        var key = global.vs_jk_load_key;
+        var path = global.vs_jk_load_path;
+        global.vs_jk_load_key = "";
+        global.vs_jk_load_path = "";
+        var spr = sprite_add(path, 1, false, false, 0, 0);
+        if (spr != -1 && sprite_exists(spr)) variable_struct_set(global.vs_jk_spr, key, spr);
+        else variable_struct_set(global.vs_jk_fail, key, true);
+    }
     vs_media_pump();
+}
+
+function vs_media_load_folder(_key, _dir)
+{
+    vs_media_init();
+    if (_key == undefined || _key == "" || _dir == undefined || _dir == "") return;
+    if (variable_struct_exists(global.vs_jk_spr, _key) || variable_struct_exists(global.vs_jk_fail, _key)) return;
+    var names = ["jacket.png", "jacket.jpg", "jacket.jpeg", "jacket.gif"];
+    var i = 0;
+    repeat (4)
+    {
+        var p = _dir + names[i];
+        if (file_exists(p))
+        {
+            var spr = sprite_add(p, 1, false, false, 0, 0);
+            if (spr != -1 && sprite_exists(spr))
+            {
+                variable_struct_set(global.vs_jk_spr, _key, spr);
+                return;
+            }
+        }
+        i++;
+    }
 }
 
 function vs_media_on_http()
