@@ -68,6 +68,22 @@ function vs_auth_on_poll(_ok, _data, _status)
     vs_auth_flow_polled(_ok, _data, _status);
 }
 
+function vs_auth_close()
+{
+    if (variable_global_exists("vs_oauth_start_q"))
+    {
+        global.vs_oauth_start_q = [];
+    }
+    instance_destroy();
+}
+
+function vs_auth_pressed_close()
+{
+    if (keyboard_check_pressed(vk_escape)) return true;
+    if (variable_global_exists("menu_cancel") && keyboard_check_pressed(global.menu_cancel)) return true;
+    return false;
+}
+
 function vs_auth_start_flow()
 {
     if (busy) return;
@@ -129,6 +145,12 @@ function vs_auth_setup()
 
 function vs_auth_step()
 {
+    if (vs_auth_pressed_close())
+    {
+        vs_auth_close();
+        return;
+    }
+
     if (signed_in)
     {
         var btn_count = 2;
@@ -151,12 +173,8 @@ function vs_auth_step()
             }
             else
             {
-                instance_destroy();
+                vs_auth_close();
             }
-        }
-        else if (keyboard_check_pressed(vk_escape))
-        {
-            instance_destroy();
         }
         return;
     }
@@ -181,11 +199,7 @@ function vs_auth_step()
         return;
     }
 
-    if (keyboard_check_pressed(vk_escape))
-    {
-        instance_destroy();
-    }
-    else if (keyboard_check_pressed(vk_enter) && stage == 0)
+    if (keyboard_check_pressed(vk_enter) && stage == 0)
     {
         vs_auth_start_flow();
     }
@@ -281,6 +295,8 @@ function vs_auth_draw()
             draw_text(bx + 12, by + 92, "Code expires in " + string(ceil(remain)) + "s");
             draw_set_color(c_yellow);
             draw_text(bx + 12, by + 106, message);
+            draw_set_color(c_gray);
+            draw_text(bx + 12, by + 118, "Esc: close");
         }
         else
         {

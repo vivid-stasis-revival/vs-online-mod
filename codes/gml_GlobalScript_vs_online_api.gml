@@ -124,6 +124,8 @@ function vs_http_q_init()
         global.vs_http_q = [];
         global.vs_http_busy = false;
         global.vs_http_cur = undefined;
+        global.vs_http_gen = 0;
+        global.vs_http_to = [];
     }
 }
 
@@ -186,12 +188,24 @@ function vs_http_pump()
     global.vs_http_busy = true;
     global.vs_http_cur = global.vs_http_q[0];
     array_delete(global.vs_http_q, 0, 1);
-    // Await/Timeout must be siblings of Begin (official coroutine syntax).
-    // Nesting them inside the Begin callback never registers the HTTP listener.
-    __CoroutineBegin(vs_http_start_current);
-    __CoroutineAwaitAsync("http", vs_http_on_async);
-    __CoroutineAsyncTimeout(vs_http_timeout_ms);
-    __CoroutineEnd();
+    vs_http_start_current();
+    var job = global.vs_http_cur;
+    if (job == undefined) return;
+    if (variable_struct_exists(job, "failed") && job.failed)
+    {
+        vs_http_complete(job, false, "", -1);
+        return;
+    }
+    if (!variable_global_exists("vs_http_gen"))
+    {
+        global.vs_http_gen = 0;
+        global.vs_http_to = [];
+    }
+    global.vs_http_gen += 1;
+    job.gen = global.vs_http_gen;
+    array_push(global.vs_http_to, job.gen);
+    var frames = max(1, round(vs_http_timeout_ms() * 60 / 1000));
+    call_later(frames, time_source_units_frames, vs_http_on_timeout);
 }
 
 function vs_http_start_current()
@@ -216,6 +230,19 @@ function vs_http_start_current()
     show_debug_message("VS Online: HTTP start " + string(job.method) + " " + string(job.url) + " rid=" + string(job.rid));
 }
 
+function vs_http_on_timeout()
+{
+    vs_http_q_init();
+    if (!variable_global_exists("vs_http_to") || array_length(global.vs_http_to) == 0) return;
+    var g = global.vs_http_to[0];
+    array_delete(global.vs_http_to, 0, 1);
+    var job = global.vs_http_cur;
+    if (job == undefined) return;
+    if (!variable_struct_exists(job, "gen") || job.gen != g) return;
+    show_debug_message("VS Online: HTTP timeout " + string(job.method) + " " + string(job.url));
+    vs_http_complete(job, false, "", -1);
+}
+
 // GameMaker HTTP async:
 //   status      — 1 = still downloading, 0 = finished, <0 = transport error
 //   http_status — actual HTTP code (200 / 201 / 404 / ...)
@@ -238,21 +265,31 @@ function vs_http_on_async()
         vs_http_complete(job, false, "", -1);
         return true;
     }
-    if (ds_map_find_value(async_load, "id") != job.rid)
+    var rid = ds_map_find_value(async_load, "id");
+    if (rid == undefined || rid != job.rid)
     {
         return false;
     }
     var gmStatus = ds_map_find_value(async_load, "status");
+    var httpStatus = ds_map_find_value(async_load, "http_status");
+    var text = ds_map_find_value(async_load, "result");
     if (gmStatus == 1)
     {
-        return false;
+        var cl = ds_map_find_value(async_load, "contentLength");
+        var got = ds_map_find_value(async_load, "sizeDownloaded");
+        if (cl != undefined && got != undefined && real(got) < real(cl))
+        {
+            return false;
+        }
+        if ((text == undefined || text == "") && (httpStatus == undefined || httpStatus < 200))
+        {
+            return false;
+        }
     }
-    var httpStatus = ds_map_find_value(async_load, "http_status");
     if (httpStatus == undefined)
     {
         httpStatus = (gmStatus < 0) ? gmStatus : 200;
     }
-    var text = ds_map_find_value(async_load, "result");
     var ok = (gmStatus >= 0 && httpStatus >= 200 && httpStatus < 300);
     show_debug_message("VS Online: HTTP done " + string(job.method) + " " + string(job.url) + " http=" + string(httpStatus) + " ok=" + string(ok));
     vs_http_complete(job, ok, text, httpStatus);
