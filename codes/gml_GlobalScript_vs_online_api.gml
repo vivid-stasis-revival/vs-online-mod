@@ -643,18 +643,19 @@ function vs_online_auth_status_text()
         case 1: conn = "online"; break;
         case -1: conn = "offline"; break;
     }
+    var ep = vs_online_endpoint_label();
     if (vs_online_is_account())
     {
+        var nm = (variable_struct_exists(cfg, "name") && cfg.name != "") ? cfg.name : "Player";
         if (variable_struct_exists(cfg, "email") && cfg.email != "")
         {
-            var nm = (variable_struct_exists(cfg, "name") && cfg.name != "") ? cfg.name : "Player";
-            return "Signed in: " + nm + " (" + cfg.email + ")  [" + conn + "]";
+            return ep + "  " + nm + " (" + cfg.email + ")  [" + conn + "]";
         }
-        return "Signed in (device flow)  [" + conn + "]";
+        return ep + "  " + nm + "  [device · " + conn + "]";
     }
     if (variable_struct_exists(cfg, "token") && cfg.token != "")
-        return "Guest / not logged in - online features disabled, only play downloaded charts.  [" + conn + "]";
-    return "Not signed in yet - log in to use online features.";
+        return ep + "  Guest / not logged in - online features disabled.  [" + conn + "]";
+    return ep + "  Not signed in yet - log in to use online features.";
 }
 
 // --- achievements ----------------------------------------------------------

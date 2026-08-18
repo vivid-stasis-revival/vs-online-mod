@@ -114,6 +114,18 @@ function vs_online_server_url()
     return vs_online_get_config().server;
 }
 
+function vs_online_endpoint_label()
+{
+    var s = vs_online_server_url();
+    if (string_pos("https://", s) == 1) s = string_copy(s, 9, string_length(s));
+    else if (string_pos("http://", s) == 1) s = string_copy(s, 8, string_length(s));
+    while (string_length(s) > 0 && string_char_at(s, string_length(s)) == "/")
+    {
+        s = string_copy(s, 1, string_length(s) - 1);
+    }
+    return s;
+}
+
 function vs_online_frontend_url()
 {
     return vs_online_get_config().frontend;

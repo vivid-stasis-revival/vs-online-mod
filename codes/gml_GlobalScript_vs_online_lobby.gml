@@ -111,6 +111,21 @@ function vs_online_avatar_cache()
     return global.vs_avatar_spr;
 }
 
+function vs_online_my_avatar()
+{
+    var cfg = vs_online_get_config();
+    var name = (variable_struct_exists(cfg, "name") && cfg.name != "") ? cfg.name : "Player";
+    var av = vs_online_avatar_sprite(name);
+    var pid = (variable_struct_exists(cfg, "playerId")) ? cfg.playerId : "";
+    var url = (variable_struct_exists(cfg, "avatar")) ? cfg.avatar : "";
+    if (url != "" && pid != "")
+    {
+        var fetched = vs_online_avatar_ensure(pid, vs_songstore_abs_url(url));
+        if (fetched != undefined) av = fetched;
+    }
+    return av;
+}
+
 function vs_online_avatar_ensure(_playerId, _url)
 {
     if (_playerId == undefined || _playerId == "" || _url == undefined || _url == "") return undefined;

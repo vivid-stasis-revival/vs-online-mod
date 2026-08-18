@@ -153,6 +153,10 @@ function vs_auth_setup()
     {
         vs_auth_start_flow();
     }
+    else
+    {
+        vs_online_my_avatar();
+    }
 }
 
 function vs_auth_step()
@@ -227,7 +231,7 @@ function vs_auth_draw()
     var cw = display_get_gui_width();
     var ch = display_get_gui_height();
     var bw = 280;
-    var bh = signed_in ? 120 : 150;
+    var bh = signed_in ? 128 : 150;
     var bx = (cw - bw) / 2;
     var by = (ch - bh) / 2;
 
@@ -256,12 +260,30 @@ function vs_auth_draw()
         var em = (variable_struct_exists(acfg, "email") && acfg.email != "") ? acfg.email : "device flow";
         var pid = (variable_struct_exists(acfg, "playerId") && acfg.playerId != "") ? acfg.playerId : "";
         if (string_length(pid) > 12) { pid = string_copy(pid, 1, 12) + "..."; }
-
+        var ep = vs_online_endpoint_label();
+        var asz = 28;
+        var ax = bx + 10;
+        var ay = by + 22;
+        var spr = vs_online_my_avatar();
+        draw_set_color(make_color_rgb(28, 30, 36));
+        draw_rectangle(ax, ay, ax + asz, ay + asz, false);
+        if (spr != undefined && sprite_exists(spr))
+        {
+            draw_set_color(c_white);
+            gpu_set_tex_filter(true);
+            draw_sprite_stretched(spr, 0, ax, ay, asz, asz);
+            gpu_set_tex_filter(false);
+        }
+        var tx = ax + asz + 8;
+        var tw = bx + bw - tx - 8;
         draw_set_halign(fa_left);
+        draw_set_color(make_color_rgb(80, 220, 230));
+        draw_text(tx, by + 22, vs_dlbr_clip_text(ep, tw));
         draw_set_color(c_white);
-        draw_text(bx + 12, by + 24, "Name: " + nm);
-        draw_text(bx + 12, by + 38, "Account: " + em);
-        draw_text(bx + 12, by + 52, "Player ID: " + pid);
+        draw_text(tx, by + 34, vs_dlbr_clip_text(nm, tw));
+        draw_set_color(make_color_rgb(180, 186, 196));
+        draw_text(tx, by + 46, vs_dlbr_clip_text(em, tw));
+        draw_text(tx, by + 56, vs_dlbr_clip_text(pid, tw));
 
         var btn_w = 126;
         var btn_h = 18;
@@ -328,8 +350,10 @@ function vs_auth_draw()
         }
         else
         {
+            draw_set_color(make_color_rgb(80, 220, 230));
+            draw_text(bx + 12, by + 22, vs_online_endpoint_label());
             draw_set_color(c_white);
-            draw_text_ext(bx + 12, by + 26, "Sign in with your account via device flow.", 10, bw - 24);
+            draw_text_ext(bx + 12, by + 36, "Sign in with your account via device flow.", 10, bw - 24);
             draw_set_color(c_yellow);
             draw_text_ext(bx + 12, by + 44, message, 10, bw - 24);
             draw_set_color(c_gray);
