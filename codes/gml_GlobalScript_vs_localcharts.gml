@@ -280,13 +280,13 @@ function vs_localcharts_auto_check()
     // Only charts recorded as our downloads (tracked) are checked against the
     // server — a local chart that merely shares the id is not treated as
     // downloadable/updatable content.
-    var all = vs_localcharts_scan();
+    var scanned = vs_localcharts_scan();
     var tr = [];
-    for (var i = 0; i < array_length(all); i++)
+    for (var i = 0; i < array_length(scanned); i++)
     {
-        if (vs_dlmgr_tracked(all[i].chart_id))
+        if (vs_dlmgr_tracked(scanned[i].chart_id))
         {
-            array_push(tr, all[i]);
+            array_push(tr, scanned[i]);
         }
     }
     st.list = tr;
