@@ -252,6 +252,7 @@ function vs_http_on_async()
     // File downloads share this official HTTP event. Handle them here so a
     // missed codepatch line cannot leave http_get_file waiting forever.
     vs_songstore_on_http();
+    vs_media_on_http();
     var job = global.vs_http_cur;
     if (job == undefined)
     {

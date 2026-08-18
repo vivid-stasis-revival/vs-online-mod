@@ -43,6 +43,15 @@ function vs_songstore_ensure_dir(_dir)
     if (_dir != "" && _dir != root && !directory_exists(_dir)) directory_create(_dir);
 }
 
+function vs_songstore_remove_chart(_chartId)
+{
+    if (_chartId == undefined || _chartId == "") return;
+    var staging = vs_songstore_root() + _chartId + ".vs_partial/";
+    if (directory_exists(staging)) directory_destroy(staging);
+    var d = vs_songstore_local_dir(_chartId);
+    if (directory_exists(d)) directory_destroy(d);
+}
+
 function vs_songstore_cleanup_stub(_chartId)
 {
     if (_chartId == undefined || _chartId == "") return;

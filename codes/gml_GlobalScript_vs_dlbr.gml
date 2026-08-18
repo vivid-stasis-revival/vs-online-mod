@@ -17,6 +17,7 @@ function vs_dlbr_open_from_menu()
         {
             do_step = method(id, vs_dlbr_step);
             do_draw = method(id, vs_dlbr_draw);
+            do_destroy = method(id, vs_dlbr_on_close);
             vs_dlbr_fetch_page();
         }
     }
@@ -38,6 +39,11 @@ function vs_dlbr_build_row(_song)
         name: variable_struct_exists(_song, "name") ? _song.name : "",
         artist: variable_struct_exists(_song, "artist") ? _song.artist : "",
         chartCount: variable_struct_exists(_song, "chartCount") ? _song.chartCount : 0,
+        jacketUrl: variable_struct_exists(_song, "jacketUrl") ? _song.jacketUrl : "",
+        previewUrl: variable_struct_exists(_song, "previewUrl") ? _song.previewUrl : "",
+        ownerName: variable_struct_exists(_song, "ownerName") ? _song.ownerName : "",
+        downloads: variable_struct_exists(_song, "downloads") ? _song.downloads : 0,
+        hasBackstage: variable_struct_exists(_song, "hasBackstage") ? _song.hasBackstage : false,
         downloaded: vs_dlmgr_downloaded(ch),
         tracked: vs_dlmgr_tracked(ch),
         checked: false,
@@ -89,11 +95,7 @@ function vs_dlbr_selected_refresh()
     }
     var r = rows[sel];
     vs_dlbr_set_status(vs_dlmgr_row_status(r));
-    if (view == 0 && r.downloaded && !r.checked)
-    {
-        var ai = vs_dlbr_row_all_index(r.chartId);
-        if (ai >= 0) vs_dlbr_check_row_index(ai);
-    }
+    vs_media_select(r.id, r.jacketUrl, r.previewUrl);
 }
 
 function vs_dlbr_fetch_page()
@@ -272,6 +274,7 @@ function vs_dlbr_start_download(_r)
 function vs_dlbr_on_download(_ok)
 {
     updating = false;
+    vs_dlbr_close_detail();
     var cancelled = variable_global_exists("vs_dlmgr_dl") && global.vs_dlmgr_dl.cancel;
     if (cancelled)
     {
@@ -300,42 +303,7 @@ function vs_dlbr_do_selected_action()
 {
     if (array_length(rows) == 0) return;
     if (updating) return;
-    var r = rows[sel];
-    if (!r.downloaded)
-    {
-        vs_dlbr_start_download(r);
-        return;
-    }
-    var ai = vs_dlbr_row_all_index(r.chartId);
-    if (ai < 0) return;
-    var rr = rows_all[ai];
-    if (rr.tracked)
-    {
-        if (!rr.checked)
-        {
-            enter_act = true;
-            vs_dlbr_check_row_index(ai);
-            return;
-        }
-        if (rr.need > 0)
-        {
-            vs_dlbr_start_download(rr);
-        }
-        else
-        {
-            vs_dlbr_set_status(r.chartId + " is up to date.");
-        }
-    }
-    else
-    {
-        if (!vs_songstore_has_chart(r.chartId))
-        {
-            vs_dlbr_start_download(r);
-            return;
-        }
-        if (!rr.checked) { vs_dlbr_check_row_index(ai); }
-        vs_dlbr_set_status(r.chartId + " is a local chart without a download record - not overwritten.");
-    }
+    vs_dlbr_open_detail(rows[sel], false);
 }
 
 function vs_dlbr_batch_update()
@@ -408,6 +376,8 @@ function vs_dlbr_cycle_filter()
 
 function vs_dlbr_toggle_view()
 {
+    vs_dlbr_close_detail();
+    vs_media_stop_preview();
     view = (view == 0) ? 1 : 0;
     page = 1;
     sel = 0;
@@ -474,6 +444,7 @@ function vs_dlbr_step()
 
     if (searching)
     {
+        vs_media_stop_preview();
         query = keyboard_string;
         if (keyboard_check_pressed(vk_enter))
         {
@@ -506,6 +477,12 @@ function vs_dlbr_step()
             vs_dlmgr_cancel();
             vs_dlbr_set_status("Cancelling download...");
         }
+        return;
+    }
+
+    if (detail_open)
+    {
+        vs_dlbr_step_detail();
         return;
     }
 
@@ -566,7 +543,7 @@ function vs_dlbr_step()
         }
         else if (keyboard_check_pressed(vk_enter) || keyboard_check_pressed(vk_space))
         {
-            vs_dlbr_do_selected_action();
+            vs_dlbr_open_detail(rows[sel], false);
         }
         else if (keyboard_check_pressed(ord("V")))
         {
@@ -601,7 +578,7 @@ function vs_dlbr_step()
         }
         else if (keyboard_check_pressed(vk_enter) || keyboard_check_pressed(vk_space))
         {
-            vs_dlbr_jump_from_local();
+            vs_dlbr_open_detail(local_rows[sel], true);
         }
         else if (keyboard_check_pressed(ord("V")))
         {
@@ -623,136 +600,76 @@ function vs_dlbr_draw()
 {
     var cw = display_get_gui_width();
     var ch = display_get_gui_height();
-    var bw = 320;
-    var bh = 176;
+    var bw = min(560, max(420, floor(cw * 0.62)));
+    var bh = min(300, max(230, floor(ch * 0.52)));
     var bx = (cw - bw) / 2;
     var by = (ch - bh) / 2;
-    var rowh = 13;
+    var rowh = 22;
 
-    draw_set_alpha(0.7);
+    draw_set_alpha(0.72);
     draw_set_color(c_black);
     draw_rectangle(0, 0, cw, ch, false);
     draw_set_alpha(1);
 
-    draw_set_color(c_black);
+    draw_set_color(make_color_rgb(12, 14, 18));
     draw_rectangle(bx - 2, by - 2, bx + bw + 2, by + bh + 2, false);
-    draw_set_color(c_white);
+    draw_set_color(make_color_rgb(48, 52, 60));
     draw_rectangle(bx, by, bx + bw, by + bh, true);
 
     draw_set_font(fnt_monacovs);
     draw_set_halign(fa_left);
     draw_set_valign(fa_top);
-    draw_set_color(c_aqua);
-    draw_text(bx + 6, by + 3, "Chart Downloader");
+    draw_set_color(make_color_rgb(80, 220, 230));
+    draw_text(bx + 10, by + 5, "Chart Downloader");
     draw_set_font(global.default_font);
 
-    if (view == 0)
+    var head = (view == 0)
+        ? ("WEB  " + string(page) + "/" + string(maxpage) + "  (" + string(total) + ")  [" + vs_dlmgr_filter_name(filter) + "]")
+        : ("LOCAL  " + string(array_length(local_rows)) + "/" + string(array_length(local_all)));
+    if (query != "") head += "  q=\"" + query + "\"";
+    draw_set_color(make_color_rgb(180, 186, 196));
+    if (searching)
     {
-        var head = "WEB  page " + string(page) + "/" + string(maxpage) + "  (" + string(total) + ")";
-        if (query != "") head += "  q=\"" + query + "\"";
-        head += "  [" + vs_dlmgr_filter_name(filter) + "]";
+        draw_set_color(c_lime);
+        head = "Search: " + query + "_";
+    }
+    draw_text(bx + 10, by + 18, head);
+
+    var listTop = by + 34;
+    var listBot = by + bh - 36;
+    var vis = max(1, floor((listBot - listTop) / rowh));
+    var n = (view == 0) ? array_length(rows) : array_length(local_rows);
+    var start_idx = max(0, sel - floor(vis / 2));
+    if (start_idx + vis > n) start_idx = max(0, n - vis);
+    var end_idx = min(n, start_idx + vis);
+
+    if (n == 0)
+    {
         draw_set_color(c_white);
-        draw_text(bx + 6, by + 15, head);
-
-        if (searching)
-        {
-            draw_set_color(c_lime);
-            draw_text(bx + 6, by + 15, "Search: " + query + "_");
-        }
-
-        var vis = 8;
-        var start_idx = max(0, sel - 3);
-        var end_idx = min(array_length(rows), start_idx + vis);
-        var ty = by + 27;
-        for (var r = start_idx; r < end_idx; r++)
-        {
-            var s = rows[r];
-            var isSel = (r == sel);
-            var st = ".";
-            if (s.downloaded && !s.tracked) st = "L";
-            else if (s.downloaded) st = (s.checked && s.need > 0) ? "U" : "D";
-            draw_set_color(isSel ? c_yellow : (st == "U" ? c_aqua : (st == "L" ? c_orange : c_white)));
-            var line = (isSel ? ">" : " ") + st + "  " + s.name + "  -  " + s.artist;
-            if (s.chartCount > 0) line += "  [" + string(s.chartCount) + "]";
-            draw_text(bx + 6, ty + ((r - start_idx) * rowh), line);
-        }
-        if (array_length(rows) == 0)
-        {
-            draw_set_color(c_white);
-            draw_text(bx + 6, ty + 2, "No charts match.");
-        }
+        draw_text(bx + 14, listTop + 8, (view == 0) ? "No charts match." : "No custom charts in Custom Songs/.");
     }
     else
     {
-        draw_set_color(c_white);
-        var lhead = "LOCAL  (" + string(array_length(local_rows)) + "/" + string(array_length(local_all)) + ")";
-        if (query != "") lhead += "  q=\"" + query + "\"";
-        draw_text(bx + 6, by + 15, lhead);
-        if (searching)
+        var i = start_idx;
+        repeat (end_idx - start_idx)
         {
-            draw_set_color(c_lime);
-            draw_text(bx + 6, by + 15, "Search: " + query + "_");
-        }
-
-        var vis = 8;
-        var start_idx = max(0, sel - 3);
-        var end_idx = min(array_length(local_rows), start_idx + vis);
-        var ty = by + 27;
-        for (var r = start_idx; r < end_idx; r++)
-        {
-            var s = local_rows[r];
-            var isSel = (r == sel);
-            var st = vs_dlmgr_tracked(s.chart_id) ? "D" : "L";
-            draw_set_color(isSel ? c_yellow : (st == "D" ? c_white : c_orange));
-            draw_text(bx + 6, ty + ((r - start_idx) * rowh), (isSel ? ">" : " ") + st + "  " + s.name + "  -  " + s.artist);
-            if (isSel)
-            {
-                var dstr = "";
-                var d = 0;
-                repeat (array_length(s.diffs))
-                {
-                    if (d > 0) dstr += "/";
-                    dstr += s.diffs[d];
-                    d++;
-                }
-                var tag = vs_dlmgr_tracked(s.chart_id) ? " downloaded" : " local (no record)";
-                draw_set_color(c_gray);
-                draw_text(bx + 6, ty + ((r - start_idx) * rowh) + 14, "[" + s.pack + "]  " + dstr + tag + (s.in_select ? "" : "  (not in select)"));
-            }
-        }
-        if (array_length(local_rows) == 0)
-        {
-            draw_set_color(c_white);
-            draw_text(bx + 6, ty + 2, "No custom charts in Custom Songs/.");
+            vs_dlbr_draw_bar(bx + 8, listTop + ((i - start_idx) * rowh), bw - 16, rowh - 3, i);
+            i++;
         }
     }
 
     var st = string(status);
-    if (string_length(st) > 52) st = string_copy(st, 1, 49) + "...";
-    draw_set_color(c_lime);
-    draw_text(bx + 6, by + bh - 28, st);
+    if (string_length(st) > 64) st = string_copy(st, 1, 61) + "...";
+    draw_set_color(make_color_rgb(120, 210, 140));
+    draw_text(bx + 10, by + bh - 32, st);
 
-    var hint1 = "";
-    var hint2 = "";
-    if (searching)
-    {
-        hint1 = "Enter confirm";
-        hint2 = "Esc cancel";
-    }
-    else if (view == 0)
-    {
-        hint1 = "Enter act   Tab search   F filter";
-        hint2 = "<> page   V local   Esc close";
-    }
-    else
-    {
-        hint1 = "Enter jump   Tab search";
-        hint2 = "V web   Esc close";
-    }
-    draw_set_color(c_gray);
-    draw_text(bx + 6, by + bh - 17, hint1);
-    draw_text(bx + 6, by + bh - 8, hint2);
+    var hint1 = searching ? "Enter confirm" : ((view == 0) ? "Enter details   Tab search   F filter" : "Enter details   Tab search");
+    var hint2 = searching ? "Esc cancel" : ((view == 0) ? "<> page   V local   Esc close" : "V web   Esc close");
+    draw_set_color(make_color_rgb(120, 126, 136));
+    draw_text(bx + 10, by + bh - 20, hint1);
+    draw_text(bx + 10, by + bh - 11, hint2);
 
+    if (detail_open) vs_dlbr_draw_detail();
     if (updating) vs_dlbr_draw_dl_popup();
 
     draw_set_halign(fa_left);
@@ -822,4 +739,418 @@ function vs_dlbr_draw_dl_popup()
     draw_set_color(c_yellow);
     draw_set_halign(fa_center);
     draw_text(px + pw / 2, py + 58, string(floor(frac * 100)) + "%   Esc cancel");
+}
+
+function vs_dlbr_on_close()
+{
+    vs_media_stop_preview();
+}
+
+function vs_dlbr_mark(_r)
+{
+    if (_r == undefined) return ".";
+    if (variable_struct_exists(_r, "chart_id"))
+    {
+        return vs_dlmgr_tracked(_r.chart_id) ? "D" : "L";
+    }
+    if (_r.downloaded && !_r.tracked) return "L";
+    if (_r.downloaded && _r.checked && _r.need > 0) return "U";
+    if (_r.downloaded) return "D";
+    return ".";
+}
+
+function vs_dlbr_mark_color(_m, _sel)
+{
+    if (_sel) return c_black;
+    if (_m == "U") return make_color_rgb(80, 220, 230);
+    if (_m == "L") return make_color_rgb(240, 160, 70);
+    if (_m == "D") return make_color_rgb(140, 220, 150);
+    return make_color_rgb(200, 204, 212);
+}
+
+function vs_dlbr_draw_bar(_x, _y, _w, _h, _idx)
+{
+    var web = (view == 0);
+    var r = web ? rows[_idx] : local_rows[_idx];
+    var isSel = (_idx == sel);
+    var mk = vs_dlbr_mark(r);
+    if (isSel)
+    {
+        draw_set_color(make_color_rgb(240, 210, 70));
+        draw_rectangle(_x, _y, _x + _w, _y + _h, false);
+    }
+    else
+    {
+        draw_set_color(make_color_rgb(22, 24, 30));
+        draw_rectangle(_x, _y, _x + _w, _y + _h, false);
+        draw_set_color(make_color_rgb(40, 44, 52));
+        draw_rectangle(_x, _y, _x + _w, _y + _h, true);
+    }
+    draw_set_color(isSel ? c_black : vs_dlbr_mark_color(mk, false));
+    draw_text(_x + 6, _y + 4, mk);
+    var nm = web ? r.name : r.name;
+    var ar = web ? r.artist : r.artist;
+    var line = nm;
+    if (ar != "") line += "  -  " + ar;
+    if (web && r.chartCount > 0) line += "  [" + string(r.chartCount) + "]";
+    if (string_length(line) > 52) line = string_copy(line, 1, 49) + "...";
+    draw_set_color(isSel ? c_black : c_white);
+    draw_text(_x + 22, _y + 4, (isSel ? "> " : "  ") + line);
+}
+
+function vs_dlbr_open_detail(_r, _local)
+{
+    if (_r == undefined) return;
+    detail_open = true;
+    detail_local = _local;
+    detail_confirm = false;
+    detail_btn = 0;
+    detail_loading = !_local;
+    detail = undefined;
+    if (_local)
+    {
+        detail_id = "";
+        detail_chart = _r.chart_id;
+        detail =
+        {
+            name: _r.name,
+            artist: _r.artist,
+            chartId: _r.chart_id,
+            ownerName: "",
+            bpmDisplay: "",
+            jacketArtist: "",
+            jacketUrl: "",
+            previewUrl: "",
+            charts: [],
+            diffs: _r.diffs,
+            pack: _r.pack
+        };
+        return;
+    }
+    detail_id = _r.id;
+    detail_chart = _r.chartId;
+    vs_media_select(_r.id, _r.jacketUrl, _r.previewUrl);
+    vs_songstore_detail(_r.id, vs_dlbr_on_detail);
+}
+
+function vs_dlbr_on_detail(_ok, _data)
+{
+    if (!instance_exists(vs_downloader_browser)) return;
+    with (vs_downloader_browser)
+    {
+        detail_loading = false;
+        if (!_ok || _data == undefined)
+        {
+            vs_dlbr_set_status("Could not load song details.");
+            return;
+        }
+        detail = _data;
+        var ai = vs_dlbr_row_all_index(detail_chart);
+        if (ai < 0) return;
+        var rr = rows_all[ai];
+        rr.checked = true;
+        var need = vs_songstore_diff(_data.files, rr.chartId);
+        if (rr.tracked)
+        {
+            rr.need = array_length(need);
+        }
+        else if (array_length(need) == 0 && vs_songstore_has_chart(rr.chartId))
+        {
+            vs_dlmgr_write_meta(rr.chartId, rr.id, rr.name);
+            rr.tracked = true;
+            rr.need = 0;
+        }
+        else if (vs_songstore_has_chart(rr.chartId))
+        {
+            rr.need = -3;
+        }
+    }
+}
+
+function vs_dlbr_close_detail()
+{
+    detail_open = false;
+    detail_local = false;
+    detail_loading = false;
+    detail = undefined;
+    detail_confirm = false;
+    detail_btn = 0;
+}
+
+function vs_dlbr_detail_row()
+{
+    if (detail_local)
+    {
+        if (sel < 0 || sel >= array_length(local_rows)) return undefined;
+        return local_rows[sel];
+    }
+    var ai = vs_dlbr_row_all_index(detail_chart);
+    if (ai < 0) return undefined;
+    return rows_all[ai];
+}
+
+function vs_dlbr_detail_buttons()
+{
+    var b = [];
+    if (detail_confirm)
+    {
+        array_push(b, { id: "yes", label: "Confirm delete" });
+        array_push(b, { id: "no", label: "Cancel" });
+        return b;
+    }
+    if (detail_local)
+    {
+        array_push(b, { id: "jump", label: "Play" });
+        array_push(b, { id: "del", label: "Delete" });
+        array_push(b, { id: "close", label: "Close" });
+        return b;
+    }
+    var r = vs_dlbr_detail_row();
+    if (r != undefined)
+    {
+        if (!r.downloaded) array_push(b, { id: "dl", label: "Download" });
+        else if (r.tracked && r.need > 0) array_push(b, { id: "dl", label: "Update" });
+        else if (r.tracked) array_push(b, { id: "ok", label: "Up to date" });
+        else array_push(b, { id: "ok", label: "Local (kept)" });
+        if (r.downloaded) array_push(b, { id: "del", label: "Delete" });
+    }
+    array_push(b, { id: "close", label: "Close" });
+    return b;
+}
+
+function vs_dlbr_do_delete()
+{
+    var id = detail_chart;
+    vs_songstore_remove_chart(id);
+    vs_dlbr_close_detail();
+    vs_localcharts_refresh();
+    vs_dlbr_fetch_page();
+    vs_dlbr_set_status("Deleted " + id);
+}
+
+function vs_dlbr_detail_act(_id)
+{
+    if (_id == "close" || _id == "no")
+    {
+        if (_id == "no") { detail_confirm = false; detail_btn = 0; return; }
+        vs_dlbr_close_detail();
+        return;
+    }
+    if (_id == "yes")
+    {
+        vs_dlbr_do_delete();
+        return;
+    }
+    if (_id == "del")
+    {
+        detail_confirm = true;
+        detail_btn = 0;
+        return;
+    }
+    if (_id == "jump")
+    {
+        vs_dlbr_close_detail();
+        vs_dlbr_jump_from_local();
+        return;
+    }
+    if (_id == "dl")
+    {
+        var r = vs_dlbr_detail_row();
+        if (r == undefined) return;
+        if (!r.downloaded || (r.tracked && r.need > 0))
+        {
+            vs_dlbr_close_detail();
+            vs_dlbr_start_download(r);
+        }
+    }
+}
+
+function vs_dlbr_step_detail()
+{
+    var btns = vs_dlbr_detail_buttons();
+    var n = array_length(btns);
+    if (n <= 0) return;
+    if (detail_btn >= n) detail_btn = n - 1;
+    if (keyboard_check_pressed(vk_escape))
+    {
+        if (detail_confirm) { detail_confirm = false; detail_btn = 0; return; }
+        vs_dlbr_close_detail();
+        return;
+    }
+    if (keyboard_check_pressed(vk_left))
+    {
+        detail_btn = (detail_btn + n - 1) % n;
+    }
+    else if (keyboard_check_pressed(vk_right))
+    {
+        detail_btn = (detail_btn + 1) % n;
+    }
+    else if (keyboard_check_pressed(vk_enter) || keyboard_check_pressed(vk_space))
+    {
+        vs_dlbr_detail_act(btns[detail_btn].id);
+    }
+}
+
+function vs_dlbr_diff_color(_d)
+{
+    var k = string_lower(string(_d));
+    if (k == "opening") return make_color_rgb(38, 217, 217);
+    if (k == "middle") return make_color_rgb(252, 184, 43);
+    if (k == "finale") return make_color_rgb(241, 75, 107);
+    if (k == "encore") return make_color_rgb(176, 107, 240);
+    return make_color_rgb(145, 151, 164);
+}
+
+function vs_dlbr_draw_detail()
+{
+    var cw = display_get_gui_width();
+    var ch = display_get_gui_height();
+    var pw = min(420, cw - 40);
+    var ph = min(210, ch - 40);
+    var px = (cw - pw) / 2;
+    var py = (ch - ph) / 2;
+
+    draw_set_alpha(0.55);
+    draw_set_color(c_black);
+    draw_rectangle(0, 0, cw, ch, false);
+    draw_set_alpha(1);
+    draw_set_color(make_color_rgb(14, 16, 20));
+    draw_rectangle(px - 2, py - 2, px + pw + 2, py + ph + 2, false);
+    draw_set_color(make_color_rgb(80, 220, 230));
+    draw_rectangle(px, py, px + pw, py + ph, true);
+
+    var jx = px + 12;
+    var jy = py + 12;
+    var js = 72;
+    draw_set_color(make_color_rgb(28, 30, 36));
+    draw_rectangle(jx, jy, jx + js, jy + js, false);
+    var spr = vs_media_jacket(detail_id);
+    if (spr != -1 && sprite_exists(spr))
+    {
+        draw_sprite_stretched(spr, 0, jx, jy, js, js);
+    }
+    else
+    {
+        draw_set_color(make_color_rgb(80, 84, 92));
+        draw_set_halign(fa_center);
+        draw_text(jx + js / 2, jy + js / 2 - 4, detail_loading ? "..." : " ");
+        draw_set_halign(fa_left);
+    }
+
+    var tx = jx + js + 12;
+    var name = detail_chart;
+    var artist = "";
+    var owner = "";
+    var bpm = "";
+    var jacketBy = "";
+    if (detail != undefined)
+    {
+        if (variable_struct_exists(detail, "name") && detail.name != "") name = detail.name;
+        if (variable_struct_exists(detail, "artist")) artist = string(detail.artist);
+        if (variable_struct_exists(detail, "ownerName")) owner = string(detail.ownerName);
+        if (variable_struct_exists(detail, "bpmDisplay")) bpm = string(detail.bpmDisplay);
+        if (variable_struct_exists(detail, "jacketArtist")) jacketBy = string(detail.jacketArtist);
+        if (variable_struct_exists(detail, "chartId") && detail.chartId != "") detail_chart = detail.chartId;
+    }
+    draw_set_font(fnt_monacovs);
+    draw_set_color(c_white);
+    if (string_length(name) > 28) name = string_copy(name, 1, 25) + "...";
+    draw_text(tx, py + 10, name);
+    draw_set_font(global.default_font);
+    draw_set_color(make_color_rgb(180, 186, 196));
+    draw_text(tx, py + 26, (artist != "") ? artist : " ");
+    draw_set_color(make_color_rgb(140, 146, 156));
+    var meta = detail_chart;
+    if (owner != "") meta += "  ·  " + owner;
+    if (bpm != "") meta += "  ·  BPM " + bpm;
+    draw_text(tx, py + 40, meta);
+    if (jacketBy != "") draw_text(tx, py + 52, "Jacket  " + jacketBy);
+
+    var dy = py + 90;
+    draw_set_color(make_color_rgb(200, 204, 212));
+    if (detail_loading)
+    {
+        draw_text(px + 12, dy, "Loading charts...");
+    }
+    else if (detail != undefined && variable_struct_exists(detail, "charts") && is_array(detail.charts))
+    {
+        var charts = detail.charts;
+        var cx = px + 12;
+        var i = 0;
+        repeat (array_length(charts))
+        {
+            var c = charts[i];
+            var diff = variable_struct_exists(c, "difficulty") ? string(c.difficulty) : "";
+            var lab = string_upper(diff);
+            var num = "";
+            if (variable_struct_exists(c, "difficultyDisplay") && c.difficultyDisplay != "") num = string(c.difficultyDisplay);
+            else if (variable_struct_exists(c, "difficultyConstant")) num = string(c.difficultyConstant);
+            var nd = variable_struct_exists(c, "noteDesigner") ? string(c.noteDesigner) : "";
+            var pill = lab;
+            if (num != "") pill += " " + num;
+            var pw2 = string_width(pill) + 10;
+            draw_set_color(vs_dlbr_diff_color(diff));
+            draw_rectangle(cx, dy, cx + pw2, dy + 12, false);
+            draw_set_color(c_black);
+            draw_text(cx + 5, dy + 1, pill);
+            cx += pw2 + 6;
+            if (nd != "")
+            {
+                draw_set_color(make_color_rgb(160, 166, 176));
+                draw_text(cx, dy + 1, nd);
+                cx += string_width(nd) + 10;
+            }
+            i++;
+        }
+    }
+    else if (detail != undefined && variable_struct_exists(detail, "diffs") && is_array(detail.diffs))
+    {
+        var cx = px + 12;
+        var i = 0;
+        repeat (array_length(detail.diffs))
+        {
+            var lab = string(detail.diffs[i]);
+            var pw2 = string_width(lab) + 10;
+            draw_set_color(vs_dlbr_diff_color(lab));
+            draw_rectangle(cx, dy, cx + pw2, dy + 12, false);
+            draw_set_color(c_black);
+            draw_text(cx + 5, dy + 1, lab);
+            cx += pw2 + 6;
+            i++;
+        }
+        if (variable_struct_exists(detail, "pack"))
+        {
+            draw_set_color(make_color_rgb(140, 146, 156));
+            draw_text(px + 12, dy + 16, string(detail.pack));
+        }
+    }
+
+    var btns = vs_dlbr_detail_buttons();
+    var bn = array_length(btns);
+    var byb = py + ph - 28;
+    var bx = px + 12;
+    var i = 0;
+    repeat (bn)
+    {
+        var lab = btns[i].label;
+        var bw2 = string_width(lab) + 16;
+        var on = (i == detail_btn);
+        if (on)
+        {
+            draw_set_color((btns[i].id == "yes" || btns[i].id == "del") ? make_color_rgb(241, 75, 107) : make_color_rgb(240, 210, 70));
+            draw_rectangle(bx, byb, bx + bw2, byb + 16, false);
+            draw_set_color(c_black);
+        }
+        else
+        {
+            draw_set_color(make_color_rgb(40, 44, 52));
+            draw_rectangle(bx, byb, bx + bw2, byb + 16, false);
+            draw_set_color(c_white);
+        }
+        draw_text(bx + 8, byb + 3, lab);
+        bx += bw2 + 8;
+        i++;
+    }
+    draw_set_color(make_color_rgb(120, 126, 136));
+    draw_text(px + 12, py + ph - 12, "<> button   Enter act   Esc back");
 }

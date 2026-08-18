@@ -34,3 +34,13 @@ cur_chart = "";
 
 status = "Chart Downloader - loading...";
 enter_act = false;
+
+detail_open = false;
+detail_local = false;
+detail_loading = false;
+detail = undefined;
+detail_id = "";
+detail_chart = "";
+detail_btn = 0;
+detail_confirm = false;
+do_destroy = function() { };
