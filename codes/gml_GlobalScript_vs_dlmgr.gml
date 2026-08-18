@@ -4,7 +4,7 @@
 // Downloads / updates custom charts from the live vs-server-go catalog into
 // "Custom Songs/" (CSM format), plus the matching Local tab.
 //
-//   - browse the server catalog (paginated, size=100) with search (?q=)
+//   - browse songs / backstage / shatters (paginated, size=100) with search (?q=)
 //   - annotate each row with local state (downloaded / needs update via
 //     sha1 diff against the local folder)
 //   - single download/update, "check page", and "update page" batch actions
@@ -21,24 +21,32 @@
 // below. The browser object drives everything else through its own instances.
 // ============================================================================
 
-// GET /api/v1/songs?q=&page=&size=100 -> {songs, total}.
+// GET /api/v1/songs or /shatters?q=&page=&size=100.
+// _kind: 0 songs, 1 songs?backstage=1, 2 shatters.
 // _on_done(ok, data|undefined).
-function vs_dlmgr_list(_query, _page, _on_done)
+function vs_dlmgr_list(_query, _page, _kind, _on_done)
 {
     if (!variable_global_exists("vs_dlmgr_cb"))
     {
-        global.vs_dlmgr_cb = { query: "", page: 1, on_done: undefined };
+        global.vs_dlmgr_cb = { query: "", page: 1, kind: 0, on_done: undefined };
     }
     global.vs_dlmgr_cb.query = _query;
     global.vs_dlmgr_cb.page = _page;
+    global.vs_dlmgr_cb.kind = _kind;
     global.vs_dlmgr_cb.on_done = _on_done;
     vs_online_with_conn(function()
     {
-        var url = "/api/v1/songs?page=" + string(max(global.vs_dlmgr_cb.page, 1)) + "&size=100";
+        var kind = global.vs_dlmgr_cb.kind;
+        var path = (kind == 2) ? "/api/v1/shatters" : "/api/v1/songs";
+        var url = path + "?page=" + string(max(global.vs_dlmgr_cb.page, 1)) + "&size=100";
         var q = global.vs_dlmgr_cb.query;
         if (q != undefined && q != "")
         {
             url += "&q=" + vs_online_url_encode(q);
+        }
+        if (kind == 1)
+        {
+            url += "&backstage=1";
         }
         vs_online_get_json(url, false, function(_ok, _data, _status)
         {
@@ -58,7 +66,7 @@ function vs_dlmgr_downloaded(_chartId)
 // Full sha1 check of one chart: fetch server detail, diff against the local
 // folder. _on_done(ok, need|undefined) where `need` is the array of files
 // that are missing or changed (empty array => up to date).
-function vs_dlmgr_check(_songId, _chartId, _on_done)
+function vs_dlmgr_check(_songId, _chartId, _kind, _on_done)
 {
     if (!variable_global_exists("vs_dlmgr_check_cb"))
     {
@@ -66,7 +74,7 @@ function vs_dlmgr_check(_songId, _chartId, _on_done)
     }
     global.vs_dlmgr_check_cb.on_done = _on_done;
     global.vs_dlmgr_check_cb.chartId = _chartId;
-    vs_songstore_detail(_songId, function(_ok, _detail)
+    vs_songstore_fetch(_kind, _songId, function(_ok, _detail)
     {
         var slot = global.vs_dlmgr_check_cb;
         var cb = slot.on_done;
@@ -208,7 +216,7 @@ function vs_dlmgr_log(_chartId, _serverId, _name, _isNew)
 // (vs_localcharts_refresh -> load_song_information rebuilds song_list once).
 // This deliberately does NOT call CustomSongReader(), which appends every
 // custom song again into global.song_list (would duplicate entries).
-function vs_dlmgr_download(_songId, _chartId, _on_done)
+function vs_dlmgr_download(_songId, _chartId, _kind, _on_done)
 {
     if (!variable_global_exists("vs_dlmgr_dl"))
     {
@@ -223,7 +231,7 @@ function vs_dlmgr_download(_songId, _chartId, _on_done)
     global.vs_dlmgr_dl.fileTotal = 0;
     global.vs_dlmgr_dl.fileName = "";
     global.vs_dlmgr_dl.err = "";
-    vs_songstore_detail(_songId, function(_ok, _detail)
+    vs_songstore_fetch(_kind, _songId, function(_ok, _detail)
     {
         var st = global.vs_dlmgr_dl;
         if (st.cancel)

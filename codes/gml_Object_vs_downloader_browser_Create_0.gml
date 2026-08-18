@@ -4,6 +4,7 @@ do_step = function() { };
 do_draw = function() { };
 
 view = 0;
+catalog = 0;
 page = 1;
 maxpage = 1;
 total = 0;

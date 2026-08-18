@@ -22,7 +22,8 @@ function vs_songstore_root()
 
 function vs_songstore_dir_has_chart(_dir)
 {
-    return (_dir != undefined && _dir != "" && file_exists(_dir + "info.json"));
+    if (_dir == undefined || _dir == "") return false;
+    return file_exists(_dir + "info.json") || file_exists(_dir + "shatterinfo.json");
 }
 
 function vs_songstore_local_dir(_chartId)
@@ -125,13 +126,18 @@ function vs_songstore_install_from_zip(_zip, _chartId)
     }
     var dest = root + _chartId + "/";
     vs_songstore_copy_tree(staging, dest, "info.json");
+    if (file_exists(dest + "shatterinfo.json")) file_delete(dest + "shatterinfo.json");
     if (file_exists(staging + "info.json"))
     {
         if (file_exists(dest + "info.json")) file_delete(dest + "info.json");
         file_copy(staging + "info.json", dest + "info.json");
     }
+    if (file_exists(staging + "shatterinfo.json"))
+    {
+        file_copy(staging + "shatterinfo.json", dest + "shatterinfo.json");
+    }
     if (directory_exists(staging)) directory_destroy(staging);
-    if (!file_exists(dest + "info.json"))
+    if (!vs_songstore_dir_has_chart(dest))
     {
         vs_songstore_set_err("package missing info.json");
         vs_songstore_cleanup_stub(_chartId);
@@ -178,20 +184,27 @@ function vs_songstore_skip_file(_name)
     return false;
 }
 
-function vs_songstore_detail(_songId, _on_done)
+// _kind 2 = shatter (GET /shatters/:id), otherwise song (GET /songs/:id).
+function vs_songstore_fetch(_kind, _id, _on_done)
 {
     if (!variable_global_exists("vs_store_detail_cb"))
     {
         global.vs_store_detail_cb = { on_done: undefined };
     }
     global.vs_store_detail_cb.on_done = _on_done;
-    vs_online_get_json("/api/v1/songs/" + _songId, false,
+    var path = (_kind == 2) ? "/api/v1/shatters/" : "/api/v1/songs/";
+    vs_online_get_json(path + _id, false,
         function(_ok, _data, _status)
         {
             var cb = global.vs_store_detail_cb.on_done;
             global.vs_store_detail_cb.on_done = undefined;
             if (cb != undefined) { cb(_ok, _data); }
         });
+}
+
+function vs_songstore_detail(_songId, _on_done)
+{
+    vs_songstore_fetch(0, _songId, _on_done);
 }
 
 function vs_songstore_diff(_files, _chartId)
@@ -214,7 +227,7 @@ function vs_songstore_diff(_files, _chartId)
         if (string_lower(localHash) != string_lower(f.sha1))
         {
             var item = { name: f.name, url: f.url, localPath: localPath };
-            if (string_lower(flat) == "info.json") info = item;
+            if (string_lower(flat) == "info.json" || string_lower(flat) == "shatterinfo.json") info = item;
             else array_push(need, item);
         }
     }

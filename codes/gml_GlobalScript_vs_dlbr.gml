@@ -39,11 +39,14 @@ function vs_dlbr_build_row(_song)
         name: variable_struct_exists(_song, "name") ? _song.name : "",
         artist: variable_struct_exists(_song, "artist") ? _song.artist : "",
         chartCount: variable_struct_exists(_song, "chartCount") ? _song.chartCount : 0,
+        diffName: variable_struct_exists(_song, "difficultyName") ? _song.difficultyName : "",
+        diffNum: variable_struct_exists(_song, "difficultyNumber") ? string(_song.difficultyNumber) : "",
         jacketUrl: variable_struct_exists(_song, "jacketUrl") ? _song.jacketUrl : "",
         previewUrl: variable_struct_exists(_song, "previewUrl") ? _song.previewUrl : "",
         ownerName: variable_struct_exists(_song, "ownerName") ? _song.ownerName : "",
         downloads: variable_struct_exists(_song, "downloads") ? _song.downloads : 0,
         hasBackstage: variable_struct_exists(_song, "hasBackstage") ? _song.hasBackstage : false,
+        kind: (catalog == 2) ? 2 : 0,
         downloaded: vs_dlmgr_downloaded(ch),
         tracked: vs_dlmgr_tracked(ch),
         checked: false,
@@ -125,7 +128,7 @@ function vs_dlbr_fetch_page()
         return;
     }
     vs_dlbr_set_status(query == "" ? "Loading charts..." : "Search: \"" + query + "\" ...");
-    vs_dlmgr_list(query, page, method(self, vs_dlbr_on_list));
+    vs_dlmgr_list(query, page, catalog, method(self, vs_dlbr_on_list));
 }
 
 function vs_dlbr_on_list(_ok, _data)
@@ -134,13 +137,15 @@ function vs_dlbr_on_list(_ok, _data)
     if (_ok && _data != undefined)
     {
         var arr = [];
-        var songs = _data.songs;
-        total = floor(_data.total);
+        var items = [];
+        if (variable_struct_exists(_data, "shatters") && is_array(_data.shatters)) items = _data.shatters;
+        else if (variable_struct_exists(_data, "songs") && is_array(_data.songs)) items = _data.songs;
+        total = variable_struct_exists(_data, "total") ? floor(_data.total) : array_length(items);
         maxpage = max(1, ceil(total / 100));
         var i = 0;
-        repeat (array_length(songs))
+        repeat (array_length(items))
         {
-            array_push(arr, vs_dlbr_build_row(songs[i]));
+            array_push(arr, vs_dlbr_build_row(items[i]));
             i++;
         }
         rows_all = arr;
@@ -164,7 +169,7 @@ function vs_dlbr_check_row_index(_ai)
     checking = true;
     check_chart = r.chartId;
     vs_dlbr_set_status("Checking " + r.chartId + " ...");
-    vs_dlmgr_check(r.id, r.chartId, method(self, vs_dlbr_on_check));
+    vs_dlmgr_check(r.id, r.chartId, r.kind, method(self, vs_dlbr_on_check));
 }
 
 function vs_dlbr_on_check(_ok, _need)
@@ -268,7 +273,7 @@ function vs_dlbr_start_download(_r)
     cur_id = _r.id;
     cur_chart = _r.chartId;
     vs_dlbr_set_status("Downloading " + _r.name + " ...");
-    vs_dlmgr_download(_r.id, _r.chartId, method(self, vs_dlbr_on_download));
+    vs_dlmgr_download(_r.id, _r.chartId, _r.kind, method(self, vs_dlbr_on_download));
 }
 
 function vs_dlbr_on_download(_ok)
@@ -343,7 +348,7 @@ function vs_dlbr_batch_next()
     var ri = update_queue[update_qidx];
     var r = rows_all[ri];
     batch_name = r.name;
-    vs_dlmgr_download(r.id, r.chartId, method(self, vs_dlbr_on_batch));
+    vs_dlmgr_download(r.id, r.chartId, r.kind, method(self, vs_dlbr_on_batch));
 }
 
 function vs_dlbr_on_batch(_ok)
@@ -382,6 +387,47 @@ function vs_dlbr_toggle_view()
     page = 1;
     sel = 0;
     vs_dlbr_fetch_page();
+}
+
+function vs_dlbr_set_catalog(_c)
+{
+    vs_dlbr_close_detail();
+    vs_media_stop_preview();
+    view = 0;
+    catalog = _c;
+    page = 1;
+    sel = 0;
+    vs_dlbr_fetch_page();
+}
+
+function vs_dlbr_cycle_catalog()
+{
+    vs_dlbr_set_catalog((catalog + 1) % 3);
+}
+
+function vs_dlbr_catalog_key()
+{
+    if (keyboard_check_pressed(ord("T")))
+    {
+        vs_dlbr_cycle_catalog();
+        return true;
+    }
+    if (keyboard_check_pressed(ord("1")))
+    {
+        vs_dlbr_set_catalog(0);
+        return true;
+    }
+    if (keyboard_check_pressed(ord("2")))
+    {
+        vs_dlbr_set_catalog(1);
+        return true;
+    }
+    if (keyboard_check_pressed(ord("3")))
+    {
+        vs_dlbr_set_catalog(2);
+        return true;
+    }
+    return false;
 }
 
 function vs_dlbr_apply_local_filter()
@@ -423,6 +469,12 @@ function vs_dlbr_jump_from_local()
 {
     if (array_length(local_rows) == 0) return;
     var lr = local_rows[sel];
+    if (variable_struct_exists(lr, "kind") && lr.kind == 2)
+    {
+        if (vs_localcharts_jump_shatter(lr.chart_id)) return;
+        vs_dlbr_set_status(lr.name + " is not in the shatter list - enable the Custom Songs Mod and reload (R).");
+        return;
+    }
     if (vs_localcharts_jump(lr.chart_id))
     {
         return;
@@ -500,9 +552,18 @@ function vs_dlbr_step()
 
         if (n == 0)
         {
+            if (vs_dlbr_catalog_key()) return;
             if (keyboard_check_pressed(ord("R"))) vs_dlbr_reload_data();
             else if (keyboard_check_pressed(ord("V"))) vs_dlbr_toggle_view();
             else if (keyboard_check_pressed(vk_tab)) { searching = true; keyboard_string = query; }
+            else if (keyboard_check_pressed(vk_left) || keyboard_check_pressed(vk_pageup))
+            {
+                if (page > 1) { page--; vs_dlbr_fetch_page(); }
+            }
+            else if (keyboard_check_pressed(vk_right) || keyboard_check_pressed(vk_pagedown))
+            {
+                if (page < maxpage) { page++; vs_dlbr_fetch_page(); }
+            }
             return;
         }
 
@@ -553,6 +614,7 @@ function vs_dlbr_step()
         {
             vs_dlbr_reload_data();
         }
+        else if (vs_dlbr_catalog_key()) { }
     }
     else
     {
@@ -560,6 +622,7 @@ function vs_dlbr_step()
 
         if (ln == 0)
         {
+            if (vs_dlbr_catalog_key()) return;
             if (keyboard_check_pressed(ord("R"))) vs_dlbr_reload_local();
             else if (keyboard_check_pressed(ord("V"))) vs_dlbr_toggle_view();
             else if (keyboard_check_pressed(vk_tab)) { searching = true; keyboard_string = query; }
@@ -593,6 +656,7 @@ function vs_dlbr_step()
             searching = true;
             keyboard_string = query;
         }
+        else if (vs_dlbr_catalog_key()) { }
     }
 }
 
@@ -623,17 +687,7 @@ function vs_dlbr_draw()
     draw_text(bx + 10, by + 5, "Chart Downloader");
     draw_set_font(global.default_font);
 
-    var head = (view == 0)
-        ? ("WEB  " + string(page) + "/" + string(maxpage) + "  (" + string(total) + ")  [" + vs_dlmgr_filter_name(filter) + "]")
-        : ("LOCAL  " + string(array_length(local_rows)) + "/" + string(array_length(local_all)));
-    if (query != "") head += "  q=\"" + query + "\"";
-    draw_set_color(make_color_rgb(180, 186, 196));
-    if (searching)
-    {
-        draw_set_color(c_lime);
-        head = "Search: " + query + "_";
-    }
-    draw_text(bx + 10, by + 18, head);
+    vs_dlbr_draw_tabs(bx + 10, by + 18, bw - 20);
 
     var listTop = by + 34;
     var listBot = by + bh - 36;
@@ -663,7 +717,7 @@ function vs_dlbr_draw()
     draw_set_color(make_color_rgb(120, 210, 140));
     draw_text(bx + 10, by + bh - 32, st);
 
-    var hint1 = searching ? "Enter confirm" : ((view == 0) ? "Enter details   Tab search   F filter" : "Enter details   Tab search");
+    var hint1 = searching ? "Enter confirm" : ((view == 0) ? "Enter details   Tab search   T catalog   F filter" : "Enter details   Tab search   T catalog");
     var hint2 = searching ? "Esc cancel" : ((view == 0) ? "<> page   V local   Esc close" : "V web   Esc close");
     draw_set_color(make_color_rgb(120, 126, 136));
     draw_text(bx + 10, by + bh - 20, hint1);
@@ -671,6 +725,7 @@ function vs_dlbr_draw()
 
     if (detail_open) vs_dlbr_draw_detail();
     if (updating) vs_dlbr_draw_dl_popup();
+    if (searching) vs_dlbr_draw_search();
 
     draw_set_halign(fa_left);
     draw_set_valign(fa_top);
@@ -746,6 +801,57 @@ function vs_dlbr_on_close()
     vs_media_stop_preview();
 }
 
+function vs_dlbr_draw_tabs(_x, _y, _w)
+{
+    var names = ["SONGS", "BACKSTAGE", "SHATTER", "LOCAL"];
+    var tx = _x;
+    var i = 0;
+    repeat (4)
+    {
+        var on = (i == 3) ? (view == 1) : (view == 0 && catalog == i);
+        draw_set_color(on ? make_color_rgb(80, 220, 230) : make_color_rgb(110, 116, 126));
+        draw_text(tx, _y, names[i]);
+        tx += string_width(names[i]) + 10;
+        i++;
+    }
+    var pg = (view == 0)
+        ? ("[" + string(page) + "/" + string(maxpage) + "]  " + vs_dlmgr_filter_name(filter))
+        : ("[" + string(array_length(local_rows)) + "/" + string(array_length(local_all)) + "]");
+    draw_set_halign(fa_right);
+    draw_set_color(make_color_rgb(180, 186, 196));
+    draw_text(_x + _w, _y, pg);
+    draw_set_halign(fa_left);
+}
+
+function vs_dlbr_draw_search()
+{
+    var cw = display_get_gui_width();
+    var ch = display_get_gui_height();
+    var pw = min(360, cw - 40);
+    var ph = 78;
+    var px = (cw - pw) / 2;
+    var py = (ch - ph) / 2;
+    draw_set_alpha(0.62);
+    draw_set_color(c_black);
+    draw_rectangle(0, 0, cw, ch, false);
+    draw_set_alpha(1);
+    draw_set_color(c_black);
+    draw_rectangle(px - 2, py - 2, px + pw + 2, py + ph + 2, false);
+    draw_set_color(make_color_rgb(80, 220, 230));
+    draw_rectangle(px, py, px + pw, py + ph, true);
+    draw_set_font(fnt_monacovs);
+    draw_set_halign(fa_left);
+    draw_set_color(c_white);
+    draw_text(px + 12, py + 6, "Search");
+    draw_set_font(global.default_font);
+    draw_set_color(c_lime);
+    var q = query + "_";
+    if (string_length(q) > 42) q = string_copy(q, string_length(q) - 41, 42);
+    draw_text(px + 12, py + 28, q);
+    draw_set_color(make_color_rgb(120, 126, 136));
+    draw_text(px + 12, py + 52, "Enter confirm   Esc cancel");
+}
+
 function vs_dlbr_mark(_r)
 {
     if (_r == undefined) return ".";
@@ -792,7 +898,14 @@ function vs_dlbr_draw_bar(_x, _y, _w, _h, _idx)
     var ar = web ? r.artist : r.artist;
     var line = nm;
     if (ar != "") line += "  -  " + ar;
-    if (web && r.chartCount > 0) line += "  [" + string(r.chartCount) + "]";
+    if (web && variable_struct_exists(r, "kind") && r.kind == 2)
+    {
+        var dlab = r.diffName;
+        if (r.diffNum != "") dlab = (dlab != "") ? (dlab + " " + r.diffNum) : r.diffNum;
+        if (dlab != "") line += "  [" + dlab + "]";
+    }
+    else if (web && r.chartCount > 0) line += "  [" + string(r.chartCount) + "]";
+    if (web && r.hasBackstage) line += "  B";
     if (string_length(line) > 52) line = string_copy(line, 1, 49) + "...";
     draw_set_color(isSel ? c_black : c_white);
     draw_text(_x + 22, _y + 4, (isSel ? "> " : "  ") + line);
@@ -830,7 +943,7 @@ function vs_dlbr_open_detail(_r, _local)
     detail_id = _r.id;
     detail_chart = _r.chartId;
     vs_media_select(_r.id, _r.jacketUrl, _r.previewUrl);
-    vs_songstore_detail(_r.id, vs_dlbr_on_detail);
+    vs_songstore_fetch(variable_struct_exists(_r, "kind") ? _r.kind : 0, _r.id, vs_dlbr_on_detail);
 }
 
 function vs_dlbr_on_detail(_ok, _data)
@@ -841,7 +954,7 @@ function vs_dlbr_on_detail(_ok, _data)
         detail_loading = false;
         if (!_ok || _data == undefined)
         {
-            vs_dlbr_set_status("Could not load song details.");
+            vs_dlbr_set_status("Could not load details.");
             return;
         }
         detail = _data;
@@ -1122,6 +1235,22 @@ function vs_dlbr_draw_detail()
         {
             draw_set_color(make_color_rgb(140, 146, 156));
             draw_text(px + 12, dy + 16, string(detail.pack));
+        }
+    }
+    else if (detail != undefined && variable_struct_exists(detail, "difficultyName"))
+    {
+        var lab = string(detail.difficultyName);
+        var num = variable_struct_exists(detail, "difficultyNumber") ? string(detail.difficultyNumber) : "";
+        if (num != "") lab += " " + num;
+        var pw2 = string_width(lab) + 10;
+        draw_set_color(make_color_rgb(176, 107, 240));
+        draw_rectangle(px + 12, dy, px + 12 + pw2, dy + 12, false);
+        draw_set_color(c_black);
+        draw_text(px + 17, dy + 1, lab);
+        if (variable_struct_exists(detail, "noteDesigner") && detail.noteDesigner != "")
+        {
+            draw_set_color(make_color_rgb(160, 166, 176));
+            draw_text(px + 24 + pw2, dy + 1, string(detail.noteDesigner));
         }
     }
 

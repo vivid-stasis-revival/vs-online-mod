@@ -89,7 +89,8 @@ function vs_localcharts_read_info(_dir, _pack)
         has_encore: false,
         song_id: -1,
         in_select: false,
-        tracked: false
+        tracked: false,
+        kind: 0
     };
     if (s.chart_id == "") s.chart_id = vs_localcharts_folder_name(_dir);
 
@@ -113,6 +114,44 @@ function vs_localcharts_read_info(_dir, _pack)
     return s;
 }
 
+function vs_localcharts_read_shatter(_dir, _pack)
+{
+    if (!file_exists(_dir + "shatterinfo.json")) return undefined;
+
+    var raw = "";
+    var f = file_text_open_read(_dir + "shatterinfo.json");
+    while (!file_text_eof(f))
+    {
+        raw += file_text_readln(f);
+    }
+    file_text_close(f);
+
+    var j = undefined;
+    try { j = json_parse(raw); } catch (_e) { }
+    if (j == undefined) return undefined;
+
+    var diff = variable_struct_exists(j, "difficulty_name") ? string(j.difficulty_name) : "";
+    var s =
+    {
+        pack: _pack,
+        chart_id: variable_struct_exists(j, "chart_id") ? j.chart_id : "",
+        name: variable_struct_exists(j, "name") ? j.name : "",
+        artist: variable_struct_exists(j, "artist") ? j.artist : "",
+        chart_path: _dir,
+        diffs: (diff != "") ? [diff] : [],
+        has_encore: false,
+        song_id: -1,
+        in_select: false,
+        tracked: false,
+        kind: 2
+    };
+    if (s.chart_id == "") s.chart_id = vs_localcharts_folder_name(_dir);
+    s.song_id = vs_localcharts_shatter_id_in_list(s.chart_id);
+    s.in_select = (s.song_id >= 0);
+    s.tracked = vs_dlmgr_tracked(s.chart_id);
+    return s;
+}
+
 // Scan "Custom Songs/" (top-level songs + pack subfolders) into a flat list
 // sorted by pack, then name.
 function vs_localcharts_scan()
@@ -129,6 +168,11 @@ function vs_localcharts_scan()
         {
             var s = vs_localcharts_read_info(p, "Unpacked");
             if (s != undefined) array_push(out, s);
+        }
+        else if (file_exists(p + "shatterinfo.json"))
+        {
+            var sh = vs_localcharts_read_shatter(p, "Shatter");
+            if (sh != undefined) array_push(out, sh);
         }
         else if (file_exists(p + "songpack_info.json"))
         {
@@ -148,6 +192,11 @@ function vs_localcharts_scan()
             {
                 var s2 = vs_localcharts_read_info(pp, pk.name);
                 if (s2 != undefined) array_push(out, s2);
+            }
+            else if (file_exists(pp + "shatterinfo.json"))
+            {
+                var sh2 = vs_localcharts_read_shatter(pp, pk.name);
+                if (sh2 != undefined) array_push(out, sh2);
             }
             dd = file_find_next();
         }
@@ -172,6 +221,19 @@ function vs_localcharts_song_id_in_list(_chart_id)
     for (var i = 0; i < n; i++)
     {
         var s = global.song_list[i];
+        if (s != undefined && variable_struct_exists(s, "chart_id") && s.chart_id == _chart_id)
+            return i;
+    }
+    return -1;
+}
+
+function vs_localcharts_shatter_id_in_list(_chart_id)
+{
+    if (!variable_global_exists("shatter_list")) return -1;
+    var n = array_length(global.shatter_list);
+    for (var i = 0; i < n; i++)
+    {
+        var s = global.shatter_list[i];
         if (s != undefined && variable_struct_exists(s, "chart_id") && s.chart_id == _chart_id)
             return i;
     }
@@ -255,6 +317,35 @@ function vs_localcharts_jump(_chart_id)
     }
     // No menu to hand the transition to — fall back to an instant room change.
     room_goto(scene_songselect_old);
+    return true;
+}
+
+function vs_localcharts_jump_shatter(_chart_id)
+{
+    if (_chart_id == undefined || _chart_id == "") return false;
+
+    try { create_shatter_list(); } catch (_e) { }
+
+    var sid = vs_localcharts_shatter_id_in_list(_chart_id);
+    if (sid < 0) return false;
+
+    global.force_song_select = sid;
+
+    if (instance_exists(vs_downloader_browser))
+    {
+        instance_destroy(vs_downloader_browser);
+    }
+
+    audio_stop_all();
+    if (instance_exists(o_newmenu_main))
+    {
+        with (o_newmenu_main)
+        {
+            transitionToScene(scene_songselect_old_shatter, true, 0);
+        }
+        return true;
+    }
+    room_goto(scene_songselect_old_shatter);
     return true;
 }
 
