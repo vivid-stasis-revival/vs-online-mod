@@ -38,10 +38,12 @@ function vs_songstore_parent(_path)
 
 function vs_songstore_clear_save_songs()
 {
+    if (variable_global_exists("vs_save_songs_cleared") && global.vs_save_songs_cleared) return;
     var p = working_directory + "Custom Songs";
     if (directory_exists(p)) directory_destroy(p);
     p = working_directory + "Custom Songs/";
     if (directory_exists(p)) directory_destroy(p);
+    global.vs_save_songs_cleared = true;
 }
 
 function vs_songstore_dir_has_chart(_dir)
@@ -255,7 +257,9 @@ function vs_songstore_diff(_files, _chartId)
             continue;
         }
         var localPath = dir + flat;
-        var localHash = file_exists(localPath) ? sha1_file(localPath) : "";
+        var readPath = vs_songstore_install_path(localPath);
+        if (!file_exists(readPath)) readPath = localPath;
+        var localHash = file_exists(readPath) ? sha1_file(readPath) : "";
         if (string_lower(localHash) != string_lower(f.sha1))
         {
             var item = { name: f.name, url: f.url, localPath: localPath };

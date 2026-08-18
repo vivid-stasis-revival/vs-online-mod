@@ -295,12 +295,12 @@ function vs_dlbr_on_check(_ok, _need)
                 vs_dlmgr_write_meta(rr.chartId, rr.id, rr.name);
                 rr.tracked = true;
                 rr.need = 0;
-                vs_dlbr_set_status(rr.chartId + " recognized as downloaded (content matches server) - recorded.");
+                vs_dlbr_set_status(rr.chartId + " matches server.");
             }
             else
             {
-                rr.need = -3;
-                vs_dlbr_set_status(rr.chartId + " is a local chart without a download record - protected, not overwritten.");
+                rr.need = _ok ? cnt : 0;
+                vs_dlbr_set_status(rr.chartId + " incomplete - Get to finish.");
             }
             break;
         }
@@ -308,11 +308,11 @@ function vs_dlbr_on_check(_ok, _need)
     }
     if (check_all)
     {
+        vs_dlbr_set_status("Checking " + string(check_idx) + "/" + string(n) + " ...");
         vs_dlbr_check_next();
         return;
     }
     vs_dlbr_apply_filter();
-    vs_dlbr_selected_refresh();
     if (enter_act)
     {
         enter_act = false;
@@ -320,7 +320,7 @@ function vs_dlbr_on_check(_ok, _need)
         if (ai2 >= 0)
         {
             var after = rows_all[ai2];
-            if (after.tracked && after.need > 0)
+            if (after.need > 0)
             {
                 vs_dlbr_start_download(after);
                 return;
@@ -1143,7 +1143,7 @@ function vs_dlbr_on_detail(_ok, _data)
         }
         else if (vs_songstore_has_chart(rr.chartId))
         {
-            rr.need = -3;
+            rr.need = array_length(need);
         }
     }
 }
@@ -1190,9 +1190,8 @@ function vs_dlbr_detail_buttons()
     if (r != undefined)
     {
         if (!r.downloaded) array_push(b, { id: "dl", label: "Get" });
-        else if (r.tracked && r.need > 0) array_push(b, { id: "dl", label: "Update" });
-        else if (r.tracked) array_push(b, { id: "ok", label: "OK" });
-        else array_push(b, { id: "ok", label: "Local" });
+        else if (!r.tracked || r.need > 0) array_push(b, { id: "dl", label: r.tracked ? "Update" : "Get" });
+        else array_push(b, { id: "ok", label: "OK" });
         if (r.downloaded) array_push(b, { id: "del", label: "Del" });
     }
     array_push(b, { id: "auto", label: vs_online_preview_auto() ? "Mute" : "Auto" });
@@ -1250,7 +1249,7 @@ function vs_dlbr_detail_act(_id)
     {
         var r = vs_dlbr_detail_row();
         if (r == undefined) return;
-        if (!r.downloaded || (r.tracked && r.need > 0))
+        if (!r.downloaded || !r.tracked || r.need > 0)
         {
             vs_dlbr_close_detail();
             vs_dlbr_start_download(r);

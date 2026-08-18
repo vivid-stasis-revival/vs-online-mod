@@ -87,11 +87,13 @@ function vs_media_request(_kind, _id, _url)
     if (_id == undefined || _id == "" || _url == undefined || _url == "") return;
     if (_kind == "jacket")
     {
-        if (variable_struct_exists(global.vs_jk_spr, _id) || variable_struct_exists(global.vs_jk_fail, _id)) return;
+        if (variable_struct_exists(global.vs_jk_spr, _id)) return;
+        if (variable_struct_exists(global.vs_jk_fail, _id)) variable_struct_set(global.vs_jk_fail, _id, false);
     }
     else
     {
-        if (variable_struct_exists(global.vs_pv_snd, _id) || variable_struct_exists(global.vs_pv_fail, _id)) return;
+        if (variable_struct_exists(global.vs_pv_snd, _id)) return;
+        if (variable_struct_exists(global.vs_pv_fail, _id)) variable_struct_set(global.vs_pv_fail, _id, false);
     }
     var i = 0;
     repeat (array_length(global.vs_media_q))
@@ -176,7 +178,12 @@ function vs_media_on_later()
         if (file_exists(abs)) spr = sprite_add(abs, 1, false, false, 0, 0);
         if ((spr == -1 || !sprite_exists(spr)) && file_exists(path)) spr = sprite_add(path, 1, false, false, 0, 0);
         if (spr != -1 && sprite_exists(spr)) variable_struct_set(global.vs_jk_spr, key, spr);
-        else variable_struct_set(global.vs_jk_fail, key, true);
+        else
+        {
+            if (file_exists(abs)) file_delete(abs);
+            if (file_exists(path)) file_delete(path);
+            variable_struct_set(global.vs_jk_fail, key, true);
+        }
     }
     vs_media_start();
 }

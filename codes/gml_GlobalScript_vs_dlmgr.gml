@@ -96,8 +96,8 @@ function vs_dlmgr_row_status(_r)
     if (!_r.downloaded) return _r.chartId + "  -  not downloaded";
     if (!_r.tracked)
     {
-        if (_r.checked && _r.need == -3) return _r.chartId + "  -  local chart, differs from server - protected (not overwritten)";
-        return _r.chartId + "  -  local (no download record) - not overwritten";
+        if (_r.checked && _r.need > 0) return _r.chartId + "  -  incomplete, Get to finish";
+        return _r.chartId + "  -  local (Get to replace from server)";
     }
     if (_r.checked && _r.need > 0) return _r.chartId + "  -  UPDATE (" + string(_r.need) + " file" + (_r.need > 1 ? "s" : "") + ")";
     if (_r.checked) return _r.chartId + "  -  up to date";
@@ -152,6 +152,7 @@ function vs_dlmgr_tracked(_chartId)
 {
     if (_chartId == undefined || _chartId == "") return false;
     if (file_exists(vs_dlmgr_meta_path(_chartId))) return true;
+    if (file_exists(vs_songstore_install_path(vs_dlmgr_meta_path(_chartId)))) return true;
     return vs_dlmgr_log_has(_chartId);
 }
 
@@ -308,7 +309,11 @@ function vs_dlmgr_dl_finish(_ok)
     }
     else
     {
-        vs_songstore_cleanup_stub(st.chartId);
+        if (!st.cancel && vs_songstore_has_chart(st.chartId))
+        {
+            vs_dlmgr_write_meta(st.chartId, st.serverId, st.name);
+        }
+        else vs_songstore_cleanup_stub(st.chartId);
     }
     var cb = st.on_done;
     st.on_done = undefined;
