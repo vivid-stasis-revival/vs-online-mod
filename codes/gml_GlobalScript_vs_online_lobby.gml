@@ -74,7 +74,7 @@ function vs_online_avatar_sprite(_name)
     {
         return undefined;
     }
-    var idx = abs(string_hash(_name)) % array_length(global.song_list);
+    var idx = vs_online_str_hash(_name) % array_length(global.song_list);
     var song = global.song_list[idx];
     if (song == undefined) return undefined;
     var jk = song_get_info(song, "jacket", 0);

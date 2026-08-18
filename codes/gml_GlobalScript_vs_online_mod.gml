@@ -80,6 +80,26 @@ function vs_online_server_url()
     return vs_online_get_config().server;
 }
 
+// sha1 hex prefix as a non-negative real. string_hash is not a GML builtin
+// (vsml compiles it as an instance variable).
+function vs_online_str_hash(_s)
+{
+    var h = sha1_string_utf8(string(_s));
+    var n = 0;
+    var i = 1;
+    repeat (8)
+    {
+        var c = string_ord_at(h, i);
+        var v = 0;
+        if (c >= 48 && c <= 57) v = c - 48;
+        else if (c >= 97 && c <= 102) v = c - 87;
+        else if (c >= 65 && c <= 70) v = c - 55;
+        n = n * 16 + v;
+        i++;
+    }
+    return n;
+}
+
 // Lobby uses native GameMaker WS. cfg.ws if set, otherwise same host as REST
 // (https:// → wss://, http:// → ws://).
 function vs_online_ws_url()

@@ -676,7 +676,7 @@ function vs_online_highscore_file(_orig)
 {
     if (vs_online_is_custom())
     {
-        return _orig + "_vson" + string(abs(string_hash(vs_online_server_url())));
+        return _orig + "_vson" + string_copy(sha1_string_utf8(vs_online_server_url()), 1, 8);
     }
     return _orig;
 }
