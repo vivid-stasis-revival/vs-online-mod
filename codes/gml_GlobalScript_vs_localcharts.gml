@@ -272,6 +272,7 @@ function vs_localcharts_pack_pos(_chart_id)
 //     so freshly downloaded / removed charts take effect in the select.
 function vs_localcharts_refresh()
 {
+    vs_songstore_clear_save_songs();
     if (variable_global_exists("custom_song_packs"))
     {
         try { load_song_information(); }
