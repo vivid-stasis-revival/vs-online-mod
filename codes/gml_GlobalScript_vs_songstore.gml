@@ -6,8 +6,9 @@
 //   - vs_songstore_diff        sha1-diff the server files[] against local
 //   - vs_songstore_download_file  download one file (http_get_file)
 //
-// File HTTP is handled on oCoroutineManager Other_62 via vs_songstore_on_http
-// (same path as REST). Nested AwaitAsync never received progress events.
+// File HTTP is handled on the official HTTP event (vs_http_on_async also
+// calls vs_songstore_on_http). http_get_file is started on the next frame —
+// starting it from inside the REST completion callback never fired done.
 // ============================================================================
 
 function vs_songstore_local_dir(_chartId)
@@ -71,13 +72,38 @@ function vs_songstore_diff(_files, _chartId)
     return need;
 }
 
+function vs_songstore_abs_url(_url)
+{
+    if (_url == undefined) return "";
+    var u = string(_url);
+    if (u == "") return "";
+    var marker = "/uploads/";
+    var p = string_pos(marker, u);
+    if (p <= 0)
+    {
+        marker = "/api/";
+        p = string_pos(marker, u);
+    }
+    if (p > 0)
+    {
+        u = vs_online_server_url() + string_copy(u, p, string_length(u));
+    }
+    else if (string_pos("http://", u) != 1 && string_pos("https://", u) != 1)
+    {
+        if (string_copy(u, 1, 1) != "/") u = "/" + u;
+        u = vs_online_server_url() + u;
+    }
+    return string_replace_all(u, " ", "%20");
+}
+
 function vs_songstore_dl_init()
 {
     if (!variable_global_exists("vs_dl_q"))
     {
         global.vs_dl_q = [];
         global.vs_dl_busy = false;
-        global.vs_dl_state = { rid: -1, url: "", localPath: "", on_done: undefined, got: 0, total: 0 };
+        global.vs_dl_scheduled = false;
+        global.vs_dl_state = { rid: -1, gen: 0, url: "", localPath: "", tmpPath: "vsonline_dl.bin", on_done: undefined, got: 0, total: 0 };
     }
 }
 
@@ -85,6 +111,21 @@ function vs_songstore_download_file(_url, _localPath, _on_done)
 {
     vs_songstore_dl_init();
     array_push(global.vs_dl_q, { url: _url, localPath: _localPath, on_done: _on_done });
+    vs_songstore_dl_schedule();
+}
+
+function vs_songstore_dl_schedule()
+{
+    vs_songstore_dl_init();
+    if (global.vs_dl_scheduled) return;
+    global.vs_dl_scheduled = true;
+    call_later(1, time_source_units_frames, vs_songstore_dl_on_later);
+}
+
+function vs_songstore_dl_on_later()
+{
+    vs_songstore_dl_init();
+    global.vs_dl_scheduled = false;
     vs_songstore_dl_pump();
 }
 
@@ -92,6 +133,12 @@ function vs_songstore_dl_clear()
 {
     vs_songstore_dl_init();
     global.vs_dl_q = [];
+    if (global.vs_dl_busy)
+    {
+        var tmp = global.vs_dl_state.tmpPath;
+        if (tmp != "" && file_exists(tmp)) file_delete(tmp);
+        vs_songstore_dl_finish(false);
+    }
 }
 
 function vs_songstore_dl_pump()
@@ -107,18 +154,69 @@ function vs_songstore_dl_pump()
     global.vs_dl_busy = true;
     var job = global.vs_dl_q[0];
     array_delete(global.vs_dl_q, 0, 1);
-    global.vs_dl_state.url = job.url;
+    if (!variable_global_exists("vs_dl_gen"))
+    {
+        global.vs_dl_gen = 0;
+        global.vs_dl_to = [];
+    }
+    global.vs_dl_gen += 1;
+    var url = vs_songstore_abs_url(job.url);
+    var tmp = "vsonline_dl_" + string(global.vs_dl_gen) + ".bin";
+    if (file_exists(tmp)) file_delete(tmp);
+    global.vs_dl_state.url = url;
     global.vs_dl_state.localPath = job.localPath;
+    global.vs_dl_state.tmpPath = tmp;
     global.vs_dl_state.on_done = job.on_done;
     global.vs_dl_state.got = 0;
     global.vs_dl_state.total = 0;
-    global.vs_dl_state.rid = http_get_file(job.url, job.localPath);
+    global.vs_dl_state.gen = global.vs_dl_gen;
+    global.vs_dl_state.rid = http_get_file(url, tmp);
     if (global.vs_dl_state.rid == undefined || global.vs_dl_state.rid < 0)
     {
+        show_debug_message("VS DL: http_get_file failed " + url);
         vs_songstore_dl_finish(false);
         return;
     }
-    show_debug_message("VS DL: start " + string(job.localPath) + " rid=" + string(global.vs_dl_state.rid));
+    array_push(global.vs_dl_to, global.vs_dl_state.gen);
+    call_later(60 * 300, time_source_units_frames, vs_songstore_dl_on_timeout);
+    show_debug_message("VS DL: start " + string(job.localPath) + " url=" + url + " rid=" + string(global.vs_dl_state.rid));
+}
+
+function vs_songstore_dl_on_timeout()
+{
+    vs_songstore_dl_init();
+    if (!variable_global_exists("vs_dl_to") || array_length(global.vs_dl_to) == 0) return;
+    var g = global.vs_dl_to[0];
+    array_delete(global.vs_dl_to, 0, 1);
+    if (!global.vs_dl_busy) return;
+    var st = global.vs_dl_state;
+    if (st.gen != g) return;
+    show_debug_message("VS DL: timeout " + string(st.localPath) + " url=" + string(st.url));
+    var tmp = st.tmpPath;
+    if (tmp != "" && file_exists(tmp)) file_delete(tmp);
+    vs_songstore_dl_finish(false);
+}
+
+function vs_songstore_dl_commit(_ok)
+{
+    var st = global.vs_dl_state;
+    var tmp = st.tmpPath;
+    var dest = st.localPath;
+    if (_ok)
+    {
+        if (tmp != "" && file_exists(tmp))
+        {
+            if (file_exists(dest)) file_delete(dest);
+            file_copy(tmp, dest);
+            file_delete(tmp);
+        }
+        _ok = file_exists(dest);
+    }
+    else if (tmp != "" && file_exists(tmp))
+    {
+        file_delete(tmp);
+    }
+    return _ok;
 }
 
 function vs_songstore_dl_finish(_ok)
@@ -127,11 +225,13 @@ function vs_songstore_dl_finish(_ok)
     var st = global.vs_dl_state;
     var cb = st.on_done;
     var path = st.localPath;
+    _ok = vs_songstore_dl_commit(_ok);
     st.on_done = undefined;
     st.rid = -1;
+    st.gen = 0;
     global.vs_dl_busy = false;
     if (cb != undefined) { cb(_ok, path); }
-    vs_songstore_dl_pump();
+    vs_songstore_dl_schedule();
 }
 
 function vs_songstore_on_http()
@@ -141,7 +241,7 @@ function vs_songstore_on_http()
     if (st == undefined || st.rid < 0) return;
     if (async_load == -1) return;
     var rid = ds_map_find_value(async_load, "id");
-    if (rid == undefined || rid != st.rid) return;
+    if (rid == undefined || string(rid) != string(st.rid)) return;
     var gmStatus = ds_map_find_value(async_load, "status");
     var got = ds_map_find_value(async_load, "sizeDownloaded");
     var tot = ds_map_find_value(async_load, "contentLength");
@@ -152,17 +252,18 @@ function vs_songstore_on_http()
         global.vs_dlmgr_dl.fileGot = st.got;
         global.vs_dlmgr_dl.fileTotal = st.total;
     }
-    if (gmStatus == 1)
+    var doneProg = (st.total > 0 && st.got >= st.total);
+    if (gmStatus == 1 && !doneProg)
     {
         return;
     }
     var httpStatus = ds_map_find_value(async_load, "http_status");
-    var ok = (gmStatus >= 0 && (httpStatus == undefined || (httpStatus >= 200 && httpStatus < 300)) && file_exists(st.localPath));
+    var httpOk = (httpStatus == undefined || (httpStatus >= 200 && httpStatus < 300));
+    var ok = ((gmStatus >= 0) || doneProg) && httpOk;
     if (variable_global_exists("vs_dlmgr_dl") && global.vs_dlmgr_dl.cancel)
     {
-        if (file_exists(st.localPath)) file_delete(st.localPath);
         ok = false;
     }
-    show_debug_message("VS DL: done " + string(st.localPath) + " ok=" + string(ok));
+    show_debug_message("VS DL: done " + string(st.localPath) + " ok=" + string(ok) + " http=" + string(httpStatus) + " st=" + string(gmStatus));
     vs_songstore_dl_finish(ok);
 }

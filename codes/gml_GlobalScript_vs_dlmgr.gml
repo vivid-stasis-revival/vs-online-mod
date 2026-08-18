@@ -226,6 +226,11 @@ function vs_dlmgr_download(_songId, _chartId, _on_done)
     vs_songstore_detail(_songId, function(_ok, _detail)
     {
         var st = global.vs_dlmgr_dl;
+        if (st.cancel)
+        {
+            vs_dlmgr_dl_finish(false);
+            return;
+        }
         if (!_ok || _detail == undefined)
         {
             var cb = st.on_done;
