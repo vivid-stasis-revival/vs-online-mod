@@ -20,14 +20,6 @@ function vs_songstore_root()
     return "Custom Songs/";
 }
 
-function vs_songstore_parent(_path)
-{
-    var p = string_replace_all(string(_path), "\\", "/");
-    var cut = string_last_pos("/", p);
-    if (cut <= 0) return "";
-    return string_copy(p, 1, cut);
-}
-
 function vs_songstore_dir_has_chart(_dir)
 {
     if (_dir == undefined || _dir == "") return false;
@@ -425,38 +417,6 @@ function vs_songstore_dl_on_timeout()
     vs_songstore_dl_finish(false);
 }
 
-function vs_songstore_file_ready(_path, _name)
-{
-    if (_path == undefined || _path == "" || !file_exists(_path)) return false;
-    var n = string_lower(filename_name(_name));
-    if (n == "info.json" || n == "shatterinfo.json")
-    {
-        var f = file_text_open_read(_path);
-        if (f < 0) return false;
-        var raw = "";
-        if (!file_text_eof(f)) raw = file_text_readln(f);
-        file_text_close(f);
-        return string_pos("{", raw) > 0;
-    }
-    return true;
-}
-
-function vs_songstore_write_copy(_src, _dst)
-{
-    if (_dst == undefined || _dst == "") return false;
-    vs_songstore_ensure_dir(vs_songstore_parent(_dst));
-    if (file_exists(_dst)) file_delete(_dst);
-    file_copy(_src, _dst);
-    if (vs_songstore_file_ready(_dst, _dst)) return true;
-    var buf = buffer_load(_src);
-    if (buf != -1 && buf != undefined)
-    {
-        buffer_save(buf, _dst);
-        buffer_delete(buf);
-    }
-    return vs_songstore_file_ready(_dst, _dst);
-}
-
 function vs_songstore_dl_commit(_ok)
 {
     var st = global.vs_dl_state;
@@ -466,13 +426,12 @@ function vs_songstore_dl_commit(_ok)
     {
         if (tmp != "" && file_exists(tmp))
         {
-            _ok = vs_songstore_write_copy(tmp, dest);
-            if (file_exists(tmp)) file_delete(tmp);
+            vs_songstore_ensure_dir(filename_path(dest));
+            if (file_exists(dest)) file_delete(dest);
+            file_copy(tmp, dest);
+            file_delete(tmp);
         }
-        else
-        {
-            _ok = vs_songstore_file_ready(dest, dest);
-        }
+        _ok = file_exists(dest);
         if (!_ok) vs_songstore_set_err("could not write " + string(dest));
     }
     else if (tmp != "" && file_exists(tmp))

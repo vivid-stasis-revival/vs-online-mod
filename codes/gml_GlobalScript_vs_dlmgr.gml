@@ -285,13 +285,7 @@ function vs_dlmgr_dl_finish(_ok)
     var st = global.vs_dlmgr_dl;
     if (_ok && !st.cancel)
     {
-        if (!vs_songstore_has_chart(st.chartId))
-        {
-            vs_songstore_set_err("files missing after download");
-            _ok = false;
-            vs_songstore_cleanup_stub(st.chartId);
-        }
-        else vs_dlmgr_write_meta(st.chartId, st.serverId, st.name);
+        vs_dlmgr_write_meta(st.chartId, st.serverId, st.name);
     }
     else
     {
