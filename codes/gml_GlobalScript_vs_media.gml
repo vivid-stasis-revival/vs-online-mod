@@ -82,12 +82,28 @@ function vs_media_request(_kind, _id, _url)
     vs_media_pump();
 }
 
+function vs_media_audio_url(_previewUrl, _jacketUrl, _id)
+{
+    if (_previewUrl != undefined && string(_previewUrl) != "") return string(_previewUrl);
+    var u = (_jacketUrl != undefined) ? string(_jacketUrl) : "";
+    var cut = string_last_pos("/", u);
+    if (cut > 0) return string_copy(u, 1, cut) + "music.ogg";
+    if (_id == undefined || string(_id) == "") return "";
+    return vs_online_server_url() + "/uploads/songs/" + string(_id) + "/music.ogg";
+}
+
 function vs_media_select(_id, _jacketUrl, _previewUrl)
 {
     vs_media_init();
-    global.vs_media_want_pv = (_id == undefined) ? "" : string(_id);
     vs_media_request("jacket", _id, _jacketUrl);
-    vs_media_request("preview", _id, _previewUrl);
+    var audio = vs_media_audio_url(_previewUrl, _jacketUrl, _id);
+    if (audio != "") vs_media_request("preview", _id, audio);
+    if (!vs_online_preview_auto())
+    {
+        if (global.vs_media_want_pv != "") vs_media_stop_preview();
+        return;
+    }
+    global.vs_media_want_pv = (_id == undefined) ? "" : string(_id);
     vs_media_try_play();
 }
 

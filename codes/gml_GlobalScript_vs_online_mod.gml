@@ -119,6 +119,20 @@ function vs_online_frontend_url()
     return vs_online_get_config().frontend;
 }
 
+function vs_online_preview_auto()
+{
+    var cfg = vs_online_get_config();
+    if (!variable_struct_exists(cfg, "previewAuto")) return true;
+    return (cfg.previewAuto == true || cfg.previewAuto == 1);
+}
+
+function vs_online_set_preview_auto(_on)
+{
+    var cfg = vs_online_get_config();
+    cfg.previewAuto = _on ? true : false;
+    vs_online_save_config();
+}
+
 function vs_online_device_page_url(_userCode)
 {
     var page = vs_online_frontend_url() + "/device";

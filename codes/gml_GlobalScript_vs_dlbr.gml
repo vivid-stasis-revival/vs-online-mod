@@ -42,6 +42,7 @@ function vs_dlbr_build_row(_song)
         diffNum: variable_struct_exists(_song, "difficultyNumber") ? string(_song.difficultyNumber) : "",
         jacketUrl: variable_struct_exists(_song, "jacketUrl") ? _song.jacketUrl : "",
         previewUrl: variable_struct_exists(_song, "previewUrl") ? _song.previewUrl : "",
+        musicUrl: variable_struct_exists(_song, "musicUrl") ? _song.musicUrl : "",
         ownerName: variable_struct_exists(_song, "ownerName") ? _song.ownerName : "",
         downloads: variable_struct_exists(_song, "downloads") ? _song.downloads : 0,
         hasBackstage: variable_struct_exists(_song, "hasBackstage") ? _song.hasBackstage : false,
@@ -97,7 +98,77 @@ function vs_dlbr_selected_refresh()
     }
     var r = rows[sel];
     vs_dlbr_set_status(vs_dlmgr_row_status(r));
-    vs_media_select(r.id, r.jacketUrl, r.previewUrl);
+    vs_media_select(r.id, r.jacketUrl, (r.previewUrl != "") ? r.previewUrl : r.musicUrl);
+}
+
+function vs_dlbr_current_web_row()
+{
+    if (detail_open && !detail_local)
+    {
+        return vs_dlbr_detail_row();
+    }
+    if (view == 0 && array_length(rows) > 0 && sel >= 0 && sel < array_length(rows))
+    {
+        return rows[sel];
+    }
+    return undefined;
+}
+
+function vs_dlbr_page_url(_r)
+{
+    if (_r == undefined) return "";
+    var sid = "";
+    if (variable_struct_exists(_r, "id") && _r.id != "") sid = string(_r.id);
+    if (sid == "") return "";
+    var path = "/songs/";
+    if (variable_struct_exists(_r, "kind") && _r.kind == 2) path = "/shatters/";
+    return vs_online_frontend_url() + path + sid;
+}
+
+function vs_dlbr_toggle_preview_auto()
+{
+    var on = !vs_online_preview_auto();
+    vs_online_set_preview_auto(on);
+    if (!on)
+    {
+        vs_media_stop_preview();
+        vs_dlbr_set_status("Preview auto-play off");
+        return;
+    }
+    vs_dlbr_set_status("Preview auto-play on");
+    var r = vs_dlbr_current_web_row();
+    if (r != undefined)
+    {
+        var audio = (variable_struct_exists(r, "previewUrl") && r.previewUrl != "") ? r.previewUrl : ((variable_struct_exists(r, "musicUrl")) ? r.musicUrl : "");
+        vs_media_select(r.id, r.jacketUrl, audio);
+    }
+}
+
+function vs_dlbr_open_page()
+{
+    var page = vs_dlbr_page_url(vs_dlbr_current_web_row());
+    if (page == "")
+    {
+        vs_dlbr_set_status("No web page for this chart.");
+        return;
+    }
+    url_open(page);
+    vs_dlbr_set_status("Opened page");
+}
+
+function vs_dlbr_media_keys()
+{
+    if (keyboard_check_pressed(ord("P")))
+    {
+        vs_dlbr_toggle_preview_auto();
+        return true;
+    }
+    if (keyboard_check_pressed(ord("W")))
+    {
+        vs_dlbr_open_page();
+        return true;
+    }
+    return false;
 }
 
 function vs_dlbr_fetch_page()
@@ -552,6 +623,7 @@ function vs_dlbr_step()
         if (n == 0)
         {
             if (vs_dlbr_catalog_key()) return;
+            if (vs_dlbr_media_keys()) return;
             if (keyboard_check_pressed(ord("R"))) vs_dlbr_reload_data();
             else if (keyboard_check_pressed(ord("V"))) vs_dlbr_toggle_view();
             else if (keyboard_check_pressed(vk_tab)) { searching = true; keyboard_string = query; }
@@ -613,6 +685,7 @@ function vs_dlbr_step()
         {
             vs_dlbr_reload_data();
         }
+        else if (vs_dlbr_media_keys()) { }
         else if (vs_dlbr_catalog_key()) { }
     }
     else
@@ -622,6 +695,7 @@ function vs_dlbr_step()
         if (ln == 0)
         {
             if (vs_dlbr_catalog_key()) return;
+            if (vs_dlbr_media_keys()) return;
             if (keyboard_check_pressed(ord("R"))) vs_dlbr_reload_local();
             else if (keyboard_check_pressed(ord("V"))) vs_dlbr_toggle_view();
             else if (keyboard_check_pressed(vk_tab)) { searching = true; keyboard_string = query; }
@@ -655,6 +729,7 @@ function vs_dlbr_step()
             searching = true;
             keyboard_string = query;
         }
+        else if (vs_dlbr_media_keys()) { }
         else if (vs_dlbr_catalog_key()) { }
     }
 }
@@ -735,7 +810,7 @@ function vs_dlbr_draw()
     draw_set_color(make_color_rgb(120, 210, 140));
     draw_text(bx + 6, by + bh - 22, st);
 
-    var hint = searching ? "Enter  Esc" : ((view == 0) ? "Enter  Tab  T  F  <>  V  Esc" : "Enter  Tab  T  V  Esc");
+    var hint = searching ? "Enter  Esc" : ((view == 0) ? "Enter  Tab  T  F  P  W  V  Esc" : "Enter  Tab  T  V  Esc");
     draw_set_color(make_color_rgb(120, 126, 136));
     draw_text(bx + 6, by + bh - 12, vs_dlbr_clip_text(hint, bw - 12));
 
@@ -949,7 +1024,7 @@ function vs_dlbr_open_detail(_r, _local)
     }
     detail_id = _r.id;
     detail_chart = _r.chartId;
-    vs_media_select(_r.id, _r.jacketUrl, _r.previewUrl);
+    vs_media_select(_r.id, _r.jacketUrl, (_r.previewUrl != "") ? _r.previewUrl : _r.musicUrl);
     vs_songstore_fetch(variable_struct_exists(_r, "kind") ? _r.kind : 0, _r.id, vs_dlbr_on_detail);
 }
 
@@ -1021,19 +1096,21 @@ function vs_dlbr_detail_buttons()
     if (detail_local)
     {
         array_push(b, { id: "jump", label: "Play" });
-        array_push(b, { id: "del", label: "Delete" });
+        array_push(b, { id: "del", label: "Del" });
         array_push(b, { id: "close", label: "Close" });
         return b;
     }
     var r = vs_dlbr_detail_row();
     if (r != undefined)
     {
-        if (!r.downloaded) array_push(b, { id: "dl", label: "Download" });
+        if (!r.downloaded) array_push(b, { id: "dl", label: "Get" });
         else if (r.tracked && r.need > 0) array_push(b, { id: "dl", label: "Update" });
-        else if (r.tracked) array_push(b, { id: "ok", label: "Up to date" });
-        else array_push(b, { id: "ok", label: "Local (kept)" });
-        if (r.downloaded) array_push(b, { id: "del", label: "Delete" });
+        else if (r.tracked) array_push(b, { id: "ok", label: "OK" });
+        else array_push(b, { id: "ok", label: "Local" });
+        if (r.downloaded) array_push(b, { id: "del", label: "Del" });
     }
+    array_push(b, { id: "auto", label: vs_online_preview_auto() ? "Mute" : "Auto" });
+    array_push(b, { id: "page", label: "Page" });
     array_push(b, { id: "close", label: "Close" });
     return b;
 }
@@ -1073,6 +1150,16 @@ function vs_dlbr_detail_act(_id)
         vs_dlbr_jump_from_local();
         return;
     }
+    if (_id == "auto")
+    {
+        vs_dlbr_toggle_preview_auto();
+        return;
+    }
+    if (_id == "page")
+    {
+        vs_dlbr_open_page();
+        return;
+    }
     if (_id == "dl")
     {
         var r = vs_dlbr_detail_row();
@@ -1109,6 +1196,7 @@ function vs_dlbr_step_detail()
     {
         vs_dlbr_detail_act(btns[detail_btn].id);
     }
+    else vs_dlbr_media_keys();
 }
 
 function vs_dlbr_diff_color(_d)
@@ -1254,28 +1342,52 @@ function vs_dlbr_draw_detail()
 
     var btns = vs_dlbr_detail_buttons();
     var bn = array_length(btns);
-    var bx = px + 6;
+    var startx = px + 6;
+    var maxw = right - startx;
+    var used = 0;
+    var rows = 1;
     var i = 0;
+    repeat (bn)
+    {
+        var bw2 = string_width(btns[i].label) + 12;
+        if (used + bw2 > maxw && used > 0)
+        {
+            rows++;
+            used = 0;
+        }
+        used += bw2 + 4;
+        i++;
+    }
+    var rowY = byb - (rows - 1) * 14;
+    var bx = startx;
+    used = 0;
+    i = 0;
     repeat (bn)
     {
         var lab = btns[i].label;
         var bw2 = string_width(lab) + 12;
-        if (bx + bw2 > right) break;
+        if (used + bw2 > maxw && used > 0)
+        {
+            rowY += 14;
+            bx = startx;
+            used = 0;
+        }
         var on = (i == detail_btn);
         if (on)
         {
             draw_set_color((btns[i].id == "yes" || btns[i].id == "del") ? make_color_rgb(241, 75, 107) : make_color_rgb(240, 210, 70));
-            draw_rectangle(bx, byb, bx + bw2, byb + 12, false);
+            draw_rectangle(bx, rowY, bx + bw2, rowY + 12, false);
             draw_set_color(c_black);
         }
         else
         {
             draw_set_color(make_color_rgb(40, 44, 52));
-            draw_rectangle(bx, byb, bx + bw2, byb + 12, false);
+            draw_rectangle(bx, rowY, bx + bw2, rowY + 12, false);
             draw_set_color(c_white);
         }
-        draw_text(bx + 6, byb + 2, lab);
+        draw_text(bx + 6, rowY + 2, lab);
         bx += bw2 + 4;
+        used += bw2 + 4;
         i++;
     }
 }
