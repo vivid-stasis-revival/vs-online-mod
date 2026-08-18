@@ -541,11 +541,8 @@ function vs_songstore_dl_pump()
     }
     global.vs_dl_gen += 1;
     var url = vs_songstore_abs_url(job.url);
-    var save = vs_songstore_save_dir();
     var tmp = "vsonline_dl_" + string(global.vs_dl_gen) + ".bin";
-    if (save != "") tmp = save + tmp;
     if (file_exists(tmp)) file_delete(tmp);
-    if (file_exists(filename_name(tmp))) file_delete(filename_name(tmp));
     global.vs_dl_state.url = url;
     global.vs_dl_state.localPath = job.localPath;
     global.vs_dl_state.tmpPath = tmp;
@@ -738,13 +735,15 @@ function vs_songstore_on_http()
     }
     var httpStatus = ds_map_find_value(async_load, "http_status");
     var httpOk = (httpStatus == undefined || (httpStatus >= 200 && httpStatus < 300));
-    var ok = ((gmStatus >= 0) || doneProg) && httpOk;
+    var tmpHere = (st.tmpPath != "" && (file_exists(st.tmpPath) || file_exists(vs_songstore_tmp_abs(st.tmpPath))));
+    var ok = httpOk && ((gmStatus >= 0) || doneProg || tmpHere);
     if (variable_global_exists("vs_dlmgr_dl") && global.vs_dlmgr_dl.cancel)
     {
         ok = false;
     }
-    if (!ok) vs_songstore_set_err("http " + string(httpStatus) + " for " + string(st.url));
-    vs_songstore_log("done " + string(st.localPath) + " ok=" + string(ok) + " http=" + string(httpStatus) + " st=" + string(gmStatus));
+    if (!ok && !httpOk) vs_songstore_set_err("http " + string(httpStatus) + " for " + string(st.url));
+    else if (!ok) vs_songstore_set_err("download file missing after http " + string(httpStatus) + " st=" + string(gmStatus));
+    vs_songstore_log("done " + string(st.localPath) + " ok=" + string(ok) + " http=" + string(httpStatus) + " st=" + string(gmStatus) + " tmp=" + string(tmpHere));
     vs_songstore_dl_finish(ok);
 }
 
