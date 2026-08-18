@@ -578,5 +578,228 @@
         "Find": "draw_text_o(bx + ox + 32, by + oy + 22 + (i * 35), @@string@@(\"{0}\", member.rate));",
         "Value": "draw_text_o(bx + ox + 32, by + oy + 22 + (i * 35), @@string@@(\"{0}\", member.rate));if (!vs_online_is_custom() && variable_struct_exists(member, \"has_bwp\") && member.has_bwp){draw_set_halign(fa_right);draw_set_color(c_lime);draw_text_o(bx + ox + 143, by + oy + 13 + (i * 35), \"Better WP\");}",
         "Type": 0
+    },
+
+    {
+        "Entry": "gml_GlobalScript_load_song_information",
+        "Find": "file_text_close(artists_file);",
+        "Value": "file_text_close(artists_file);CustomSongReader();",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_GlobalScript_create_song_packs",
+        "Function": "create_song_packs",
+        "ExternalFile": "csm/create_songpacks.gml",
+        "Type": 3
+    },
+    {
+        "Entry": "gml_GlobalScript_LoadSong",
+        "Find": "var chart = read_binary_chart(@@string@@(\"{0}Charts/{1}/{2}.vsb\", working_directory, arg0, arg1));",
+        "ExternalFile": "csm/LoadSong_Mod.gml",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_GlobalScript_upload_score",
+        "Find": "var song = global.song_list[arg0];",
+        "Value": "var song = global.song_list[arg0];if (struct_exists(song, \"is_custom\") && !vs_online_is_custom()) return;",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_GlobalScript_save_highscores",
+        "Find": "ini_open(global.highscore_file);",
+        "ExternalFile": "csm/SaveLoadHighScores/save_highscores.gml",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_GlobalScript_load_highscores",
+        "Find": "    var load_score = function(arg0, arg1)\n    {\n        ini_open(global.highscore_file);\n        var retval = \n        {\n            score: ini_read_real(arg0, arg1, 0),\n            game_score: ini_read_real(arg0, @@string@@(\"{0}_GAME\", arg1), 0),\n            game_perc: ini_read_real(arg0, @@string@@(\"{0}_GAMEPERC\", arg1), 0),\n            max_combo: ini_read_real(arg0, @@string@@(\"{0}_MAXCOMBO\", arg1), 0),\n            lamp: ini_read_real(arg0, @@string@@(\"{0}_COMBO\", arg1), UnknownEnum.Value_0)\n        };\n        ini_close();\n        return retval;\n    };",
+        "ExternalFile": "csm/SaveLoadHighScores/load_highscores_part1.gml",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_GlobalScript_load_highscores",
+        "Find": "scores[d] = load_score(string(i), diff_names[d]);",
+        "ExternalFile": "csm/SaveLoadHighScores/load_highscores_part2.gml",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_GlobalScript_load_highscores",
+        "Find": "global.highscores.shatter[i] = load_score(string(i), song.difficulty_name);",
+        "ExternalFile": "csm/SaveLoadHighScores/load_highscores_part3.gml",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_GlobalScript_load_highscores",
+        "Function": "load_highscores",
+        "Value": "vs_csm_scores_merge_start();",
+        "Type": 3
+    },
+    {
+        "Entry": "gml_GlobalScript_create_shatter_list",
+        "Find": "global.shatter_list[17].name = \"Angelstar?\";",
+        "Value": "",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_GlobalScript_create_shatter_list",
+        "Find": "if (get_story_progress() == 36)",
+        "Value": "if (get_story_progress() == 36)\n{global.shatter_list[17].name = \"Angelstar?\";}\nCustomShatterReader();",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_Object_o_profile_select_2023boot_Step_0",
+        "Find": "global.last_freeplay_song = ini_read_real(\"profile\", \"last_freeplay_song\", 0);",
+        "ExternalFile": "csm/songid_overflow_crash_fix.gml",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_GlobalScript_LoadSongData",
+        "Find": "var weight = ini_read_real(\"mods\", \"weight\", 0);",
+        "Value": "",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_GlobalScript_LoadSongData",
+        "Find": "ini_close();",
+        "Value": "",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_GlobalScript_LoadSongData",
+        "Find": "ini_open(working_directory + \"Charts/\" + arg0 + \"/\" + arg1 + \".vmv\");",
+        "ExternalFile": "csm/CustomStat/load_custom_stats_p1.gml",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_GlobalScript_LoadSongData",
+        "Find": "if (!file_exists(binName))",
+        "Value": "if(!file_exists(binName) && !file_exists(customChartName))",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_GlobalScript_LoadSongData",
+        "Find": "var statName = baseName + \".stats\";",
+        "ExternalFile": "csm/CustomStat/load_custom_stats_p2.gml",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_GlobalScript_LoadSongData",
+        "Find": "var hash = sha1_file(binName);",
+        "ExternalFile": "csm/CustomStat/load_custom_stats_p3.gml",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_GlobalScript_LoadSongData",
+        "Find": "ini_open(statName);",
+        "Value": "ini_open(finalstatName)",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_GlobalScript_LoadSongData",
+        "Find": "data = parseSongDataFromBinary(binName, arg0, arg3, arg1 == \"ENCORE\");",
+        "ExternalFile": "csm/CustomStat/load_custom_stats_p4.gml",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_Object_o_songselect_Draw_0",
+        "Find": "draw_text(316 - artist_width, 2 + top_y, name);",
+        "Value": "draw_text(316 - artist_width, 2 + top_y, name); if (struct_exists(selected_song, \"is_custom\")) { var _oc = draw_get_color(); draw_set_color(make_color_rgb(80, 220, 255)); draw_text(2, 7 + top_y, \"C\"); draw_set_color(_oc); }",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_Object_o_songselect_Draw_73",
+        "Find": "selected_song.is_original",
+        "Value": "selected_song.is_original || variable_struct_exists(selected_song,\"is_custom\")",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_Room_scene_gameplay_Create",
+        "Function": "",
+        "ExternalFile": "csm/FXLayerFix/fx_layer_add.gml",
+        "Type": 2
+    },
+    {
+        "Entry": "gml_Object_cc_Create_0",
+        "Find": "mod_fx_chroma_distort = 0;",
+        "Value": "mod_fx_chroma_distort = 0.01;",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_Object_obj_scarletdeath_gimmick_Create_0",
+        "Find": "cc.mod_fx_underwater = 0;",
+        "Value": "cc.mod_fx_underwater = 0.01;",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_Object_o_songselect_sortmenu_Create_0",
+        "Find": "column_widths = [];",
+        "ExternalFile": "csm/sortMenu/extendSortDiff.gml",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_GlobalScript_AddSongPacket",
+        "Find": "return buffer;",
+        "Value": "buffer_write(buffer, buffer_string, global.song_list[arg0.songId].chart_id);return buffer;",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_GlobalScript_AddSongPacket",
+        "Find": "buffer_delete(arg0);",
+        "Value": "try{obj.songId = get_song_id_from_chart(buffer_read(arg0, buffer_string));}catch (ex){}buffer_delete(arg0);",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_GlobalScript_AddSongPacket",
+        "Find": "BasePacket(arg0, true, 3)",
+        "Value": "BasePacket(arg0, true, 3, buffer_grow)",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_GlobalScript_ShadowSongPacket",
+        "Find": "return buffer;",
+        "Value": "buffer_write(buffer, buffer_string, global.song_list[arg0.songId].chart_id);return buffer;",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_GlobalScript_ShadowSongPacket",
+        "Find": "buffer_delete(arg0);",
+        "Value": "try{obj.songId = get_song_id_from_chart(buffer_read(arg0, buffer_string));}catch (ex){}buffer_delete(arg0);",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_GlobalScript_SendQueuePacket",
+        "Find": "return buffer;",
+        "ExternalFile": "csm/CustomWP/SendQueuePacket_part1.gml",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_GlobalScript_SendQueuePacket",
+        "Find": "buffer_delete(arg0);",
+        "ExternalFile": "csm/CustomWP/SendQueuePacket_part2.gml",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_Object_o_transitionsong_Alarm_0",
+        "Find": "diff_col = backstage ? 7209215 : 16711858;",
+        "Value": "if (struct_exists(song,\"is_custom\") && struct_exists(song,\"enc_data\")){jacket_designer = backstage ? song.enc_data.jacket_designer : jacket_designer;} diff_col =  backstage ? 7209215 : 16711858;",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_GlobalScript_mod_setup",
+        "Find": "global.mods = {};",
+        "Type": 0,
+        "ExternalFile": "csm/gmk_easing_extension.gml"
+    },
+    {
+        "Entry": "gml_GlobalScript_start_song_shatter",
+        "Find": "var song = global.shatter_list[arg0];",
+        "Value": "var song = global.shatter_list[arg0];global.currentSongInfo=song;",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_GlobalScript_start_song",
+        "Find": "var song = global.song_list[arg0];",
+        "Value": "var song = global.song_list[arg0];global.currentSongInfo=song;",
+        "Type": 0
     }
 ]

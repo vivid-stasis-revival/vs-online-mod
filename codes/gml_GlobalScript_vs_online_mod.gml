@@ -384,6 +384,7 @@ function vs_online_bind_hooks()
 
 function vs_online_init()
 {
+    vs_csm_force_gm_audio();
     vs_online_bind_hooks();
     vs_online_get_config();
     if (!instance_exists(oCoroutineManager))

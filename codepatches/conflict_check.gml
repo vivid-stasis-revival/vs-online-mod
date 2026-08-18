@@ -11,4 +11,9 @@ if (variable_global_exists("vml_mods"))
         show_message("VS Online 与 betterWP 不兼容，请移除其一后重试。\n\nVS Online is incompatible with betterWP — please remove one of them and restart.");
         game_end();
     }
+    if (variable_struct_exists(_vm, "custom_song_mod"))
+    {
+        show_message("VS Online 已内置 Custom Songs，请卸载独立的 Custom Songs Mod 后重试。\n\nVS Online already includes Custom Songs — please uninstall the standalone Custom Songs Mod and restart.");
+        game_end();
+    }
 }

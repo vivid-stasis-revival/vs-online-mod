@@ -65,13 +65,39 @@ function vs_online_chart_sha1(_chartId, _diff)
     else if (low == "finale") fileDiff = "FINALE";
     else if (low == "encore") fileDiff = "ENCORE";
     else if (low == "prelude") fileDiff = "PRELUDE";
-    var dir = "Custom Songs/" + _chartId + "/";
-    var p = dir + fileDiff + ".vsc";
-    if (!file_exists(p)) p = dir + fileDiff + ".vsb";
+    var loadDir = vs_csm_load_dir_from_id(_chartId);
+    var p = "";
+    if (loadDir != "")
+    {
+        p = loadDir + fileDiff + ".vsc";
+        if (!file_exists(p)) p = loadDir + fileDiff + ".vsb";
+    }
+    if (p == "" || !file_exists(p))
+    {
+        var dir = "Custom Songs/" + _chartId + "/";
+        p = dir + fileDiff + ".vsc";
+        if (!file_exists(p)) p = dir + fileDiff + ".vsb";
+    }
     if (!file_exists(p)) p = working_directory + "Charts/" + _chartId + "/" + fileDiff + ".vsb";
     if (!file_exists(p)) p = working_directory + "Charts/" + _chartId + "/" + fileDiff + ".vsc";
     if (!file_exists(p)) return "";
     return sha1_file(p);
+}
+
+function vs_online_get_my_chart_score(_chartId, _difficulty, _sha1, _on_done)
+{
+    if (!vs_online_is_account())
+    {
+        if (_on_done != undefined) { _on_done(false, undefined, 0); }
+        return;
+    }
+    var url = "/api/v1/charts/scores/me?chartId=" + vs_online_url_encode(_chartId)
+            + "&difficulty=" + vs_online_url_encode(vs_online_diff_api(_difficulty));
+    if (_sha1 != undefined && _sha1 != "")
+    {
+        url += "&sha1=" + vs_online_url_encode(_sha1);
+    }
+    vs_online_get_json(url, true, _on_done);
 }
 
 function vs_http_headers_create(_spec)

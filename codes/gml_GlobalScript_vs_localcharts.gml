@@ -8,9 +8,8 @@
 //     REST layer)
 //   - jumps into the song select at a chart's position
 //
-// This complements the Custom Songs Mod (CSM): CSM turns these folders into
-// playable entries in global.song_list + global.song_packs; here we give the
-// player a dedicated home-page manager for them.
+// Custom songs are loaded by vs_csm.gml (CustomSongReader) into
+// global.song_list + global.song_packs. This file is the home-page manager.
 //
 // COMPILER NOTE: Underanalyzer / vsml:
 //   - anons do not capture enclosing args/`var` (they become self.<name>)
@@ -26,14 +25,12 @@ function vs_localcharts_dir()
 // "Custom Songs/xyz/" -> "xyz"
 function vs_localcharts_folder_name(_dir)
 {
-    var d = _dir;
-    var pre = vs_localcharts_dir();
-    if (string_starts_with(d, pre))
-        d = string_copy(d, string_length(pre) + 1, string_length(d));
-    if (string_ends_with(d, "/"))
+    var d = string_replace_all(string(_dir), "\\", "/");
+    while (string_ends_with(d, "/"))
         d = string_copy(d, 1, string_length(d) - 1);
-    if (string_ends_with(d, "\\"))
-        d = string_copy(d, 1, string_length(d) - 1);
+    var slash = string_last_pos("/", d);
+    if (slash > 0)
+        d = string_copy(d, slash + 1, string_length(d));
     return d;
 }
 
@@ -152,57 +149,86 @@ function vs_localcharts_read_shatter(_dir, _pack)
     return s;
 }
 
-// Scan "Custom Songs/" (top-level songs + pack subfolders) into a flat list
-// sorted by pack, then name.
+// Scan both Custom Songs roots (save area + Steam) into a flat list
+// sorted by pack, then name. Same chart_id keeps the save-area copy.
 function vs_localcharts_scan()
 {
     var out = [];
     vs_songstore_clear_save_songs();
-    if (!directory_exists(vs_localcharts_dir())) return out;
+    var roots = vs_csm_song_roots();
+    if (array_length(roots) == 0) return out;
 
+    var seen = {};
     var packs = [];
-    var d = file_find_first(vs_localcharts_dir() + "*", 16);
-    while (d != "")
+    for (var r = 0; r < array_length(roots); r++)
     {
-        var p = vs_localcharts_dir() + d + "/";
-        if (file_exists(p + "info.json"))
+        var entries = vs_csm_list_subdirs(roots[r]);
+        for (var i = 0; i < array_length(entries); i++)
         {
-            var s = vs_localcharts_read_info(p, "Unpacked");
-            if (s != undefined) array_push(out, s);
+            var e = entries[i];
+            var key = string_lower(e.name);
+            if (file_exists(e.dir + "info.json"))
+            {
+                if (variable_struct_exists(seen, key)) continue;
+                var s = vs_localcharts_read_info(e.dir, "Unpacked");
+                if (s != undefined)
+                {
+                    variable_struct_set(seen, key, true);
+                    if (s.chart_id != "") variable_struct_set(seen, string_lower(s.chart_id), true);
+                    array_push(out, s);
+                }
+            }
+            else if (file_exists(e.dir + "shatterinfo.json"))
+            {
+                if (variable_struct_exists(seen, key)) continue;
+                var sh = vs_localcharts_read_shatter(e.dir, "Shatter");
+                if (sh != undefined)
+                {
+                    variable_struct_set(seen, key, true);
+                    if (sh.chart_id != "") variable_struct_set(seen, string_lower(sh.chart_id), true);
+                    array_push(out, sh);
+                }
+            }
+            else if (file_exists(e.dir + "songpack_info.json"))
+            {
+                if (variable_struct_exists(seen, "pack:" + key)) continue;
+                variable_struct_set(seen, "pack:" + key, true);
+                array_push(packs, e.dir);
+            }
         }
-        else if (file_exists(p + "shatterinfo.json"))
-        {
-            var sh = vs_localcharts_read_shatter(p, "Shatter");
-            if (sh != undefined) array_push(out, sh);
-        }
-        else if (file_exists(p + "songpack_info.json"))
-        {
-            array_push(packs, p);
-        }
-        d = file_find_next();
     }
-    file_find_close();
 
     for (var i = 0; i < array_length(packs); i++)
     {
         var pk = vs_localcharts_read_pack(packs[i]);
-        var dd = file_find_first(packs[i] + "*", 16);
-        while (dd != "")
+        var children = vs_csm_list_subdirs(packs[i]);
+        for (var j = 0; j < array_length(children); j++)
         {
-            var pp = packs[i] + dd + "/";
+            var pp = children[j].dir;
+            var ck = string_lower(vs_localcharts_folder_name(packs[i]) + "/" + children[j].name);
             if (file_exists(pp + "info.json"))
             {
+                if (variable_struct_exists(seen, ck)) continue;
                 var s2 = vs_localcharts_read_info(pp, pk.name);
-                if (s2 != undefined) array_push(out, s2);
+                if (s2 != undefined)
+                {
+                    variable_struct_set(seen, ck, true);
+                    if (s2.chart_id != "") variable_struct_set(seen, string_lower(s2.chart_id), true);
+                    array_push(out, s2);
+                }
             }
             else if (file_exists(pp + "shatterinfo.json"))
             {
+                if (variable_struct_exists(seen, ck)) continue;
                 var sh2 = vs_localcharts_read_shatter(pp, pk.name);
-                if (sh2 != undefined) array_push(out, sh2);
+                if (sh2 != undefined)
+                {
+                    variable_struct_set(seen, ck, true);
+                    if (sh2.chart_id != "") variable_struct_set(seen, string_lower(sh2.chart_id), true);
+                    array_push(out, sh2);
+                }
             }
-            dd = file_find_next();
         }
-        file_find_close();
     }
 
     array_sort(out, function(_a, _b)
@@ -272,14 +298,14 @@ function vs_localcharts_pack_pos(_chart_id)
 //     so freshly downloaded / removed charts take effect in the select.
 function vs_localcharts_refresh()
 {
+    // load_song_information rebuilds song_list then CustomSongReader appends once.
     vs_songstore_clear_save_songs();
-    if (variable_global_exists("custom_song_packs"))
-    {
-        try { load_song_information(); }
-        catch (_e) { show_debug_message("VS LocalCharts: song reload failed -> " + string(_e)); }
-        try { create_song_packs(); }
-        catch (_e2) { show_debug_message("VS LocalCharts: pack rebuild failed -> " + string(_e2)); }
-    }
+    try { load_song_information(); }
+    catch (_e) { show_debug_message("VS LocalCharts: song reload failed -> " + string(_e)); }
+    try { create_song_packs(); }
+    catch (_e2) { show_debug_message("VS LocalCharts: pack rebuild failed -> " + string(_e2)); }
+    try { load_highscores(); }
+    catch (_e3) { show_debug_message("VS LocalCharts: highscore reload failed -> " + string(_e3)); }
 }
 
 // Jump into the song select with a chart focused (used from both the download
