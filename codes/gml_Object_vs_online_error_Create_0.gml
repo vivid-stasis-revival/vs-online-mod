@@ -1,6 +1,5 @@
-// Error dialog — Create. No vs_* names. Methods bound after create.
+// Error dialog — Create. Message/on_retry filled by vs_online_show_error.
 depth = -10000;
-do_step = function() { };
 title = "Cannot Connect to Server";
 server_url = "";
 message = "";

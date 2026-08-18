@@ -1,7 +1,5 @@
-// Chart Downloader — Create. No vs_* names. Methods bound after create.
+// Chart Downloader — Create
 depth = -10000;
-do_step = function() { };
-do_draw = function() { };
 
 view = 0;
 page = 1;
@@ -33,3 +31,5 @@ cur_id = "";
 cur_chart = "";
 
 status = "Chart Downloader - loading...";
+
+vs_dlbr_fetch_page();

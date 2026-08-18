@@ -1,6 +1,5 @@
 // ============================================================================
 // vs_auth.gml — vs_auth_panel actions as named scripts.
-// Object-event anonymous functions cannot call mod GlobalScripts.
 // ============================================================================
 
 function vs_auth_flow_started(_ok, _data)

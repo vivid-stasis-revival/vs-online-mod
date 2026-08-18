@@ -127,16 +127,40 @@ function vs_http_q_init()
     }
 }
 
-// Fire an HTTP request. _on_done(ok, bodyOrJson, status).
+function vs_http_default_timeout()
+{
+    return 10000;
+}
+
+function vs_http_timeout_ms()
+{
+    var job = global.vs_http_cur;
+    if (job != undefined && variable_struct_exists(job, "failed") && job.failed)
+    {
+        return 0;
+    }
+    if (job != undefined && variable_struct_exists(job, "timeout") && job.timeout > 0)
+    {
+        return job.timeout;
+    }
+    return vs_http_default_timeout();
+}
+
+// Fire an HTTP request. _on_done(ok, bodyOrJson, httpStatus).
 // Jobs are serialized (one in flight) so callbacks cannot clobber each other.
 function vs_http_request(_url, _method, _headers, _body, _on_done)
 {
     vs_http_request_ex(_url, _method, _headers, _body, _on_done, false, "", "");
 }
 
-function vs_http_request_ex(_url, _method, _headers, _body, _on_done, _json, _after, _email)
+function vs_http_request_ex(_url, _method, _headers, _body, _on_done, _json, _after, _email, _timeout)
 {
     vs_http_q_init();
+    var to = vs_http_default_timeout();
+    if (_timeout != undefined && _timeout > 0)
+    {
+        to = _timeout;
+    }
     array_push(global.vs_http_q,
     {
         url: _url,
@@ -147,6 +171,7 @@ function vs_http_request_ex(_url, _method, _headers, _body, _on_done, _json, _af
         json: _json,
         after: (_after == undefined) ? "" : _after,
         email: (_email == undefined) ? "" : _email,
+        timeout: to,
         rid: -1,
         hdr: undefined
     });
@@ -161,33 +186,92 @@ function vs_http_pump()
     global.vs_http_busy = true;
     global.vs_http_cur = global.vs_http_q[0];
     array_delete(global.vs_http_q, 0, 1);
-    __CoroutineBegin(function()
-    {
-        var job = global.vs_http_cur;
-        var hdr = vs_http_headers_create(job.headers);
-        job.hdr = hdr;
-        job.rid = http_request(job.url, job.method, hdr, job.body);
-        __CoroutineAwaitAsync("http", function()
-        {
-            var job = global.vs_http_cur;
-            if (job == undefined || async_load[? "id"] != job.rid)
-            {
-                return false;
-            }
-            var status = async_load[? "status"];
-            var text = async_load[? "result"];
-            if (job.hdr != undefined)
-            {
-                ds_map_destroy(job.hdr);
-                job.hdr = undefined;
-            }
-            global.vs_http_busy = false;
-            vs_http_finish(job, (status >= 200 && status < 300), text, status);
-            vs_http_pump();
-            return true;
-        });
-    });
+    // Await/Timeout must be siblings of Begin (official coroutine syntax).
+    // Nesting them inside the Begin callback never registers the HTTP listener.
+    __CoroutineBegin(vs_http_start_current);
+    __CoroutineAwaitAsync("http", vs_http_on_async);
+    __CoroutineAsyncTimeout(vs_http_timeout_ms);
     __CoroutineEnd();
+}
+
+function vs_http_start_current()
+{
+    var job = global.vs_http_cur;
+    if (job == undefined)
+    {
+        global.vs_http_busy = false;
+        return;
+    }
+    var hdr = vs_http_headers_create(job.headers);
+    job.hdr = hdr;
+    job.rid = http_request(job.url, job.method, hdr, job.body);
+    if (job.rid == undefined || job.rid < 0)
+    {
+        job.rid = -1;
+        job.failed = true;
+        show_debug_message("VS Online: HTTP failed to start " + string(job.method) + " " + string(job.url));
+        return;
+    }
+    job.failed = false;
+    show_debug_message("VS Online: HTTP start " + string(job.method) + " " + string(job.url) + " rid=" + string(job.rid));
+}
+
+// GameMaker HTTP async:
+//   status      — 1 = still downloading, 0 = finished, <0 = transport error
+//   http_status — actual HTTP code (200 / 201 / 404 / ...)
+// Coroutine timeout invokes this with async_load == -1.
+function vs_http_on_async()
+{
+    var job = global.vs_http_cur;
+    if (job == undefined)
+    {
+        return true;
+    }
+    if (variable_struct_exists(job, "failed") && job.failed)
+    {
+        vs_http_complete(job, false, "", -1);
+        return true;
+    }
+    if (async_load == -1)
+    {
+        show_debug_message("VS Online: HTTP timeout " + string(job.method) + " " + string(job.url));
+        vs_http_complete(job, false, "", -1);
+        return true;
+    }
+    if (async_load[? "id"] != job.rid)
+    {
+        return false;
+    }
+    var gmStatus = async_load[? "status"];
+    if (gmStatus == 1)
+    {
+        return false;
+    }
+    var httpStatus = async_load[? "http_status"];
+    if (httpStatus == undefined)
+    {
+        httpStatus = (gmStatus < 0) ? gmStatus : 200;
+    }
+    var text = async_load[? "result"];
+    var ok = (gmStatus >= 0 && httpStatus >= 200 && httpStatus < 300);
+    show_debug_message("VS Online: HTTP done " + string(job.method) + " " + string(job.url) + " http=" + string(httpStatus) + " ok=" + string(ok));
+    vs_http_complete(job, ok, text, httpStatus);
+    return true;
+}
+
+function vs_http_complete(_job, _ok, _text, _status)
+{
+    if (_job == undefined) return;
+    if (global.vs_http_cur != _job) return;
+    if (_job.hdr != undefined)
+    {
+        ds_map_destroy(_job.hdr);
+        _job.hdr = undefined;
+    }
+    global.vs_http_busy = false;
+    global.vs_http_cur = undefined;
+    vs_http_finish(_job, _ok, _text, _status);
+    vs_http_pump();
 }
 
 function vs_http_finish(_job, _ok, _text, _status)
@@ -234,7 +318,7 @@ function vs_http_finish(_job, _ok, _text, _status)
 }
 
 // GET a JSON object; _on_done(ok, data, status). _authed appends ?token=.
-function vs_online_get_json(_path, _authed, _on_done)
+function vs_online_get_json(_path, _authed, _on_done, _timeout)
 {
     var cfg = vs_online_get_config();
     var url = vs_online_server_url() + _path;
@@ -242,7 +326,7 @@ function vs_online_get_json(_path, _authed, _on_done)
     {
         url += (string_pos("?", url) > 0 ? "&" : "?") + "token=" + vs_online_url_encode(cfg.token);
     }
-    vs_http_request_ex(url, "GET", { Accept: "application/json" }, "", _on_done, true, "", "");
+    vs_http_request_ex(url, "GET", { Accept: "application/json" }, "", _on_done, true, "", "", _timeout);
 }
 
 // POST a JSON body; _on_done(ok, data, status).

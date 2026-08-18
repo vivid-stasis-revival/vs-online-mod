@@ -1,11 +1,8 @@
 // ============================================================================
 // vs_dlbr.gml — Chart Downloader UI (named scripts, not object anons).
-//
-// Underanalyzer compiles anonymous functions inside OBJECT events as if every
-// unknown identifier were an instance variable. Mod GlobalScripts such as
-// vs_online_is_custom then become `self.vs_online_is_custom` and crash.
-// All browser logic lives here; object Create/Step only call these scripts
-// (self is the vs_downloader_browser instance).
+// Object Create/Step/Draw call these; self is the vs_downloader_browser
+// instance. Requires vsml to Import() codes/ GlobalScripts + Object events
+// in one CodeImportGroup so vs_* names resolve as global functions.
 // ============================================================================
 
 function vs_dlbr_open_from_menu()
@@ -13,15 +10,6 @@ function vs_dlbr_open_from_menu()
     if (!instance_exists(vs_downloader_browser))
     {
         instance_create_depth(0, 0, -10000, vs_downloader_browser);
-    }
-    if (instance_exists(vs_downloader_browser))
-    {
-        with (vs_downloader_browser)
-        {
-            do_step = method(id, vs_dlbr_step);
-            do_draw = method(id, vs_dlbr_draw);
-            vs_dlbr_fetch_page();
-        }
     }
 }
 
