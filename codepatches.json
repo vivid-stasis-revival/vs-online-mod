@@ -7,7 +7,7 @@
     {
         "Entry": "gml_Object_oCoroutineManager_Other_62",
         "Find": "CoroutineEventHook();",
-        "Value": "CoroutineEventHook();\nvs_http_on_async();",
+        "Value": "CoroutineEventHook();\nvs_http_on_async();\nvs_songstore_on_http();",
         "Type": 1
     },
     {

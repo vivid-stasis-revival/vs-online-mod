@@ -213,12 +213,16 @@ function vs_dlmgr_download(_songId, _chartId, _on_done)
 {
     if (!variable_global_exists("vs_dlmgr_dl"))
     {
-        global.vs_dlmgr_dl = { on_done: undefined, need: [], idx: 0, chartId: "", serverId: "", name: "", failed: false };
+        global.vs_dlmgr_dl = { on_done: undefined, need: [], idx: 0, chartId: "", serverId: "", name: "", failed: false, cancel: false, fileGot: 0, fileTotal: 0, fileName: "" };
     }
     global.vs_dlmgr_dl.on_done = _on_done;
     global.vs_dlmgr_dl.chartId = _chartId;
     global.vs_dlmgr_dl.serverId = _songId;
     global.vs_dlmgr_dl.failed = false;
+    global.vs_dlmgr_dl.cancel = false;
+    global.vs_dlmgr_dl.fileGot = 0;
+    global.vs_dlmgr_dl.fileTotal = 0;
+    global.vs_dlmgr_dl.fileName = "";
     vs_songstore_detail(_songId, function(_ok, _detail)
     {
         var st = global.vs_dlmgr_dl;
@@ -248,33 +252,81 @@ function vs_dlmgr_download(_songId, _chartId, _on_done)
 
 // Serial-download driver for vs_dlmgr_download (state in global.vs_dlmgr_dl).
 // On completion writes the per-chart download marker + the history log.
+function vs_dlmgr_cancel()
+{
+    if (!variable_global_exists("vs_dlmgr_dl")) return;
+    global.vs_dlmgr_dl.cancel = true;
+    global.vs_dlmgr_dl.failed = true;
+    vs_songstore_dl_clear();
+}
+
+function vs_dlmgr_dl_finish(_ok)
+{
+    var st = global.vs_dlmgr_dl;
+    if (_ok && !st.cancel)
+    {
+        vs_dlmgr_write_meta(st.chartId, st.serverId, st.name);
+    }
+    var cb = st.on_done;
+    st.on_done = undefined;
+    if (cb != undefined) { cb(_ok && !st.cancel); }
+}
+
+function vs_dlmgr_dl_file_done(_ok, _path)
+{
+    var st2 = global.vs_dlmgr_dl;
+    if (st2.cancel)
+    {
+        if (_path != undefined && file_exists(_path)) file_delete(_path);
+        vs_dlmgr_dl_finish(false);
+        return;
+    }
+    if (!_ok)
+    {
+        st2.failed = true;
+        show_debug_message("VS DLMGR: download failed -> " + string(_path));
+    }
+    st2.idx++;
+    vs_dlmgr_dl_step();
+}
+
 function vs_dlmgr_dl_step()
 {
     var st = global.vs_dlmgr_dl;
+    if (st.cancel)
+    {
+        vs_dlmgr_dl_finish(false);
+        return;
+    }
     if (st.idx >= array_length(st.need))
     {
-        var ok = !st.failed;
-        if (ok)
-        {
-            vs_dlmgr_write_meta(st.chartId, st.serverId, st.name);
-        }
-        var cb = st.on_done;
-        st.on_done = undefined;
-        if (cb != undefined) { cb(ok); }
+        vs_dlmgr_dl_finish(!st.failed);
         return;
     }
     var f = st.need[st.idx];
-    vs_songstore_download_file(f.url, f.localPath, function(_ok, _path)
+    st.fileName = vs_songstore_flatten_name(f.name);
+    st.fileGot = 0;
+    st.fileTotal = 0;
+    vs_songstore_download_file(f.url, f.localPath, vs_dlmgr_dl_file_done);
+}
+
+function vs_dlmgr_prog_frac()
+{
+    if (!variable_global_exists("vs_dlmgr_dl")) return 0;
+    var st = global.vs_dlmgr_dl;
+    var n = array_length(st.need);
+    if (n <= 0) return 0;
+    var part = 0;
+    if (st.fileTotal > 0)
     {
-        var st2 = global.vs_dlmgr_dl;
-        if (!_ok)
-        {
-            st2.failed = true;
-            show_debug_message("VS DLMGR: download failed -> " + string(_path));
-        }
-        st2.idx++;
-        vs_dlmgr_dl_step();
-    });
+        part = st.fileGot / st.fileTotal;
+        if (part < 0) part = 0;
+        if (part > 1) part = 1;
+    }
+    var p = (st.idx + part) / n;
+    if (p < 0) p = 0;
+    if (p > 1) p = 1;
+    return p;
 }
 
 // Filter names for the F key cycle.

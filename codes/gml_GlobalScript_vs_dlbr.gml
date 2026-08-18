@@ -271,6 +271,13 @@ function vs_dlbr_start_download(_r)
 function vs_dlbr_on_download(_ok)
 {
     updating = false;
+    var cancelled = variable_global_exists("vs_dlmgr_dl") && global.vs_dlmgr_dl.cancel;
+    if (cancelled)
+    {
+        vs_dlbr_set_status("Download cancelled.");
+        vs_dlbr_fetch_page();
+        return;
+    }
     if (_ok)
     {
         vs_dlbr_set_status("Done - " + cur_chart + " (rescanning custom songs...)");
@@ -362,6 +369,13 @@ function vs_dlbr_batch_next()
 
 function vs_dlbr_on_batch(_ok)
 {
+    if (variable_global_exists("vs_dlmgr_dl") && global.vs_dlmgr_dl.cancel)
+    {
+        updating = false;
+        update_queue = [];
+        vs_dlbr_set_status("Download cancelled.");
+        return;
+    }
     update_qidx++;
     vs_dlbr_set_status("Updating " + batch_name + " (" + string(update_qidx) + "/" + string(array_length(update_queue)) + ") ...");
     vs_dlbr_batch_next();
@@ -474,13 +488,23 @@ function vs_dlbr_step()
         return;
     }
 
+    if (updating)
+    {
+        if (keyboard_check_pressed(vk_escape))
+        {
+            vs_dlmgr_cancel();
+            vs_dlbr_set_status("Cancelling download...");
+        }
+        return;
+    }
+
     if (keyboard_check_pressed(vk_escape))
     {
         instance_destroy();
         return;
     }
 
-    if (loading || checking || updating) return;
+    if (loading || checking) return;
 
     if (view == 0)
     {
@@ -718,6 +742,73 @@ function vs_dlbr_draw()
     draw_text(bx + 6, by + bh - 17, hint1);
     draw_text(bx + 6, by + bh - 8, hint2);
 
+    if (updating) vs_dlbr_draw_dl_popup();
+
     draw_set_halign(fa_left);
     draw_set_valign(fa_top);
+}
+
+function vs_dlbr_draw_dl_popup()
+{
+    var cw = display_get_gui_width();
+    var ch = display_get_gui_height();
+    var pw = 220;
+    var ph = 78;
+    var px = (cw - pw) / 2;
+    var py = (ch - ph) / 2;
+    draw_set_alpha(0.55);
+    draw_set_color(c_black);
+    draw_rectangle(0, 0, cw, ch, false);
+    draw_set_alpha(1);
+    draw_set_color(c_black);
+    draw_rectangle(px - 2, py - 2, px + pw + 2, py + ph + 2, false);
+    draw_set_color(c_white);
+    draw_rectangle(px, py, px + pw, py + ph, true);
+
+    var title = "Downloading";
+    var fname = "";
+    var files = "Preparing...";
+    var frac = 0;
+    if (variable_global_exists("vs_dlmgr_dl"))
+    {
+        var st = global.vs_dlmgr_dl;
+        if (st.name != "") title = st.name;
+        var n = array_length(st.need);
+        var cur = st.idx + 1;
+        if (cur > n) cur = n;
+        files = "File " + string(cur) + "/" + string(n);
+        fname = string(st.fileName);
+        frac = vs_dlmgr_prog_frac();
+        if (st.cancel) title = "Cancelling...";
+    }
+
+    draw_set_font(fnt_monacovs);
+    draw_set_halign(fa_center);
+    draw_set_color(c_aqua);
+    draw_text(px + pw / 2, py + 4, title);
+    draw_set_font(global.default_font);
+    draw_set_halign(fa_left);
+    draw_set_color(c_white);
+    draw_text(px + 8, py + 20, files);
+    draw_set_color(c_gray);
+    if (string_length(fname) > 28) fname = string_copy(fname, 1, 25) + "...";
+    draw_text(px + 8, py + 32, fname);
+
+    var barx = px + 8;
+    var bary = py + 46;
+    var barw = pw - 16;
+    var barh = 8;
+    draw_set_color(make_color_rgb(40, 40, 40));
+    draw_rectangle(barx, bary, barx + barw, bary + barh, false);
+    draw_set_color(c_gray);
+    draw_rectangle(barx, bary, barx + barw, bary + barh, true);
+    var fill = floor(barw * frac);
+    if (fill > 0)
+    {
+        draw_set_color(c_lime);
+        draw_rectangle(barx, bary, barx + fill, bary + barh, false);
+    }
+    draw_set_color(c_yellow);
+    draw_set_halign(fa_center);
+    draw_text(px + pw / 2, py + 58, string(floor(frac * 100)) + "%   Esc cancel");
 }
