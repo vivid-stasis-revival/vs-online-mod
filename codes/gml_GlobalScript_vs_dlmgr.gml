@@ -116,6 +116,16 @@ function vs_dlmgr_row_status(_r)
 
 function vs_dlmgr_meta_path(_chartId)
 {
+    var play = vs_songstore_chart_dir(_chartId);
+    if (play != "") return play + ".vs_download.json";
+    var dirs = vs_songstore_dir_candidates(_chartId);
+    var i = 0;
+    repeat (array_length(dirs))
+    {
+        var p = dirs[i] + ".vs_download.json";
+        if (file_exists(p)) return p;
+        i++;
+    }
     return vs_songstore_local_dir(_chartId) + ".vs_download.json";
 }
 
@@ -285,7 +295,13 @@ function vs_dlmgr_dl_finish(_ok)
     var st = global.vs_dlmgr_dl;
     if (_ok && !st.cancel)
     {
-        vs_dlmgr_write_meta(st.chartId, st.serverId, st.name);
+        if (!vs_songstore_has_chart(st.chartId))
+        {
+            vs_songstore_set_err("files missing after download");
+            _ok = false;
+            vs_songstore_cleanup_stub(st.chartId);
+        }
+        else vs_dlmgr_write_meta(st.chartId, st.serverId, st.name);
     }
     else
     {

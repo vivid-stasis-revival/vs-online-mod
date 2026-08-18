@@ -31,7 +31,6 @@ function vs_dlbr_set_status(_msg)
 function vs_dlbr_build_row(_song)
 {
     var ch = variable_struct_exists(_song, "chartId") ? _song.chartId : "";
-    if (ch != "" && !vs_songstore_has_chart(ch)) vs_songstore_cleanup_stub(ch);
     return
     {
         id: variable_struct_exists(_song, "id") ? _song.id : "",
