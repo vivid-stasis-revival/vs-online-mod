@@ -16,6 +16,13 @@ function vs_dlbr_open_from_menu()
     {
         instance_create_depth(0, 0, -10000, vs_downloader_browser);
     }
+    if (instance_exists(vs_downloader_browser))
+    {
+        with (vs_downloader_browser)
+        {
+            vs_dlbr_fetch_page();
+        }
+    }
 }
 
 function vs_dlbr_set_status(_msg)
@@ -418,4 +425,269 @@ function vs_dlbr_jump_from_local()
 function vs_dlbr_reload_data()
 {
     vs_dlbr_fetch_page();
+}
+
+function vs_dlbr_step()
+{
+    if (instance_exists(vs_online_error)) return;
+
+    started++;
+    if (started < 8) return;
+
+    if (searching)
+    {
+        query = keyboard_string;
+        if (keyboard_check_pressed(vk_enter))
+        {
+            searching = false;
+            if (view == 1)
+            {
+                vs_dlbr_apply_local_filter();
+                vs_dlbr_set_status((array_length(local_rows) > 0)
+                    ? ("Local search: " + string(array_length(local_rows)) + "/" + string(array_length(local_all)))
+                    : ("No local charts match \"" + query + "\"."));
+            }
+            else
+            {
+                page = 1;
+                vs_dlbr_fetch_page();
+            }
+        }
+        else if (keyboard_check_pressed(vk_escape) || keyboard_check_pressed(vk_tab))
+        {
+            searching = false;
+            keyboard_string = query;
+        }
+        return;
+    }
+
+    if (keyboard_check_pressed(vk_escape))
+    {
+        instance_destroy();
+        return;
+    }
+
+    if (loading || checking || updating) return;
+
+    if (view == 0)
+    {
+        var n = array_length(rows);
+
+        if (n == 0)
+        {
+            if (keyboard_check_pressed(ord("R"))) vs_dlbr_reload_data();
+            else if (keyboard_check_pressed(ord("V"))) vs_dlbr_toggle_view();
+            else if (keyboard_check_pressed(vk_tab)) { searching = true; keyboard_string = query; }
+            return;
+        }
+
+        if (keyboard_check_pressed(vk_up))
+        {
+            sel = (sel + n - 1) % n;
+            vs_dlbr_selected_refresh();
+        }
+        else if (keyboard_check_pressed(vk_down))
+        {
+            sel = (sel + 1) % n;
+            vs_dlbr_selected_refresh();
+        }
+        else if (keyboard_check_pressed(vk_left) || keyboard_check_pressed(vk_pageup))
+        {
+            if (page > 1) { page--; vs_dlbr_fetch_page(); }
+        }
+        else if (keyboard_check_pressed(vk_right) || keyboard_check_pressed(vk_pagedown))
+        {
+            if (page < maxpage) { page++; vs_dlbr_fetch_page(); }
+        }
+        else if (keyboard_check_pressed(vk_tab))
+        {
+            searching = true;
+            keyboard_string = query;
+        }
+        else if (keyboard_check_pressed(ord("F")))
+        {
+            vs_dlbr_cycle_filter();
+        }
+        else if (keyboard_check_pressed(ord("K")))
+        {
+            vs_dlbr_check_all_rows();
+        }
+        else if (keyboard_check_pressed(ord("G")))
+        {
+            vs_dlbr_batch_update();
+        }
+        else if (keyboard_check_pressed(vk_enter) || keyboard_check_pressed(vk_space))
+        {
+            vs_dlbr_do_selected_action();
+        }
+        else if (keyboard_check_pressed(ord("V")))
+        {
+            vs_dlbr_toggle_view();
+        }
+        else if (keyboard_check_pressed(ord("R")))
+        {
+            vs_dlbr_reload_data();
+        }
+    }
+    else
+    {
+        var ln = array_length(local_rows);
+
+        if (ln == 0)
+        {
+            if (keyboard_check_pressed(ord("R"))) vs_dlbr_reload_local();
+            else if (keyboard_check_pressed(ord("V"))) vs_dlbr_toggle_view();
+            else if (keyboard_check_pressed(vk_tab)) { searching = true; keyboard_string = query; }
+            return;
+        }
+
+        if (keyboard_check_pressed(vk_up))
+        {
+            sel = (sel + ln - 1) % ln;
+            vs_dlbr_set_status(local_rows[sel].pack + "  " + local_rows[sel].name);
+        }
+        else if (keyboard_check_pressed(vk_down))
+        {
+            sel = (sel + 1) % ln;
+            vs_dlbr_set_status(local_rows[sel].pack + "  " + local_rows[sel].name);
+        }
+        else if (keyboard_check_pressed(vk_enter) || keyboard_check_pressed(vk_space))
+        {
+            vs_dlbr_jump_from_local();
+        }
+        else if (keyboard_check_pressed(ord("V")))
+        {
+            vs_dlbr_toggle_view();
+        }
+        else if (keyboard_check_pressed(ord("R")))
+        {
+            vs_dlbr_reload_local();
+        }
+        else if (keyboard_check_pressed(vk_tab))
+        {
+            searching = true;
+            keyboard_string = query;
+        }
+    }
+}
+
+function vs_dlbr_draw()
+{
+    var cw = display_get_gui_width();
+    var ch = display_get_gui_height();
+    var bw = 312;
+    var bh = 168;
+    var bx = (cw - bw) / 2;
+    var by = (ch - bh) / 2;
+    var rowh = 13;
+
+    draw_set_alpha(0.7);
+    draw_set_color(c_black);
+    draw_rectangle(0, 0, cw, ch, false);
+    draw_set_alpha(1);
+
+    draw_set_color(c_black);
+    draw_rectangle(bx - 2, by - 2, bx + bw + 2, by + bh + 2, false);
+    draw_set_color(c_white);
+    draw_rectangle(bx, by, bx + bw, by + bh, true);
+
+    draw_set_font(fnt_monacovs);
+    draw_set_halign(fa_left);
+    draw_set_valign(fa_top);
+    draw_set_color(c_aqua);
+    draw_text(bx + 6, by + 3, "Chart Downloader");
+    draw_set_font(global.default_font);
+
+    if (view == 0)
+    {
+        var head = "WEB  page " + string(page) + "/" + string(maxpage) + "  (" + string(total) + ")";
+        if (query != "") head += "  q=\"" + query + "\"";
+        head += "  [" + vs_dlmgr_filter_name(filter) + "]";
+        draw_set_color(c_white);
+        draw_text(bx + 6, by + 15, head);
+
+        if (searching)
+        {
+            draw_set_color(c_lime);
+            draw_text(bx + 6, by + 15, "Search: " + query + "_");
+        }
+
+        var vis = 8;
+        var start_idx = max(0, sel - 3);
+        var end_idx = min(array_length(rows), start_idx + vis);
+        var ty = by + 27;
+        for (var r = start_idx; r < end_idx; r++)
+        {
+            var s = rows[r];
+            var isSel = (r == sel);
+            var st = ".";
+            if (s.downloaded && !s.tracked) st = "L";
+            else if (s.downloaded) st = (s.checked && s.need > 0) ? "U" : "D";
+            draw_set_color(isSel ? c_yellow : (st == "U" ? c_aqua : (st == "L" ? c_orange : c_white)));
+            var line = (isSel ? ">" : " ") + st + "  " + s.name + "  -  " + s.artist;
+            if (s.chartCount > 0) line += "  [" + string(s.chartCount) + "]";
+            draw_text(bx + 6, ty + ((r - start_idx) * rowh), line);
+        }
+        if (array_length(rows) == 0)
+        {
+            draw_set_color(c_white);
+            draw_text(bx + 6, ty + 2, "No charts match.");
+        }
+    }
+    else
+    {
+        draw_set_color(c_white);
+        var lhead = "LOCAL  (" + string(array_length(local_rows)) + "/" + string(array_length(local_all)) + ")";
+        if (query != "") lhead += "  q=\"" + query + "\"";
+        draw_text(bx + 6, by + 15, lhead);
+        if (searching)
+        {
+            draw_set_color(c_lime);
+            draw_text(bx + 6, by + 15, "Search: " + query + "_");
+        }
+
+        var vis = 8;
+        var start_idx = max(0, sel - 3);
+        var end_idx = min(array_length(local_rows), start_idx + vis);
+        var ty = by + 27;
+        for (var r = start_idx; r < end_idx; r++)
+        {
+            var s = local_rows[r];
+            var isSel = (r == sel);
+            var st = vs_dlmgr_tracked(s.chart_id) ? "D" : "L";
+            draw_set_color(isSel ? c_yellow : (st == "D" ? c_white : c_orange));
+            draw_text(bx + 6, ty + ((r - start_idx) * rowh), (isSel ? ">" : " ") + st + "  " + s.name + "  -  " + s.artist);
+            if (isSel)
+            {
+                var dstr = "";
+                var d = 0;
+                repeat (array_length(s.diffs))
+                {
+                    if (d > 0) dstr += "/";
+                    dstr += s.diffs[d];
+                    d++;
+                }
+                var tag = vs_dlmgr_tracked(s.chart_id) ? " downloaded" : " local (no record)";
+                draw_set_color(c_gray);
+                draw_text(bx + 6, ty + ((r - start_idx) * rowh) + 14, "[" + s.pack + "]  " + dstr + tag + (s.in_select ? "" : "  (not in select)"));
+            }
+        }
+        if (array_length(local_rows) == 0)
+        {
+            draw_set_color(c_white);
+            draw_text(bx + 6, ty + 2, "No custom charts in Custom Songs/.");
+        }
+    }
+
+    draw_set_color(c_lime);
+    draw_text(bx + 6, by + bh - 24, status);
+
+    draw_set_color(c_gray);
+    draw_text(bx + 6, by + bh - 11,
+        view == 0
+            ? "Enter: dl/update  Tab: search  F: filter  K: check page  G: update page  <-/->: page  V: local  R: reload  Esc: back"
+            : "Enter: jump  Tab: search  V: web  R: reload  Esc: back");
+
+    draw_set_halign(fa_left);
+    draw_set_valign(fa_top);
 }

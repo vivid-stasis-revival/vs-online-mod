@@ -1,7 +1,6 @@
 // Chart Downloader — Create
-// Instance vars only. All methods are named GlobalScripts in vs_dlbr.gml
-// (object-event anonymous functions cannot call mod scripts — Underanalyzer
-// compiles them as instance-variable reads).
+// Object events must not name any vs_* script (Underanalyzer → instance var).
+// Fetch starts from vs_dlbr_open_from_menu after this instance exists.
 depth = -10000;
 
 view = 0;
@@ -34,5 +33,3 @@ cur_id = "";
 cur_chart = "";
 
 status = "Chart Downloader - loading...";
-
-vs_dlbr_fetch_page();

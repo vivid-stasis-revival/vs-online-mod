@@ -3,12 +3,10 @@
 // vivid/stasis custom-server backend (vs-server-go).
 //
 // UNDERANALYZER / vsml:
-//   1) Object-event `function()` bodies compile unknown names as instance
-//      variables. Mod GlobalScripts (vs_online_is_custom, etc.) MUST be
-//      called from named GlobalScripts or from the event main body — never
-//      from object-local anonymous methods.
+//   1) OUR object events cannot mention any vs_* script or our object names.
+//      Those compile as instance variables and crash. Events only call
+//      global.vs_fn.* (bound in vs_online_bind_hooks).
 //   2) Anons do not capture enclosing `var` / args (they become self.xxx).
-//      Pass state through globals or `method(self, named_script)`.
 //   3) Do not use reserved names as locals (`all`, `other`, `self`, `id`).
 //   4) Only call runner builtins that exist in vsml's BuiltinList.
 //
@@ -211,7 +209,11 @@ function vs_online_opt_login_do()
 {
     if (!instance_exists(vs_auth_panel))
     {
-        instance_create_depth(0, 0, -10000, vs_auth_panel);
+        var inst = instance_create_depth(0, 0, -10000, vs_auth_panel);
+        with (inst)
+        {
+            vs_auth_setup();
+        }
     }
 }
 
@@ -330,8 +332,21 @@ function vs_online_is_account()
 
 // --- init ------------------------------------------------------------------
 
+function vs_online_bind_hooks()
+{
+    global.vs_fn = {
+        dlbr_open: vs_dlbr_open_from_menu,
+        dlbr_step: vs_dlbr_step,
+        dlbr_draw: vs_dlbr_draw,
+        auth_step: vs_auth_step,
+        auth_draw: vs_auth_draw,
+        err_step: vs_online_error_step
+    };
+}
+
 function vs_online_init()
 {
+    vs_online_bind_hooks();
     vs_online_get_config();
     if (!instance_exists(oCoroutineManager))
     {
@@ -529,7 +544,58 @@ function vs_online_show_error(_on_retry)
         return;
     }
     var e = instance_create_depth(0, 0, -10000, vs_online_error);
-    e.on_retry = _on_retry;
+    with (e)
+    {
+        vs_online_error_setup(_on_retry);
+    }
+}
+
+function vs_online_error_setup(_on_retry)
+{
+    on_retry = _on_retry;
+    server_url = vs_online_server_url();
+    message = "The custom server could not be reached.\n\n" +
+        "Address: " + server_url + "\n\n" +
+        "Check that vs-server-go is running, then retry.\n" +
+        "Or switch back to Steam.";
+}
+
+function vs_online_error_step()
+{
+    if (retrying)
+    {
+        return;
+    }
+
+    if (keyboard_check_pressed(vk_up) || keyboard_check_pressed(vk_left) || keyboard_check_pressed(vk_tab))
+    {
+        selected = (selected + 1) % array_length(buttons);
+        play_se(sfx_songsel_cursor);
+    }
+    else if (keyboard_check_pressed(vk_down) || keyboard_check_pressed(vk_right))
+    {
+        selected = (selected + array_length(buttons) - 1) % array_length(buttons);
+        play_se(sfx_songsel_cursor);
+    }
+    else if (keyboard_check_pressed(vk_enter) || keyboard_check_pressed(vk_space))
+    {
+        play_se(sfx_songsel_select);
+        if (selected == 0)
+        {
+            retrying = true;
+            message = "Retrying...";
+            vs_online_probe(vs_online_error_on_probe);
+        }
+        else
+        {
+            vs_online_disable_custom();
+            instance_destroy();
+        }
+    }
+    else if (keyboard_check_pressed(vk_escape))
+    {
+        instance_destroy();
+    }
 }
 
 function vs_online_error_on_probe(_ok)

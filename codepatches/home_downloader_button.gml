@@ -14,5 +14,10 @@ createButton(
     icon_sprite: sp_icon_vs_local,
     button_text: "Chart Downloader",
     alpha_obfuscate: 1,
-    activate: vs_dlbr_open_from_menu
+    activate: function()
+    {
+        play_se(select);
+        is_active = false;
+        global.vs_fn.dlbr_open();
+    }
 });
