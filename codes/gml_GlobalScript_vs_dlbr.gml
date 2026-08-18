@@ -1,0 +1,421 @@
+// ============================================================================
+// vs_dlbr.gml — Chart Downloader UI (named scripts, not object anons).
+//
+// Underanalyzer compiles anonymous functions inside OBJECT events as if every
+// unknown identifier were an instance variable. Mod GlobalScripts such as
+// vs_online_is_custom then become `self.vs_online_is_custom` and crash.
+// All browser logic lives here; object Create/Step only call these scripts
+// (self is the vs_downloader_browser instance).
+// ============================================================================
+
+function vs_dlbr_open_from_menu()
+{
+    play_se(select);
+    is_active = false;
+    if (!instance_exists(vs_downloader_browser))
+    {
+        instance_create_depth(0, 0, -10000, vs_downloader_browser);
+    }
+}
+
+function vs_dlbr_set_status(_msg)
+{
+    status = _msg;
+}
+
+function vs_dlbr_build_row(_song)
+{
+    var ch = variable_struct_exists(_song, "chartId") ? _song.chartId : "";
+    return
+    {
+        id: variable_struct_exists(_song, "id") ? _song.id : "",
+        chartId: ch,
+        name: variable_struct_exists(_song, "name") ? _song.name : "",
+        artist: variable_struct_exists(_song, "artist") ? _song.artist : "",
+        chartCount: variable_struct_exists(_song, "chartCount") ? _song.chartCount : 0,
+        downloaded: vs_dlmgr_downloaded(ch),
+        tracked: vs_dlmgr_tracked(ch),
+        checked: false,
+        need: -1
+    };
+}
+
+function vs_dlbr_row_all_index(_chartId)
+{
+    var n = array_length(rows_all);
+    var i = 0;
+    repeat (n)
+    {
+        if (rows_all[i].chartId == _chartId) return i;
+        i++;
+    }
+    return -1;
+}
+
+function vs_dlbr_apply_filter()
+{
+    var arr = [];
+    var n = array_length(rows_all);
+    var i = 0;
+    repeat (n)
+    {
+        var r = rows_all[i];
+        var keep = true;
+        if (filter == 1 && r.downloaded) keep = false;
+        else if (filter == 2 && !r.tracked) keep = false;
+        else if (filter == 3)
+        {
+            keep = (r.tracked && r.checked && r.need > 0);
+        }
+        if (keep) array_push(arr, r);
+        i++;
+    }
+    rows = arr;
+    if (sel >= array_length(rows)) sel = array_length(rows) - 1;
+    if (sel < 0) sel = 0;
+}
+
+function vs_dlbr_selected_refresh()
+{
+    if (array_length(rows) == 0)
+    {
+        vs_dlbr_set_status(view == 0 ? "No charts match the current filter/page." : "No local charts in Custom Songs/.");
+        return;
+    }
+    var r = rows[sel];
+    vs_dlbr_set_status(vs_dlmgr_row_status(r));
+    if (view == 0 && r.downloaded && !r.checked)
+    {
+        var ai = vs_dlbr_row_all_index(r.chartId);
+        if (ai >= 0) vs_dlbr_check_row_index(ai);
+    }
+}
+
+function vs_dlbr_fetch_page()
+{
+    if (view == 1)
+    {
+        vs_dlbr_reload_local();
+        return;
+    }
+    loading = true;
+    if (!vs_online_is_custom())
+    {
+        loading = false;
+        rows_all = [];
+        vs_dlbr_apply_filter();
+        vs_dlbr_set_status("Custom Server is off - enable it in Settings, or press V for Local charts.");
+        return;
+    }
+    if (!vs_online_is_account())
+    {
+        loading = false;
+        rows_all = [];
+        total = 0;
+        maxpage = 1;
+        vs_dlbr_apply_filter();
+        vs_dlbr_set_status("Guest / not logged in - online catalog disabled. Play downloaded charts (V -> Local) or log in: Settings -> VS Online -> Log In.");
+        return;
+    }
+    vs_dlbr_set_status(query == "" ? "Loading charts..." : "Search: \"" + query + "\" ...");
+    vs_dlmgr_list(query, page, method(self, vs_dlbr_on_list));
+}
+
+function vs_dlbr_on_list(_ok, _data)
+{
+    loading = false;
+    if (_ok && _data != undefined)
+    {
+        var arr = [];
+        var songs = _data.songs;
+        total = floor(_data.total);
+        maxpage = max(1, ceil(total / 100));
+        var i = 0;
+        repeat (array_length(songs))
+        {
+            array_push(arr, vs_dlbr_build_row(songs[i]));
+            i++;
+        }
+        rows_all = arr;
+    }
+    else
+    {
+        total = 0;
+        maxpage = 1;
+        rows_all = [];
+    }
+    vs_dlbr_apply_filter();
+    vs_dlbr_selected_refresh();
+}
+
+function vs_dlbr_check_row_index(_ai)
+{
+    if (_ai < 0 || _ai >= array_length(rows_all)) return;
+    var r = rows_all[_ai];
+    if (!r.downloaded || r.checked) return;
+    r.checked = true;
+    checking = true;
+    check_chart = r.chartId;
+    vs_dlbr_set_status("Checking " + r.chartId + " ...");
+    vs_dlmgr_check(r.id, r.chartId, method(self, vs_dlbr_on_check));
+}
+
+function vs_dlbr_on_check(_ok, _need)
+{
+    checking = false;
+    var n = array_length(rows_all);
+    var i = 0;
+    repeat (n)
+    {
+        if (rows_all[i].chartId == check_chart)
+        {
+            var rr = rows_all[i];
+            var cnt = _ok ? array_length(_need) : -2;
+            if (rr.tracked)
+            {
+                rr.need = cnt;
+            }
+            else if (cnt == 0 && _ok)
+            {
+                vs_dlmgr_write_meta(rr.chartId, rr.id, rr.name);
+                rr.tracked = true;
+                rr.need = 0;
+                vs_dlbr_set_status(rr.chartId + " recognized as downloaded (content matches server) - recorded.");
+            }
+            else
+            {
+                rr.need = -3;
+                vs_dlbr_set_status(rr.chartId + " is a local chart without a download record - protected, not overwritten.");
+            }
+            break;
+        }
+        i++;
+    }
+    if (check_all)
+    {
+        vs_dlbr_check_next();
+    }
+    else
+    {
+        vs_dlbr_apply_filter();
+        vs_dlbr_selected_refresh();
+    }
+}
+
+function vs_dlbr_check_next()
+{
+    var n = array_length(rows_all);
+    while (check_idx < n)
+    {
+        var r = rows_all[check_idx];
+        if (r.downloaded && !r.checked)
+        {
+            check_idx++;
+            vs_dlbr_check_row_index(check_idx - 1);
+            return;
+        }
+        check_idx++;
+    }
+    check_all = false;
+    vs_dlbr_apply_filter();
+    vs_dlbr_selected_refresh();
+    vs_dlbr_set_status("Checked " + string(n) + " chart(s) on this page.");
+}
+
+function vs_dlbr_check_all_rows()
+{
+    if (view == 1) return;
+    if (checking || updating) return;
+    check_all = true;
+    check_idx = 0;
+    vs_dlbr_set_status("Checking whole page for updates...");
+    vs_dlbr_check_next();
+}
+
+function vs_dlbr_finalize_install()
+{
+    vs_localcharts_refresh();
+    vs_dlbr_fetch_page();
+}
+
+function vs_dlbr_start_download(_r)
+{
+    if (updating) return;
+    updating = true;
+    cur_id = _r.id;
+    cur_chart = _r.chartId;
+    vs_dlbr_set_status("Downloading " + _r.name + " ...");
+    vs_dlmgr_download(_r.id, _r.chartId, method(self, vs_dlbr_on_download));
+}
+
+function vs_dlbr_on_download(_ok)
+{
+    updating = false;
+    if (_ok)
+    {
+        vs_dlbr_set_status("Done - " + cur_chart + " (rescanning custom songs...)");
+        vs_dlbr_finalize_install();
+    }
+    else
+    {
+        vs_dlbr_set_status("Failed - " + cur_chart);
+        vs_dlbr_fetch_page();
+    }
+}
+
+function vs_dlbr_do_selected_action()
+{
+    if (array_length(rows) == 0) return;
+    if (updating) return;
+    var r = rows[sel];
+    if (!r.downloaded)
+    {
+        vs_dlbr_start_download(r);
+        return;
+    }
+    var ai = vs_dlbr_row_all_index(r.chartId);
+    if (ai < 0) return;
+    var rr = rows_all[ai];
+    if (rr.tracked)
+    {
+        if (!rr.checked)
+        {
+            vs_dlbr_check_row_index(ai);
+            vs_dlbr_set_status("Checking " + r.chartId + " - press Enter again to update.");
+            return;
+        }
+        if (rr.need > 0)
+        {
+            vs_dlbr_start_download(rr);
+        }
+        else
+        {
+            vs_dlbr_set_status(r.chartId + " is up to date.");
+        }
+    }
+    else
+    {
+        if (!rr.checked) { vs_dlbr_check_row_index(ai); }
+        vs_dlbr_set_status(r.chartId + " is a local chart without a download record - won't be overwritten (press K to classify it).");
+    }
+}
+
+function vs_dlbr_batch_update()
+{
+    if (view == 1 || updating || checking) return;
+    var q = [];
+    var n = array_length(rows_all);
+    var i = 0;
+    repeat (n)
+    {
+        var r = rows_all[i];
+        if (r.tracked && r.checked && r.need > 0) array_push(q, i);
+        i++;
+    }
+    if (array_length(q) == 0)
+    {
+        vs_dlbr_set_status("No tracked updates on this page. Press K to check the page first.");
+        return;
+    }
+    update_queue = q;
+    update_qidx = 0;
+    updating = true;
+    vs_dlbr_set_status("Updating " + string(array_length(q)) + " chart(s) on this page...");
+    vs_dlbr_batch_next();
+}
+
+function vs_dlbr_batch_next()
+{
+    if (update_qidx >= array_length(update_queue))
+    {
+        updating = false;
+        update_queue = [];
+        vs_dlbr_set_status("Page updates done - rescanning custom songs ...");
+        vs_dlbr_finalize_install();
+        return;
+    }
+    var ri = update_queue[update_qidx];
+    var r = rows_all[ri];
+    batch_name = r.name;
+    vs_dlmgr_download(r.id, r.chartId, method(self, vs_dlbr_on_batch));
+}
+
+function vs_dlbr_on_batch(_ok)
+{
+    update_qidx++;
+    vs_dlbr_set_status("Updating " + batch_name + " (" + string(update_qidx) + "/" + string(array_length(update_queue)) + ") ...");
+    vs_dlbr_batch_next();
+}
+
+function vs_dlbr_cycle_filter()
+{
+    if (view == 1) return;
+    filter = (filter + 1) % 4;
+    vs_dlbr_set_status("Filter: " + vs_dlmgr_filter_name(filter));
+    if (filter == 3)
+    {
+        vs_dlbr_check_all_rows();
+        return;
+    }
+    vs_dlbr_apply_filter();
+    vs_dlbr_selected_refresh();
+}
+
+function vs_dlbr_toggle_view()
+{
+    view = (view == 0) ? 1 : 0;
+    page = 1;
+    sel = 0;
+    vs_dlbr_fetch_page();
+}
+
+function vs_dlbr_apply_local_filter()
+{
+    var src = local_all;
+    var q = string_lower(query);
+    var arr = [];
+    var n = array_length(src);
+    var i = 0;
+    repeat (n)
+    {
+        var r = src[i];
+        var keep = (q == "");
+        if (!keep)
+        {
+            keep = string_pos(q, string_lower(r.name)) > 0
+                || string_pos(q, string_lower(r.artist)) > 0
+                || string_pos(q, string_lower(r.chart_id)) > 0
+                || string_pos(q, string_lower(r.pack)) > 0;
+        }
+        if (keep) array_push(arr, r);
+        i++;
+    }
+    local_rows = arr;
+    if (sel >= array_length(local_rows)) sel = array_length(local_rows) - 1;
+    if (sel < 0) sel = 0;
+}
+
+function vs_dlbr_reload_local()
+{
+    local_all = vs_localcharts_scan();
+    vs_dlbr_apply_local_filter();
+    vs_dlbr_set_status((array_length(local_rows) > 0)
+        ? ("Local charts: " + string(array_length(local_rows)) + "/" + string(array_length(local_all)) + "  (Enter: jump, Tab: search, R: reload)")
+        : (query == "" ? "No local charts in Custom Songs/." : "No local charts match \"" + query + "\"."));
+}
+
+function vs_dlbr_jump_from_local()
+{
+    if (array_length(local_rows) == 0) return;
+    var lr = local_rows[sel];
+    if (vs_localcharts_jump(lr.chart_id))
+    {
+        return;
+    }
+    vs_dlbr_set_status(lr.name + " is not in the song list - enable the Custom Songs Mod and reload (R).");
+}
+
+function vs_dlbr_reload_data()
+{
+    vs_dlbr_fetch_page();
+}

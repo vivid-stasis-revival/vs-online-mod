@@ -613,6 +613,32 @@ function vs_online_download_friends_scores(_chartId, _difficulty, _sha1, _on_don
     vs_online_get_json(url, true, vs_online_download_scores_done);
 }
 
+function vs_online_lb_bind_download()
+{
+    data = [];
+    if (vs_online_is_custom())
+    {
+        vs_online_lb_download(id, false);
+        canExtend = false;
+        return;
+    }
+    lbId = steam_download_scores(name, 1, maxScores);
+    canExtend = true;
+}
+
+function vs_online_lb_bind_download_friends()
+{
+    data = [];
+    if (vs_online_is_custom())
+    {
+        vs_online_lb_download(id, true);
+        canExtend = false;
+        return;
+    }
+    lbId = steam_download_friends_scores(name);
+    canExtend = false;
+}
+
 function vs_online_lb_download(_inst, _friends)
 {
     if (!instance_exists(_inst)) return;

@@ -2,6 +2,16 @@
 // vs-online-mod — core
 // vivid/stasis custom-server backend (vs-server-go).
 //
+// UNDERANALYZER / vsml:
+//   1) Object-event `function()` bodies compile unknown names as instance
+//      variables. Mod GlobalScripts (vs_online_is_custom, etc.) MUST be
+//      called from named GlobalScripts or from the event main body — never
+//      from object-local anonymous methods.
+//   2) Anons do not capture enclosing `var` / args (they become self.xxx).
+//      Pass state through globals or `method(self, named_script)`.
+//   3) Do not use reserved names as locals (`all`, `other`, `self`, `id`).
+//   4) Only call runner builtins that exist in vsml's BuiltinList.
+//
 // Every custom-server behavior in this mod is gated by vs_online_is_custom(),
 // which is true ONLY when:
 //   - the player enabled the "Custom Server" option in Settings, AND
@@ -178,6 +188,53 @@ function vs_online_is_custom()
 
 // --- options ---------------------------------------------------------------
 
+function vs_online_opt_toggle_change(_v)
+{
+    global.op_vs_custom_server = _v;
+}
+
+function vs_online_opt_noop()
+{
+}
+
+function vs_online_opt_status_desc()
+{
+    return vs_online_auth_status_text();
+}
+
+function vs_online_opt_login_desc()
+{
+    return vs_online_is_account() ? "Already signed in - press to manage your account." : "Sign in with your account (device flow) to unlock online features.";
+}
+
+function vs_online_opt_login_do()
+{
+    if (!instance_exists(vs_auth_panel))
+    {
+        instance_create_depth(0, 0, -10000, vs_auth_panel);
+    }
+}
+
+function vs_online_opt_logout_desc()
+{
+    return vs_online_is_account() ? "Sign out of the current account (falls back to guest)." : "You are a guest - there is no account to sign out of.";
+}
+
+function vs_online_opt_logout_done(_ok)
+{
+    show_message("Signed out - online features are now disabled until you log in again.\n\n已退出登录，在线功能已禁用，需重新登录才能使用。");
+}
+
+function vs_online_opt_logout_do()
+{
+    if (!vs_online_is_account())
+    {
+        show_message("You are a guest - there is no account to sign out of.\n\n游客/未登录状态没有账号可退出。");
+        return;
+    }
+    vs_online_auth_logout(vs_online_opt_logout_done);
+}
+
 function vs_online_add_options()
 {
     var cat = { title: "VS Online", options: [] };
@@ -192,66 +249,37 @@ function vs_online_add_options()
         default_value: 0,
         varname: "op_vs_custom_server",
         key: ["custom_profile", "vsonline", "enabled"],
-        on_change: function(_v) { global.op_vs_custom_server = _v; }
+        on_change: vs_online_opt_toggle_change
     };
     array_push(global.options_categories[ci].options, array_length(global.system_options));
     array_push(global.system_options, toggle);
 
-    // --- account / login / logout options (type 3 = action rows) ------------
-
-    // Live status display: mode + user + guest warning.
     var statusOpt = {
         name: "Account Status",
         type: 3,
-        get_description: function() { return vs_online_auth_status_text(); },
-        read_value: function() { },
-        do_function: function() { } // display only
+        get_description: vs_online_opt_status_desc,
+        read_value: vs_online_opt_noop,
+        do_function: vs_online_opt_noop
     };
     array_push(global.options_categories[ci].options, array_length(global.system_options));
     array_push(global.system_options, statusOpt);
 
-    // Log in: opens the auth panel (device flow); guests upgrade to an account
-    // here, which is also the way online features get unlocked.
     var loginOpt = {
         name: "Log In",
         type: 3,
-        get_description: function()
-        {
-            return vs_online_is_account() ? "Already signed in - press to manage your account." : "Sign in with your account (device flow) to unlock online features.";
-        },
-        read_value: function() { },
-        do_function: function()
-        {
-            if (!instance_exists(vs_auth_panel))
-            {
-                instance_create_depth(0, 0, -10000, vs_auth_panel);
-            }
-        }
+        get_description: vs_online_opt_login_desc,
+        read_value: vs_online_opt_noop,
+        do_function: vs_online_opt_login_do
     };
     array_push(global.options_categories[ci].options, array_length(global.system_options));
     array_push(global.system_options, loginOpt);
 
-    // Log out: drop the account identity; back to guest (online features off).
     var logoutOpt = {
         name: "Log Out",
         type: 3,
-        get_description: function()
-        {
-            return vs_online_is_account() ? "Sign out of the current account (falls back to guest)." : "You are a guest - there is no account to sign out of.";
-        },
-        read_value: function() { },
-        do_function: function()
-        {
-            if (!vs_online_is_account())
-            {
-                show_message("You are a guest - there is no account to sign out of.\n\n游客/未登录状态没有账号可退出。");
-                return;
-            }
-            vs_online_auth_logout(function(_ok)
-            {
-                show_message("Signed out - online features are now disabled until you log in again.\n\n已退出登录，在线功能已禁用，需重新登录才能使用。");
-            });
-        }
+        get_description: vs_online_opt_logout_desc,
+        read_value: vs_online_opt_noop,
+        do_function: vs_online_opt_logout_do
     };
     array_push(global.options_categories[ci].options, array_length(global.system_options));
     array_push(global.system_options, logoutOpt);
@@ -313,28 +341,29 @@ function vs_online_init()
     vs_ws_start_listener();
     if (vs_online_is_custom())
     {
-        vs_online_ensure_identity(function(_ok, _data)
-        {
-            show_debug_message("VS Online: identity " + (_ok ? ("ok " + vs_online_player_id()) : "failed"));
-            // Keep the game's self-id in sync (member lookups use it).
-            if (instance_exists(o_st_handle))
-            {
-                o_st_handle.steamId = vs_online_player_id();
-            }
-            // Custom server + real account: after identity refresh, probe the
-            // server and automatically check local charts for server updates.
-            if (vs_online_is_account())
-            {
-                vs_online_probe(function(_conn)
-                {
-                    if (_conn)
-                    {
-                        vs_localcharts_auto_check();
-                        vs_online_rating_refresh();
-                    }
-                });
-            }
-        });
+        vs_online_ensure_identity(vs_online_init_on_identity);
+    }
+}
+
+function vs_online_init_on_probe(_conn)
+{
+    if (_conn)
+    {
+        vs_localcharts_auto_check();
+        vs_online_rating_refresh();
+    }
+}
+
+function vs_online_init_on_identity(_ok, _data)
+{
+    show_debug_message("VS Online: identity " + (_ok ? ("ok " + vs_online_player_id()) : "failed"));
+    if (instance_exists(o_st_handle))
+    {
+        o_st_handle.steamId = vs_online_player_id();
+    }
+    if (vs_online_is_account())
+    {
+        vs_online_probe(vs_online_init_on_probe);
     }
 }
 
@@ -501,6 +530,25 @@ function vs_online_show_error(_on_retry)
     }
     var e = instance_create_depth(0, 0, -10000, vs_online_error);
     e.on_retry = _on_retry;
+}
+
+function vs_online_error_on_probe(_ok)
+{
+    if (!instance_exists(vs_online_error)) return;
+    with (vs_online_error)
+    {
+        if (_ok)
+        {
+            var cb = on_retry;
+            instance_destroy();
+            if (is_method(cb)) cb();
+        }
+        else
+        {
+            retrying = false;
+            message = "Still unreachable. Is vs-server-go running?";
+        }
+    }
 }
 
 // Player chose to fall back to Steam. Persist the toggle (custom_profile ini,

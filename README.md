@@ -73,8 +73,10 @@ vs-online-mod/
 │   ├── gml_GlobalScript_vs_ws.gml           # 原生 network_socket_wss / ws
 │   ├── gml_GlobalScript_vs_localcharts.gml  # 本地谱扫描/跳转选曲/重载
 │   ├── gml_GlobalScript_vs_dlmgr.gml        # 下载管理器 web 层
+│   ├── gml_GlobalScript_vs_dlbr.gml         # 下载器 UI（具名脚本，避免对象匿名函数）
+│   ├── gml_GlobalScript_vs_auth.gml         # 登录面板动作
 │   ├── gml_GlobalScript_SuggestSongPacket.gml
-│   └── gml_Object_vs_downloader_browser_*   # 下载管理器界面
+│   └── gml_Object_vs_downloader_browser_*   # 下载管理器界面（只留实例变量）
 ├── objects/vs_downloader_browser.json
 └── sprites/sp_icon_vs_local_0.png           # 首页按钮图标
 ```

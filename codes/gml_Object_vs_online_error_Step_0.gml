@@ -24,20 +24,7 @@ else if (keyboard_check_pressed(vk_enter) || keyboard_check_pressed(vk_space))
         message = "Retrying...";
         // The callback uses `self` directly (bound to this dialog) instead of
         // a captured `var` local, which injected scripts can't capture.
-        vs_online_probe(function(_ok)
-        {
-            if (!instance_exists(self)) { return; }
-            if (_ok)
-            {
-                instance_destroy();
-                if (is_method(self.on_retry)) { self.on_retry(); }
-            }
-            else
-            {
-                self.retrying = false;
-                self.message = "Still unreachable. Is vs-server-go running?";
-            }
-        });
+        vs_online_probe(vs_online_error_on_probe);
     }
     else
     {

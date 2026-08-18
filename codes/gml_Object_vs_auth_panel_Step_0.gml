@@ -21,7 +21,7 @@ if (signed_in)
         play_se(sfx_songsel_select);
         if (sel == 0)
         {
-            do_signout();
+            vs_auth_do_signout();
         }
         else
         {
@@ -53,11 +53,7 @@ if (stage == 1 && current_time >= poll_at)
     else
     {
         busy = true;
-        vs_online_oauth_poll(device_code, method(self, function(_ok, _data, _status)
-        {
-            busy = false;
-            flow_polled(_ok, _data, _status);
-        }));
+        vs_online_oauth_poll(device_code, method(self, vs_auth_on_poll));
     }
     exit;
 }
@@ -68,5 +64,5 @@ if (keyboard_check_pressed(vk_escape))
 }
 else if (keyboard_check_pressed(vk_enter) && stage == 0)
 {
-    start_flow();
+    vs_auth_start_flow();
 }

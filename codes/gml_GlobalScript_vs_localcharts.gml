@@ -12,11 +12,10 @@
 // playable entries in global.song_list + global.song_packs; here we give the
 // player a dedicated home-page manager for them.
 //
-// COMPILER NOTE: the vsml loader compiles mod code with Underanalyzer, which
-// does NOT capture enclosing arguments/`var` locals into anonymous functions
-// (they compile to `self.<name>` reads and crash). Anonymous bodies here only
-// touch their own params, their own `var` locals, globals, or self via the
-// binding object. Cross-callback state travels through global slots.
+// COMPILER NOTE: Underanalyzer / vsml:
+//   - anons do not capture enclosing args/`var` (they become self.<name>)
+//   - object-event anons also compile mod GlobalScripts as instance vars
+// Cross-callback state travels through global slots or method(self, named_fn).
 // ============================================================================
 
 function vs_localcharts_dir()
