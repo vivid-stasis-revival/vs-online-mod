@@ -160,9 +160,20 @@ function vs_dlmgr_tracked(_chartId)
 function vs_dlmgr_write_meta(_chartId, _serverId, _name)
 {
     if (_chartId == undefined || _chartId == "") return;
-    // Do not file_text_open_write into Custom Songs/ — that recreates the
-    // AppData shadow. Provenance lives in vsonline.downloads.json.
-    var isNew = !vs_dlmgr_tracked(_chartId);
+    var p = vs_dlmgr_meta_path(_chartId);
+    vs_songstore_ensure_dir(vs_songstore_local_dir(_chartId));
+    var isNew = !file_exists(p);
+    var m =
+    {
+        chartId: _chartId,
+        serverId: _serverId,
+        name: _name,
+        downloadedAt: date_current_datetime(),
+        updatedAt: date_current_datetime()
+    };
+    var fw = file_text_open_write(p);
+    file_text_write_string(fw, json_stringify(m));
+    file_text_close(fw);
     vs_dlmgr_log(_chartId, _serverId, _name, isNew);
 }
 
@@ -220,7 +231,6 @@ function vs_dlmgr_log(_chartId, _serverId, _name, _isNew)
 // custom song again into global.song_list (would duplicate entries).
 function vs_dlmgr_download(_songId, _chartId, _kind, _on_done)
 {
-    vs_songstore_clear_save_shadow();
     if (!variable_global_exists("vs_dlmgr_dl"))
     {
         global.vs_dlmgr_dl = { on_done: undefined, need: [], idx: 0, chartId: "", serverId: "", name: "", failed: false, cancel: false, fileGot: 0, fileTotal: 0, fileName: "", err: "" };
@@ -290,16 +300,16 @@ function vs_dlmgr_dl_finish(_ok)
     {
         if (!vs_songstore_has_chart(st.chartId))
         {
-            vs_songstore_set_err("files missing after download -> " + vs_songstore_game_file(st.chartId + "/info.json"));
+            vs_songstore_set_err("files missing after download");
             _ok = false;
+            vs_songstore_cleanup_stub(st.chartId);
         }
         else vs_dlmgr_write_meta(st.chartId, st.serverId, st.name);
     }
     else
     {
-        vs_songstore_remove_chart(st.chartId);
+        vs_songstore_cleanup_stub(st.chartId);
     }
-    vs_songstore_clear_save_shadow();
     var cb = st.on_done;
     st.on_done = undefined;
     if (cb != undefined) { cb(_ok && !st.cancel); }
