@@ -10,8 +10,6 @@
 
 function vs_dlbr_open_from_menu()
 {
-    play_se(select);
-    is_active = false;
     if (!instance_exists(vs_downloader_browser))
     {
         instance_create_depth(0, 0, -10000, vs_downloader_browser);
@@ -20,6 +18,8 @@ function vs_dlbr_open_from_menu()
     {
         with (vs_downloader_browser)
         {
+            do_step = method(id, vs_dlbr_step);
+            do_draw = method(id, vs_dlbr_draw);
             vs_dlbr_fetch_page();
         }
     }

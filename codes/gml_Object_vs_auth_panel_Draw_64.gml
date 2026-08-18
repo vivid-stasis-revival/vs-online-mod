@@ -1,1 +1,1 @@
-global.vs_fn.auth_draw();
+do_draw();

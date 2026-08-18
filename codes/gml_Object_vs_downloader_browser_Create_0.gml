@@ -1,7 +1,7 @@
-// Chart Downloader — Create
-// Object events must not name any vs_* script (Underanalyzer → instance var).
-// Fetch starts from vs_dlbr_open_from_menu after this instance exists.
+// Chart Downloader — Create. No vs_* names. Methods bound after create.
 depth = -10000;
+do_step = function() { };
+do_draw = function() { };
 
 view = 0;
 page = 1;

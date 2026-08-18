@@ -1,1 +1,1 @@
-global.vs_fn.dlbr_draw();
+do_draw();

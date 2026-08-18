@@ -5,7 +5,7 @@
 // UNDERANALYZER / vsml:
 //   1) OUR object events cannot mention any vs_* script or our object names.
 //      Those compile as instance variables and crash. Events only call
-//      global.vs_fn.* (bound in vs_online_bind_hooks).
+//      do_step/do_draw (method-bound on the instance after create).
 //   2) Anons do not capture enclosing `var` / args (they become self.xxx).
 //   3) Do not use reserved names as locals (`all`, `other`, `self`, `id`).
 //   4) Only call runner builtins that exist in vsml's BuiltinList.
@@ -212,6 +212,8 @@ function vs_online_opt_login_do()
         var inst = instance_create_depth(0, 0, -10000, vs_auth_panel);
         with (inst)
         {
+            do_step = method(id, vs_auth_step);
+            do_draw = method(id, vs_auth_draw);
             vs_auth_setup();
         }
     }
@@ -334,14 +336,8 @@ function vs_online_is_account()
 
 function vs_online_bind_hooks()
 {
-    global.vs_fn = {
-        dlbr_open: vs_dlbr_open_from_menu,
-        dlbr_step: vs_dlbr_step,
-        dlbr_draw: vs_dlbr_draw,
-        auth_step: vs_auth_step,
-        auth_draw: vs_auth_draw,
-        err_step: vs_online_error_step
-    };
+    // Store on global (not a struct): struct.fn() rebinds self to the struct.
+    global.vs_dlbr_open = vs_dlbr_open_from_menu;
 }
 
 function vs_online_init()
@@ -546,6 +542,7 @@ function vs_online_show_error(_on_retry)
     var e = instance_create_depth(0, 0, -10000, vs_online_error);
     with (e)
     {
+        do_step = method(id, vs_online_error_step);
         vs_online_error_setup(_on_retry);
     }
 }

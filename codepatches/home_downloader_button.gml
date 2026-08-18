@@ -18,6 +18,6 @@ createButton(
     {
         play_se(select);
         is_active = false;
-        global.vs_fn.dlbr_open();
+        global.vs_dlbr_open();
     }
 });

@@ -1,1 +1,1 @@
-global.vs_fn.err_step();
+do_step();

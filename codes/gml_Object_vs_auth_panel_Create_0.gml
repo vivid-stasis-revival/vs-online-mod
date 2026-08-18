@@ -1,5 +1,7 @@
-// Auth panel — Create. No vs_* names here. vs_auth_setup() runs after create.
+// Auth panel — Create. No vs_* names. Methods bound after create.
 depth = -10000;
+do_step = function() { };
+do_draw = function() { };
 cfg = undefined;
 signed_in = false;
 stage = 0;
