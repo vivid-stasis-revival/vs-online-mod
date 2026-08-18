@@ -7,10 +7,11 @@
 
 function vs_dlbr_open_from_menu()
 {
-    if (!instance_exists(vs_downloader_browser))
+    if (instance_exists(vs_downloader_browser))
     {
-        instance_create_depth(0, 0, -10000, vs_downloader_browser);
+        with (vs_downloader_browser) instance_destroy();
     }
+    instance_create_depth(0, 0, -10001, vs_downloader_browser);
     if (instance_exists(vs_downloader_browser))
     {
         with (vs_downloader_browser)
@@ -21,6 +22,14 @@ function vs_dlbr_open_from_menu()
             vs_dlbr_fetch_page();
         }
     }
+}
+
+function vs_dlbr_restore_menu()
+{
+    if (!variable_global_exists("vs_dlbr_restore_menu") || !global.vs_dlbr_restore_menu) return;
+    global.vs_dlbr_restore_menu = false;
+    if (instance_exists(vs_downloader_browser)) return;
+    if (instance_exists(o_newmenu_main)) o_newmenu_main.is_active = true;
 }
 
 function vs_dlbr_set_status(_msg)
@@ -199,6 +208,11 @@ function vs_dlbr_fetch_page()
     }
     vs_dlbr_set_status(query == "" ? "Loading charts..." : "Search: \"" + query + "\" ...");
     vs_dlmgr_list(query, page, catalog, method(self, vs_dlbr_on_list));
+    if (instance_exists(vs_online_error))
+    {
+        loading = false;
+        vs_dlbr_set_status("Server unreachable.");
+    }
 }
 
 function vs_dlbr_on_list(_ok, _data)
@@ -559,9 +573,22 @@ function vs_dlbr_reload_data()
 
 function vs_dlbr_step()
 {
-    if (instance_exists(vs_online_error)) return;
+    if (instance_exists(vs_online_error))
+    {
+        if (loading)
+        {
+            loading = false;
+            vs_dlbr_set_status("Server unreachable.");
+        }
+        return;
+    }
 
     started++;
+    if (keyboard_check_pressed(vk_escape) && !searching && !updating && !detail_open)
+    {
+        instance_destroy();
+        return;
+    }
     if (started < 8) return;
 
     if (searching)
@@ -605,12 +632,6 @@ function vs_dlbr_step()
     if (detail_open)
     {
         vs_dlbr_step_detail();
-        return;
-    }
-
-    if (keyboard_check_pressed(vk_escape))
-    {
-        instance_destroy();
         return;
     }
 
@@ -809,10 +830,7 @@ function vs_dlbr_draw()
     var st = vs_dlbr_clip_text(string(status), bw - 12);
     draw_set_color(make_color_rgb(120, 210, 140));
     draw_text(bx + 6, by + bh - 22, st);
-
-    var hint = searching ? "Enter  Esc" : ((view == 0) ? "Enter  Tab  T  F  P  W  V  Esc" : "Enter  Tab  T  V  Esc");
-    draw_set_color(make_color_rgb(120, 126, 136));
-    draw_text(bx + 6, by + bh - 12, vs_dlbr_clip_text(hint, bw - 12));
+    vs_dlbr_draw_hints(bx + 6, by + bh - 12, bw - 12);
 
     if (detail_open) vs_dlbr_draw_detail();
     if (updating) vs_dlbr_draw_dl_popup();
@@ -889,6 +907,45 @@ function vs_dlbr_draw_dl_popup()
 function vs_dlbr_on_close()
 {
     vs_media_stop_preview();
+    global.vs_dlbr_restore_menu = true;
+    call_later(1, time_source_units_frames, vs_dlbr_restore_menu);
+}
+
+function vs_dlbr_draw_keychip(_x, _y, _key, _hint, _max)
+{
+    var kw = string_width(_key);
+    var hw = string_width(_hint);
+    var need = kw + 4 + hw + 6;
+    if (_max > 0 && _x + need > _max) return _x;
+    draw_set_color(make_color_rgb(80, 220, 230));
+    draw_rectangle(_x - 1, _y - 1, _x + kw + 1, _y + 8, false);
+    draw_set_color(c_black);
+    draw_text(_x, _y, _key);
+    draw_set_color(make_color_rgb(170, 176, 186));
+    draw_text(_x + kw + 4, _y, _hint);
+    return _x + need;
+}
+
+function vs_dlbr_draw_hints(_x, _y, _w)
+{
+    var right = _x + _w;
+    if (searching)
+    {
+        _x = vs_dlbr_draw_keychip(_x, _y, "ENTER", "ok", right);
+        vs_dlbr_draw_keychip(_x, _y, "ESC", "back", right);
+        return;
+    }
+    _x = vs_dlbr_draw_keychip(_x, _y, "ENTER", "open", right);
+    _x = vs_dlbr_draw_keychip(_x, _y, "TAB", "find", right);
+    if (view == 0)
+    {
+        _x = vs_dlbr_draw_keychip(_x, _y, "T", "cat", right);
+        _x = vs_dlbr_draw_keychip(_x, _y, "F", "filt", right);
+        _x = vs_dlbr_draw_keychip(_x, _y, "P", "auto", right);
+        _x = vs_dlbr_draw_keychip(_x, _y, "W", "web", right);
+    }
+    _x = vs_dlbr_draw_keychip(_x, _y, "V", (view == 0) ? "loc" : "web", right);
+    vs_dlbr_draw_keychip(_x, _y, "ESC", "back", right);
 }
 
 function vs_dlbr_draw_tabs(_x, _y, _w)
