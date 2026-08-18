@@ -125,8 +125,22 @@ function vs_dlbr_selected_refresh()
         return;
     }
     var r = rows[sel];
-    vs_dlbr_set_status(vs_dlmgr_row_status(r));
+    if (checking && check_chart == r.chartId)
+        vs_dlbr_set_status("Checking " + r.chartId + " ...");
+    else
+        vs_dlbr_set_status(vs_dlmgr_row_status(r));
     vs_media_select(r.id, vs_dlbr_row_jacket(r), vs_dlbr_row_audio(r));
+    vs_dlbr_maybe_check_selected();
+}
+
+function vs_dlbr_maybe_check_selected()
+{
+    if (view != 0 || checking || updating || loading || check_all) return;
+    if (array_length(rows) == 0) return;
+    var r = rows[sel];
+    if (!r.downloaded || r.checked) return;
+    var ai = vs_dlbr_row_all_index(r.chartId);
+    if (ai >= 0) vs_dlbr_check_row_index(ai);
 }
 
 function vs_dlbr_current_web_row()
@@ -313,6 +327,7 @@ function vs_dlbr_on_check(_ok, _need)
         return;
     }
     vs_dlbr_apply_filter();
+    vs_dlbr_selected_refresh();
     if (enter_act)
     {
         enter_act = false;
@@ -694,7 +709,7 @@ function vs_dlbr_step()
         return;
     }
 
-    if (loading || checking) return;
+    if (loading) return;
 
     if (view == 0)
     {

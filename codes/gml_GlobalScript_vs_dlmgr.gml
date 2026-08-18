@@ -101,7 +101,7 @@ function vs_dlmgr_row_status(_r)
     }
     if (_r.checked && _r.need > 0) return _r.chartId + "  -  UPDATE (" + string(_r.need) + " file" + (_r.need > 1 ? "s" : "") + ")";
     if (_r.checked) return _r.chartId + "  -  up to date";
-    return _r.chartId + "  -  downloaded, checking...";
+    return _r.chartId + "  -  downloaded";
 }
 
 // --- download provenance / history ------------------------------------------
