@@ -118,7 +118,7 @@ function vs_dlbr_fetch_page()
         total = 0;
         maxpage = 1;
         vs_dlbr_apply_filter();
-        vs_dlbr_set_status("Guest / not logged in - online catalog disabled. Play downloaded charts (V -> Local) or log in: Settings -> VS Online -> Log In.");
+        vs_dlbr_set_status("Guest / not logged in - online catalog disabled. Play downloaded charts (V -> Local) or log in: Settings -> VS Online -> Account Management.");
         return;
     }
     vs_dlbr_set_status(query == "" ? "Loading charts..." : "Search: \"" + query + "\" ...");

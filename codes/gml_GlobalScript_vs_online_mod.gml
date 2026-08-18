@@ -241,22 +241,22 @@ function vs_online_opt_status_desc()
     return vs_online_auth_status_text();
 }
 
-function vs_online_opt_login_desc()
+function vs_online_opt_account_desc()
 {
-    return vs_online_is_account() ? "Already signed in - press to manage your account." : "Sign in with your account (device flow) to unlock online features.";
+    var st = vs_online_auth_status_text();
+    if (vs_online_is_account())
+    {
+        return st + " Press to manage the account or sign out.";
+    }
+    return st + " Press to sign in (device flow).";
 }
 
-function vs_online_opt_login_do()
+function vs_online_opt_account_do()
 {
     if (!instance_exists(vs_auth_panel))
     {
         instance_create_depth(0, 0, -10000, vs_auth_panel);
     }
-}
-
-function vs_online_opt_logout_desc()
-{
-    return vs_online_is_account() ? "Sign out of the current account (falls back to guest)." : "You are a guest - there is no account to sign out of.";
 }
 
 function vs_online_opt_logout_done(_ok)
@@ -293,35 +293,15 @@ function vs_online_add_options()
     array_push(global.options_categories[ci].options, array_length(global.system_options));
     array_push(global.system_options, toggle);
 
-    var statusOpt = {
-        name: "Account Status",
+    var accountOpt = {
+        name: "Account Management",
         type: 3,
-        get_description: vs_online_opt_status_desc,
+        get_description: vs_online_opt_account_desc,
         read_value: vs_online_opt_noop,
-        do_function: vs_online_opt_noop
+        do_function: vs_online_opt_account_do
     };
     array_push(global.options_categories[ci].options, array_length(global.system_options));
-    array_push(global.system_options, statusOpt);
-
-    var loginOpt = {
-        name: "Log In",
-        type: 3,
-        get_description: vs_online_opt_login_desc,
-        read_value: vs_online_opt_noop,
-        do_function: vs_online_opt_login_do
-    };
-    array_push(global.options_categories[ci].options, array_length(global.system_options));
-    array_push(global.system_options, loginOpt);
-
-    var logoutOpt = {
-        name: "Log Out",
-        type: 3,
-        get_description: vs_online_opt_logout_desc,
-        read_value: vs_online_opt_noop,
-        do_function: vs_online_opt_logout_do
-    };
-    array_push(global.options_categories[ci].options, array_length(global.system_options));
-    array_push(global.system_options, logoutOpt);
+    array_push(global.system_options, accountOpt);
 
     var bwpCat = { title: "Better Worldcross Play", options: [] };
     array_push(global.options_categories, bwpCat);
@@ -565,7 +545,7 @@ function vs_online_with_conn_probed(_ok)
 // possible, opens the account panel so they can log in.
 function vs_online_show_account_required()
 {
-    show_message("Guest / not logged in.\n\nOnline features (lobby, leaderboards, web chart downloads) need a signed-in account. Guests can only play already-downloaded charts.\n\n游客/未登录：在线功能已禁用，只能游玩已下载的谱面。请到 设置 → VS Online → Log In 登录。");
+    show_message("Guest / not logged in.\n\nOnline features (lobby, leaderboards, web chart downloads) need a signed-in account. Guests can only play already-downloaded charts.\n\n游客/未登录：在线功能已禁用，只能游玩已下载的谱面。请到 设置 → VS Online → Account Management 登录。");
 }
 
 // Spawn the custom-server error dialog. Idempotent: one dialog at a time.

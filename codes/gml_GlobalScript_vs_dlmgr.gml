@@ -66,17 +66,20 @@ function vs_dlmgr_check(_songId, _chartId, _on_done)
         global.vs_dlmgr_check_cb = { on_done: undefined };
     }
     global.vs_dlmgr_check_cb.on_done = _on_done;
+    global.vs_dlmgr_check_cb.chartId = _chartId;
     vs_songstore_detail(_songId, function(_ok, _detail)
     {
-        var cb = global.vs_dlmgr_check_cb.on_done;
-        global.vs_dlmgr_check_cb.on_done = undefined;
+        var slot = global.vs_dlmgr_check_cb;
+        var cb = slot.on_done;
+        var chartId = slot.chartId;
+        slot.on_done = undefined;
         if (cb == undefined) return;
         if (!_ok || _detail == undefined)
         {
             cb(false, undefined);
             return;
         }
-        cb(true, vs_songstore_diff(_detail.files, _chartId));
+        cb(true, vs_songstore_diff(_detail.files, chartId));
     });
 }
 
@@ -226,14 +229,14 @@ function vs_dlmgr_download(_songId, _chartId, _on_done)
             if (cb != undefined) { cb(false); }
             return;
         }
-        st.name = variable_struct_exists(_detail, "name") ? _detail.name : _chartId;
-        var dir = "Custom Songs/" + _chartId + "/";
+        st.name = variable_struct_exists(_detail, "name") ? _detail.name : st.chartId;
+        var dir = "Custom Songs/" + st.chartId + "/";
         if (!directory_exists(dir)) { directory_create(dir); }
-        st.need = vs_songstore_diff(_detail.files, _chartId);
+        st.need = vs_songstore_diff(_detail.files, st.chartId);
         st.idx = 0;
         if (array_length(st.need) == 0)
         {
-            vs_dlmgr_write_meta(_chartId, _songId, st.name);
+            vs_dlmgr_write_meta(st.chartId, st.serverId, st.name);
             var cb = st.on_done;
             st.on_done = undefined;
             if (cb != undefined) { cb(true); }

@@ -39,9 +39,20 @@ repeat (array_length(buttons))
 {
     var xb = bx + 8 + i * (btn_w + 8);
     var isSel = (i == selected);
-    draw_set_color(isSel ? c_yellow : c_gray);
-    draw_rectangle(xb, yb, xb + btn_w, yb + btn_h, isSel);
-    draw_set_color(isSel ? c_black : c_white);
+    if (isSel)
+    {
+        draw_set_color(c_yellow);
+        draw_rectangle(xb, yb, xb + btn_w, yb + btn_h, false);
+        draw_set_color(c_black);
+    }
+    else
+    {
+        draw_set_color(make_color_rgb(48, 48, 48));
+        draw_rectangle(xb, yb, xb + btn_w, yb + btn_h, false);
+        draw_set_color(c_gray);
+        draw_rectangle(xb, yb, xb + btn_w, yb + btn_h, true);
+        draw_set_color(c_white);
+    }
     draw_set_halign(fa_center);
     draw_set_valign(fa_middle);
     draw_text(xb + btn_w / 2, yb + btn_h / 2, buttons[i]);
