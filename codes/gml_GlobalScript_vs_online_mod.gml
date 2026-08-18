@@ -369,8 +369,16 @@ function vs_online_is_account()
 
 // --- init ------------------------------------------------------------------
 
+function vs_online_bind_hooks()
+{
+    // Store on global (not a struct): official menu anons cannot name vs_*
+    // scripts, and struct.fn() rebinds self to the struct.
+    global.vs_dlbr_open = vs_dlbr_open_from_menu;
+}
+
 function vs_online_init()
 {
+    vs_online_bind_hooks();
     vs_online_get_config();
     if (!instance_exists(oCoroutineManager))
     {
