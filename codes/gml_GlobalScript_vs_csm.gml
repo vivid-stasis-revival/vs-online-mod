@@ -28,7 +28,8 @@ function vs_csm_same_dir(_a, _b)
 
 function vs_csm_save_area()
 {
-    var s = "";
+    var s = vs_songstore_save_dir();
+    if (s != undefined && s != "") return vs_csm_norm_dir(s);
     try { s = game_save_id; } catch (_e) { s = ""; }
     if (s == undefined || s == "") s = working_directory;
     return vs_csm_norm_dir(s);
@@ -47,24 +48,62 @@ function vs_csm_steam_songs_root()
     return vs_csm_norm_dir(s) + "Custom Songs/";
 }
 
-// Save-area first so a downloaded copy wins over a Steam folder with the same name.
+function vs_csm_root_listed(_roots, _dir)
+{
+    for (var i = 0; i < array_length(_roots); i++)
+    {
+        if (vs_csm_same_dir(_roots[i], _dir)) return true;
+    }
+    return false;
+}
+
+// Relative first (same view as Downloaded / file_exists), then explicit
+// AppData, then Steam. audio/sprite still resolve through vs_csm_pick_load_dir.
 function vs_csm_song_roots()
 {
     var roots = [];
+    array_push(roots, "Custom Songs/");
     var save = vs_csm_save_songs_root();
+    if (save != "" && directory_exists(save) && !vs_csm_root_listed(roots, save))
+        array_push(roots, save);
     var steam = vs_csm_steam_songs_root();
-    if (save != "" && directory_exists(save)) array_push(roots, save);
-    if (steam != "" && directory_exists(steam) && !vs_csm_same_dir(steam, save))
+    if (steam != "" && directory_exists(steam) && !vs_csm_root_listed(roots, steam))
         array_push(roots, steam);
     return roots;
+}
+
+function vs_csm_rel_tail(_rel)
+{
+    var s = vs_csm_norm_dir(_rel);
+    if (string_starts_with(string_lower(s), "custom songs/"))
+        return string_copy(s, 14, string_length(s));
+    return s;
+}
+
+// Prefer an absolute folder that actually has the files so audio_create_stream
+// does not look in the Steam tree for an AppData download.
+function vs_csm_pick_load_dir(_rel)
+{
+    var tail = vs_csm_rel_tail(_rel);
+    var save = vs_csm_save_songs_root();
+    if (save != "" && (file_exists(save + tail + "info.json") || file_exists(save + tail + "shatterinfo.json")))
+        return save + tail;
+    var steam = vs_csm_steam_songs_root();
+    if (steam != "" && (file_exists(steam + tail + "info.json") || file_exists(steam + tail + "shatterinfo.json")))
+        return steam + tail;
+    return vs_csm_norm_dir(_rel);
 }
 
 function vs_csm_list_subdirs(_root)
 {
     var out = [];
     if (_root == undefined || _root == "") return out;
-    if (!directory_exists(_root)) return out;
     var n = file_find_first(_root + "*", 16);
+    if (n == "")
+    {
+        file_find_close();
+        n = file_find_first(_root + "*", 0);
+    }
     while (n != "")
     {
         if (n != "." && n != "..")
@@ -269,7 +308,9 @@ function CustomShatterReader()
             if (file_exists(e.dir + "shatterinfo.json"))
             {
                 if (variable_struct_exists(seen, key)) continue;
-                var songInfo = readShatterInfo(e.dir, "Custom Songs/" + e.name + "/");
+                var shRel = "Custom Songs/" + e.name + "/";
+                var songInfo = undefined;
+                try { songInfo = readShatterInfo(vs_csm_pick_load_dir(shRel), shRel); } catch (_sh1) { songInfo = undefined; }
                 if (songInfo == undefined) continue;
                 var cid = string_lower(string(songInfo.chart_id));
                 if (variable_struct_exists(seen, cid)) continue;
@@ -293,7 +334,8 @@ function CustomShatterReader()
                 var ck = string_lower(packs[p].name + "/" + c.name);
                 if (variable_struct_exists(seen, ck)) continue;
                 var rel = "Custom Songs/" + packs[p].name + "/" + c.name + "/";
-                var sh = readShatterInfo(c.dir, rel);
+                var sh = undefined;
+                try { sh = readShatterInfo(vs_csm_pick_load_dir(rel), rel); } catch (_sh2) { sh = undefined; }
                 if (sh == undefined) continue;
                 var cid2 = string_lower(string(sh.chart_id));
                 if (variable_struct_exists(seen, cid2)) continue;
@@ -400,7 +442,9 @@ function CustomSongReader()
             if (file_exists(e.dir + "info.json"))
             {
                 if (variable_struct_exists(seenCharts, key)) continue;
-                var songInfo = readCustomSongInfo(e.dir, "Custom Songs/" + e.name + "/");
+                var songRel = "Custom Songs/" + e.name + "/";
+                var songInfo = undefined;
+                try { songInfo = readCustomSongInfo(vs_csm_pick_load_dir(songRel), songRel); } catch (_rd) { songInfo = undefined; }
                 if (songInfo == undefined) continue;
                 var cid = string_lower(string(songInfo.chart_id));
                 if (cid != "" && variable_struct_exists(seenCharts, cid)) continue;
@@ -430,7 +474,8 @@ function CustomSongReader()
             var ck = string_lower(packJobs[p].name + "/" + c.name);
             if (variable_struct_exists(seenCharts, ck)) continue;
             var rel = "Custom Songs/" + packJobs[p].name + "/" + c.name + "/";
-            var packed = readCustomSongInfo(c.dir, rel);
+            var packed = undefined;
+            try { packed = readCustomSongInfo(vs_csm_pick_load_dir(rel), rel); } catch (_rd2) { packed = undefined; }
             if (packed == undefined) continue;
             var cid2 = string_lower(string(packed.chart_id));
             if (cid2 != "" && variable_struct_exists(seenCharts, cid2)) continue;

@@ -572,21 +572,55 @@ function vs_dlbr_reload_local()
         : (query == "" ? "No local charts in Custom Songs/." : "No local charts match \"" + query + "\"."));
 }
 
+function vs_dlbr_jump_chart(_chartId, _kind, _name)
+{
+    if (_chartId == undefined || _chartId == "") return;
+    vs_localcharts_refresh();
+    if (_kind == 2)
+    {
+        if (vs_localcharts_jump_shatter(_chartId)) return;
+        vs_dlbr_set_status(_name + " is not in the shatter list.");
+        return;
+    }
+    if (vs_localcharts_jump(_chartId)) return;
+    vs_dlbr_set_status(_name + " is not in All Custom Songs yet.");
+}
+
 function vs_dlbr_jump_from_local()
 {
     if (array_length(local_rows) == 0) return;
     var lr = local_rows[sel];
-    if (variable_struct_exists(lr, "kind") && lr.kind == 2)
+    var kind = variable_struct_exists(lr, "kind") ? lr.kind : 0;
+    vs_dlbr_jump_chart(lr.chart_id, kind, lr.name);
+}
+
+function vs_dlbr_jump_from_detail()
+{
+    var chartId = detail_chart;
+    var kind = 0;
+    var name = chartId;
+    if (detail_local)
     {
-        if (vs_localcharts_jump_shatter(lr.chart_id)) return;
-        vs_dlbr_set_status(lr.name + " is not in the shatter list - enable the Custom Songs Mod and reload (R).");
-        return;
+        if (sel >= 0 && sel < array_length(local_rows))
+        {
+            var lr = local_rows[sel];
+            chartId = lr.chart_id;
+            kind = variable_struct_exists(lr, "kind") ? lr.kind : 0;
+            name = lr.name;
+        }
     }
-    if (vs_localcharts_jump(lr.chart_id))
+    else
     {
-        return;
+        var r = vs_dlbr_detail_row();
+        if (r != undefined)
+        {
+            chartId = r.chartId;
+            kind = variable_struct_exists(r, "kind") ? r.kind : 0;
+            name = r.name;
+        }
     }
-    vs_dlbr_set_status(lr.name + " is not in the song list - enable the Custom Songs Mod and reload (R).");
+    vs_dlbr_close_detail();
+    vs_dlbr_jump_chart(chartId, kind, name);
 }
 
 function vs_dlbr_reload_data()
@@ -1191,9 +1225,9 @@ function vs_dlbr_detail_buttons()
     var r = vs_dlbr_detail_row();
     if (r != undefined)
     {
+        if (r.downloaded) array_push(b, { id: "jump", label: "Play" });
         if (!r.downloaded) array_push(b, { id: "dl", label: "Get" });
         else if (!r.tracked || r.need > 0) array_push(b, { id: "dl", label: r.tracked ? "Update" : "Get" });
-        else array_push(b, { id: "ok", label: "OK" });
         if (r.downloaded) array_push(b, { id: "del", label: "Del" });
     }
     array_push(b, { id: "auto", label: vs_online_preview_auto() ? "Mute" : "Auto" });
@@ -1233,8 +1267,7 @@ function vs_dlbr_detail_act(_id)
     }
     if (_id == "jump")
     {
-        vs_dlbr_close_detail();
-        vs_dlbr_jump_from_local();
+        vs_dlbr_jump_from_detail();
         return;
     }
     if (_id == "auto")

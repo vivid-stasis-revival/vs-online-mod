@@ -1,5 +1,5 @@
 
-if (!string_starts_with(global.song_packs[0].name, "FCP2")&&struct_exists(global, "custom_song_packs")){
+if (!string_starts_with(global.song_packs[0].name, "FCP2") && variable_global_exists("custom_song_packs")){
     
     // var log = file_text_open_append(working_directory + "CustomSongMod_log.txt");
     
