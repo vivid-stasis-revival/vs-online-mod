@@ -346,7 +346,13 @@ function vs_songstore_log(_msg)
     var line = "VS DL: " + string(_msg);
     show_debug_message(line);
     var path = working_directory + "vsonline.dl.log";
-    if (file_exists(path) && file_size(path) > 200000) file_delete(path);
+    if (!variable_global_exists("vs_dl_log_n")) global.vs_dl_log_n = 0;
+    global.vs_dl_log_n += 1;
+    if (global.vs_dl_log_n > 2000)
+    {
+        if (file_exists(path)) file_delete(path);
+        global.vs_dl_log_n = 1;
+    }
     var f = file_text_open_append(path);
     if (f < 0) return;
     file_text_write_string(f, date_date_string(date_current_datetime()) + " " + date_time_string(date_current_datetime()) + "  " + line);
