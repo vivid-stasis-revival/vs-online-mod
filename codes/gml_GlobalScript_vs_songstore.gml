@@ -6,10 +6,12 @@
 //   - vs_songstore_diff        sha1-diff the server files[] against local
 //   - vs_songstore_download_file  download one file (http_get_file)
 //
-// Charts use the same relative "Custom Songs/" path as CSM. That is the
-// game install folder (next to the exe). Do not prefix working_directory
-// (AppData save area) or program_directory (absolute path; GMS2 file
-// functions remap it back into the save area).
+// Charts live in the game install folder: Custom Songs/<chartId>/ (CSM).
+// GMS2 file_copy / directory_create / http_get_file remap relative paths
+// into %LOCALAPPDATA%\VIVIDSTASIS\. If that save-area Custom Songs folder
+// exists, file_find_first("Custom Songs/") lists it instead of the Steam
+// folder — downloads look successful, CSM and the user see nothing.
+// HTTP lands in a save-area temp file; cmd copies it next to the exe.
 // info.json is written last so CSM never loads a half-copied folder.
 // File HTTP is handled on the official HTTP event (vs_http_on_async).
 // http_get_file starts on the next frame.
@@ -18,6 +20,76 @@
 function vs_songstore_root()
 {
     return "Custom Songs/";
+}
+
+function vs_songstore_game_dir()
+{
+    var exe = parameter_string(0);
+    if (exe == undefined || exe == "") return "";
+    var d = filename_dir(exe);
+    if (d == undefined || d == "") return "";
+    d = string_replace_all(d, "\\", "/");
+    if (d != "" && string_char_at(d, string_length(d)) != "/") d += "/";
+    var low = string_lower(d);
+    if (string_length(low) >= 10 && string_copy(low, string_length(low) - 9, 10) == "modloader/")
+    {
+        d = string_copy(d, 1, string_length(d) - 10);
+    }
+    return d;
+}
+
+function vs_songstore_win_path(_p)
+{
+    return string_replace_all(string(_p), "/", "\\");
+}
+
+function vs_songstore_game_file(_rel)
+{
+    var g = vs_songstore_game_dir();
+    if (g == "") return "";
+    var r = string_replace_all(string(_rel), "\\", "/");
+    if (string_pos("Custom Songs/", r) != 1 && r != "Custom Songs/")
+    {
+        if (string_copy(r, 1, 1) == "/") r = string_copy(r, 2, string_length(r));
+        r = "Custom Songs/" + r;
+    }
+    return g + r;
+}
+
+function vs_songstore_clear_save_shadow()
+{
+    var p = working_directory + "Custom Songs";
+    if (directory_exists(p)) directory_destroy(p);
+    p = working_directory + "Custom Songs/";
+    if (directory_exists(p)) directory_destroy(p);
+}
+
+function vs_songstore_shell_run(_args)
+{
+    var com = environment_get_variable("ComSpec");
+    if (com == undefined || com == "") com = "cmd.exe";
+    execute_shell_simple(com, _args, "open", 0);
+}
+
+function vs_songstore_shell_copy(_src, _dst)
+{
+    if (_src == undefined || _src == "" || _dst == undefined || _dst == "") return;
+    var src = vs_songstore_win_path(_src);
+    var dst = vs_songstore_win_path(_dst);
+    var dstDir = filename_dir(dst);
+    vs_songstore_shell_run("/c mkdir \"" + dstDir + "\" & copy /Y \"" + src + "\" \"" + dst + "\"");
+}
+
+function vs_songstore_shell_rmdir(_dir)
+{
+    if (_dir == undefined || _dir == "") return;
+    var d = vs_songstore_win_path(_dir);
+    if (d != "" && string_char_at(d, string_length(d)) == "\\")
+    {
+        d = string_copy(d, 1, string_length(d) - 1);
+    }
+    if (d == "") return;
+    vs_songstore_shell_run("/c rmdir /s /q \"" + d + "\"");
 }
 
 function vs_songstore_dir_has_chart(_dir)
@@ -34,37 +106,27 @@ function vs_songstore_local_dir(_chartId)
 function vs_songstore_has_chart(_chartId)
 {
     if (_chartId == undefined || _chartId == "") return false;
+    vs_songstore_clear_save_shadow();
     return vs_songstore_dir_has_chart(vs_songstore_local_dir(_chartId));
 }
 
 function vs_songstore_ensure_dir(_dir)
 {
-    var root = vs_songstore_root();
-    if (!directory_exists(root)) directory_create(root);
-    if (_dir != "" && _dir != root && !directory_exists(_dir)) directory_create(_dir);
+    // Do not directory_create relative Custom Songs — that builds the
+    // AppData shadow that hides the Steam folder from CSM.
 }
 
 function vs_songstore_remove_chart(_chartId)
 {
     if (_chartId == undefined || _chartId == "") return;
-    var staging = vs_songstore_root() + _chartId + ".vs_partial/";
-    if (directory_exists(staging)) directory_destroy(staging);
-    var d = vs_songstore_local_dir(_chartId);
-    if (directory_exists(d)) directory_destroy(d);
+    vs_songstore_clear_save_shadow();
+    var g = vs_songstore_game_file(_chartId);
+    if (g != "") vs_songstore_shell_rmdir(g);
 }
 
 function vs_songstore_cleanup_stub(_chartId)
 {
-    if (_chartId == undefined || _chartId == "") return;
-    var staging = vs_songstore_root() + _chartId + ".vs_partial/";
-    if (directory_exists(staging)) directory_destroy(staging);
-    if (vs_songstore_has_chart(_chartId)) return;
-    var d = vs_songstore_local_dir(_chartId);
-    if (directory_exists(d) && !vs_songstore_dir_has_chart(d))
-    {
-        if (file_exists(d + ".vs_download.json")) file_delete(d + ".vs_download.json");
-        directory_destroy(d);
-    }
+    vs_songstore_clear_save_shadow();
 }
 
 function vs_songstore_list_names(_dir, _dirs)
@@ -323,7 +385,7 @@ function vs_songstore_dl_init()
         global.vs_dl_q = [];
         global.vs_dl_busy = false;
         global.vs_dl_scheduled = false;
-        global.vs_dl_state = { rid: -1, gen: 0, url: "", localPath: "", tmpPath: "vsonline_dl.bin", on_done: undefined, got: 0, total: 0 };
+        global.vs_dl_state = { rid: -1, gen: 0, url: "", localPath: "", tmpPath: "vsonline_dl.bin", on_done: undefined, got: 0, total: 0, placing: false, placeTries: 0 };
     }
 }
 
@@ -389,6 +451,8 @@ function vs_songstore_dl_pump()
     global.vs_dl_state.on_done = job.on_done;
     global.vs_dl_state.got = 0;
     global.vs_dl_state.total = 0;
+    global.vs_dl_state.placing = false;
+    global.vs_dl_state.placeTries = 0;
     global.vs_dl_state.gen = global.vs_dl_gen;
     global.vs_dl_state.rid = http_get_file(url, tmp);
     if (global.vs_dl_state.rid == undefined || global.vs_dl_state.rid < 0)
@@ -412,48 +476,91 @@ function vs_songstore_dl_on_timeout()
     var st = global.vs_dl_state;
     if (st.gen != g) return;
     vs_songstore_set_err("timeout " + string(st.url));
-    var tmp = st.tmpPath;
-    if (tmp != "" && file_exists(tmp)) file_delete(tmp);
-    vs_songstore_dl_finish(false);
+    vs_songstore_dl_complete(false);
 }
 
-function vs_songstore_dl_commit(_ok)
+function vs_songstore_tmp_abs(_tmp)
+{
+    if (_tmp == undefined || _tmp == "") return "";
+    var t = string(_tmp);
+    if (string_pos(":", t) > 0) return t;
+    return working_directory + t;
+}
+
+function vs_songstore_place_start()
 {
     var st = global.vs_dl_state;
     var tmp = st.tmpPath;
     var dest = st.localPath;
-    if (_ok)
+    if (tmp == "" || !file_exists(tmp)) return false;
+    vs_songstore_clear_save_shadow();
+    var dst = vs_songstore_game_file(dest);
+    if (dst == "") return false;
+    vs_songstore_shell_copy(vs_songstore_tmp_abs(tmp), dst);
+    show_debug_message("VS DL: place " + string(dest) + " -> " + dst);
+    return true;
+}
+
+function vs_songstore_dl_complete(_ok)
+{
+    vs_songstore_dl_init();
+    var st = global.vs_dl_state;
+    var cb = st.on_done;
+    var path = st.localPath;
+    var tmp = st.tmpPath;
+    if (tmp != "" && file_exists(tmp)) file_delete(tmp);
+    st.on_done = undefined;
+    st.rid = -1;
+    st.gen = 0;
+    st.placing = false;
+    st.placeTries = 0;
+    global.vs_dl_busy = false;
+    if (cb != undefined) { cb(_ok, path); }
+    vs_songstore_dl_schedule();
+}
+
+function vs_songstore_dl_on_placed()
+{
+    vs_songstore_dl_init();
+    if (!global.vs_dl_busy) return;
+    var st = global.vs_dl_state;
+    if (!variable_struct_exists(st, "placing") || !st.placing) return;
+    vs_songstore_clear_save_shadow();
+    if (file_exists(st.localPath))
     {
-        if (tmp != "" && file_exists(tmp))
-        {
-            vs_songstore_ensure_dir(filename_path(dest));
-            if (file_exists(dest)) file_delete(dest);
-            file_copy(tmp, dest);
-            file_delete(tmp);
-        }
-        _ok = file_exists(dest);
-        if (!_ok) vs_songstore_set_err("could not write " + string(dest));
+        vs_songstore_dl_complete(true);
+        return;
     }
-    else if (tmp != "" && file_exists(tmp))
+    st.placeTries += 1;
+    if (st.placeTries < 10)
     {
-        file_delete(tmp);
+        call_later(8, time_source_units_frames, vs_songstore_dl_on_placed);
+        return;
     }
-    return _ok;
+    vs_songstore_set_err("could not write " + string(st.localPath) + " -> " + vs_songstore_game_file(st.localPath));
+    vs_songstore_dl_complete(false);
 }
 
 function vs_songstore_dl_finish(_ok)
 {
     vs_songstore_dl_init();
     var st = global.vs_dl_state;
-    var cb = st.on_done;
-    var path = st.localPath;
-    _ok = vs_songstore_dl_commit(_ok);
-    st.on_done = undefined;
-    st.rid = -1;
-    st.gen = 0;
-    global.vs_dl_busy = false;
-    if (cb != undefined) { cb(_ok, path); }
-    vs_songstore_dl_schedule();
+    var tmp = st.tmpPath;
+    if (_ok)
+    {
+        if (vs_songstore_place_start())
+        {
+            st.rid = -1;
+            st.placing = true;
+            st.placeTries = 0;
+            call_later(8, time_source_units_frames, vs_songstore_dl_on_placed);
+            return;
+        }
+        vs_songstore_set_err("could not write " + string(st.localPath));
+        _ok = false;
+    }
+    if (tmp != "" && file_exists(tmp)) file_delete(tmp);
+    vs_songstore_dl_complete(_ok);
 }
 
 function vs_songstore_on_http()

@@ -119,10 +119,40 @@ function vs_dlmgr_meta_path(_chartId)
     return vs_songstore_local_dir(_chartId) + ".vs_download.json";
 }
 
+function vs_dlmgr_log_has(_chartId)
+{
+    var path = working_directory + "vsonline.downloads.json";
+    if (!file_exists(path)) return false;
+    var f = file_text_open_read(path);
+    var raw = "";
+    while (!file_text_eof(f)) { raw += file_text_readln(f); }
+    file_text_close(f);
+    try
+    {
+        var j = json_parse(raw);
+        if (j != undefined && is_array(j))
+        {
+            var i = 0;
+            repeat (array_length(j))
+            {
+                var e = j[i];
+                if (e != undefined && variable_struct_exists(e, "chartId") && string(e.chartId) == string(_chartId))
+                {
+                    return true;
+                }
+                i++;
+            }
+        }
+    }
+    catch (_e) { }
+    return false;
+}
+
 function vs_dlmgr_tracked(_chartId)
 {
     if (_chartId == undefined || _chartId == "") return false;
-    return file_exists(vs_dlmgr_meta_path(_chartId));
+    if (file_exists(vs_dlmgr_meta_path(_chartId))) return true;
+    return vs_dlmgr_log_has(_chartId);
 }
 
 // Write / refresh the per-chart download marker (called after a successful
@@ -130,37 +160,9 @@ function vs_dlmgr_tracked(_chartId)
 function vs_dlmgr_write_meta(_chartId, _serverId, _name)
 {
     if (_chartId == undefined || _chartId == "") return;
-    var p = vs_dlmgr_meta_path(_chartId);
-    var oldDownloadedAt = 0;
-    var isNew = true;
-    if (file_exists(p))
-    {
-        var f = file_text_open_read(p);
-        var raw = "";
-        while (!file_text_eof(f)) { raw += file_text_readln(f); }
-        file_text_close(f);
-        try
-        {
-            var j = json_parse(raw);
-            if (j != undefined && variable_struct_exists(j, "downloadedAt"))
-            {
-                oldDownloadedAt = j.downloadedAt;
-                isNew = false;
-            }
-        }
-        catch (_e) { }
-    }
-    var m =
-    {
-        chartId: _chartId,
-        serverId: _serverId,
-        name: _name,
-        downloadedAt: isNew ? date_current_datetime() : oldDownloadedAt,
-        updatedAt: date_current_datetime()
-    };
-    var fw = file_text_open_write(p);
-    file_text_write_string(fw, json_stringify(m));
-    file_text_close(fw);
+    // Do not file_text_open_write into Custom Songs/ — that recreates the
+    // AppData shadow. Provenance lives in vsonline.downloads.json.
+    var isNew = !vs_dlmgr_tracked(_chartId);
     vs_dlmgr_log(_chartId, _serverId, _name, isNew);
 }
 
@@ -218,6 +220,7 @@ function vs_dlmgr_log(_chartId, _serverId, _name, _isNew)
 // custom song again into global.song_list (would duplicate entries).
 function vs_dlmgr_download(_songId, _chartId, _kind, _on_done)
 {
+    vs_songstore_clear_save_shadow();
     if (!variable_global_exists("vs_dlmgr_dl"))
     {
         global.vs_dlmgr_dl = { on_done: undefined, need: [], idx: 0, chartId: "", serverId: "", name: "", failed: false, cancel: false, fileGot: 0, fileTotal: 0, fileName: "", err: "" };
@@ -285,12 +288,18 @@ function vs_dlmgr_dl_finish(_ok)
     var st = global.vs_dlmgr_dl;
     if (_ok && !st.cancel)
     {
-        vs_dlmgr_write_meta(st.chartId, st.serverId, st.name);
+        if (!vs_songstore_has_chart(st.chartId))
+        {
+            vs_songstore_set_err("files missing after download -> " + vs_songstore_game_file(st.chartId + "/info.json"));
+            _ok = false;
+        }
+        else vs_dlmgr_write_meta(st.chartId, st.serverId, st.name);
     }
     else
     {
-        vs_songstore_cleanup_stub(st.chartId);
+        vs_songstore_remove_chart(st.chartId);
     }
+    vs_songstore_clear_save_shadow();
     var cb = st.on_done;
     st.on_done = undefined;
     if (cb != undefined) { cb(_ok && !st.cancel); }

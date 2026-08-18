@@ -157,6 +157,7 @@ function vs_localcharts_read_shatter(_dir, _pack)
 function vs_localcharts_scan()
 {
     var out = [];
+    vs_songstore_clear_save_shadow();
     if (!directory_exists(vs_localcharts_dir())) return out;
 
     var packs = [];

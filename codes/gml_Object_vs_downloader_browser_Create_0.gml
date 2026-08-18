@@ -34,6 +34,7 @@ cur_id = "";
 cur_chart = "";
 
 status = "Chart Downloader - loading...";
+note = "";
 enter_act = false;
 
 detail_open = false;

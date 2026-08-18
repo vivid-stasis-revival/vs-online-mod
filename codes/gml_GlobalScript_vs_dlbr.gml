@@ -242,6 +242,7 @@ function vs_dlbr_on_list(_ok, _data)
     }
     vs_dlbr_apply_filter();
     vs_dlbr_selected_refresh();
+    if (note != "") vs_dlbr_set_status(note);
 }
 
 function vs_dlbr_check_row_index(_ai)
@@ -356,6 +357,7 @@ function vs_dlbr_start_download(_r)
     updating = true;
     cur_id = _r.id;
     cur_chart = _r.chartId;
+    note = "";
     vs_dlbr_set_status("Downloading " + _r.name + " ...");
     vs_dlmgr_download(_r.id, _r.chartId, _r.kind, method(self, vs_dlbr_on_download));
 }
@@ -367,13 +369,15 @@ function vs_dlbr_on_download(_ok)
     var cancelled = variable_global_exists("vs_dlmgr_dl") && global.vs_dlmgr_dl.cancel;
     if (cancelled)
     {
-        vs_dlbr_set_status("Download cancelled.");
+        note = "Download cancelled.";
+        vs_dlbr_set_status(note);
         vs_dlbr_fetch_page();
         return;
     }
     if (_ok)
     {
-        vs_dlbr_set_status("Done - " + cur_chart + " (rescanning custom songs...)");
+        note = "Done - " + cur_chart;
+        vs_dlbr_set_status(note + " (rescanning custom songs...)");
         vs_dlbr_finalize_install();
     }
     else
@@ -383,7 +387,8 @@ function vs_dlbr_on_download(_ok)
         {
             why = " - " + string(global.vs_dlmgr_dl.err);
         }
-        vs_dlbr_set_status("Failed - " + cur_chart + why);
+        note = "Failed - " + cur_chart + why;
+        vs_dlbr_set_status(note);
         vs_dlbr_fetch_page();
     }
 }
@@ -661,11 +666,13 @@ function vs_dlbr_step()
 
         if (keyboard_check_pressed(vk_up))
         {
+            note = "";
             sel = (sel + n - 1) % n;
             vs_dlbr_selected_refresh();
         }
         else if (keyboard_check_pressed(vk_down))
         {
+            note = "";
             sel = (sel + 1) % n;
             vs_dlbr_selected_refresh();
         }
