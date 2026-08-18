@@ -596,6 +596,7 @@ function vs_dlbr_reload_data()
 
 function vs_dlbr_step()
 {
+    vs_media_poll();
     if (instance_exists(vs_online_error))
     {
         if (loading)
@@ -609,6 +610,7 @@ function vs_dlbr_step()
     started++;
     if (keyboard_check_pressed(vk_escape) && !searching && !updating && !detail_open)
     {
+        vs_media_stop_preview();
         instance_destroy();
         return;
     }
