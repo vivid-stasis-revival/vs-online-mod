@@ -1,5 +1,7 @@
-// Chart Downloader — Create
+// Chart Downloader — Create. No vs_* names (old vsml compiles those as instance vars).
 depth = -10000;
+do_step = function() { };
+do_draw = function() { };
 
 view = 0;
 page = 1;
@@ -31,5 +33,3 @@ cur_id = "";
 cur_chart = "";
 
 status = "Chart Downloader - loading...";
-
-vs_dlbr_fetch_page();

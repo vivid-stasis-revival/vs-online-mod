@@ -11,6 +11,15 @@ function vs_dlbr_open_from_menu()
     {
         instance_create_depth(0, 0, -10000, vs_downloader_browser);
     }
+    if (instance_exists(vs_downloader_browser))
+    {
+        with (vs_downloader_browser)
+        {
+            do_step = method(id, vs_dlbr_step);
+            do_draw = method(id, vs_dlbr_draw);
+            vs_dlbr_fetch_page();
+        }
+    }
 }
 
 function vs_dlbr_set_status(_msg)
