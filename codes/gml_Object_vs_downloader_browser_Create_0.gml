@@ -33,3 +33,4 @@ cur_id = "";
 cur_chart = "";
 
 status = "Chart Downloader - loading...";
+enter_act = false;
