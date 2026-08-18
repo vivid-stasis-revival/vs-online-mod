@@ -405,7 +405,7 @@ function vs_dlbr_on_download(_ok)
         {
             why = " - " + string(global.vs_dlmgr_dl.err);
         }
-        note = "Failed - " + cur_chart + why;
+        note = "Failed - " + cur_chart + why + " (vsonline.dl.log)";
         vs_dlbr_set_status(note);
         vs_dlbr_fetch_page();
     }

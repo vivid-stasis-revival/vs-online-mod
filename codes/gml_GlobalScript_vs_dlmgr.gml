@@ -245,6 +245,9 @@ function vs_dlmgr_download(_songId, _chartId, _kind, _on_done)
     global.vs_dlmgr_dl.fileTotal = 0;
     global.vs_dlmgr_dl.fileName = "";
     global.vs_dlmgr_dl.err = "";
+    vs_songstore_dl_init();
+    vs_songstore_sweep_tmp();
+    vs_songstore_log("download start kind=" + string(_kind) + " song=" + string(_songId) + " chart=" + string(_chartId));
     vs_songstore_fetch(_kind, _songId, function(_ok, _detail)
     {
         var st = global.vs_dlmgr_dl;
@@ -348,7 +351,7 @@ function vs_dlmgr_dl_file_done(_ok, _path)
     if (!_ok)
     {
         st2.failed = true;
-        show_debug_message("VS DLMGR: download failed -> " + string(_path));
+        vs_songstore_log("file failed -> " + string(_path));
     }
     st2.idx++;
     vs_dlmgr_dl_step();

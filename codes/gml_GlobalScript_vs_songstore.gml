@@ -341,13 +341,67 @@ function vs_songstore_encode_url(_url)
     return proto + host + out + query;
 }
 
+function vs_songstore_log(_msg)
+{
+    var line = "VS DL: " + string(_msg);
+    show_debug_message(line);
+    var path = working_directory + "vsonline.dl.log";
+    if (file_exists(path) && file_size(path) > 200000) file_delete(path);
+    var f = file_text_open_append(path);
+    if (f < 0) return;
+    file_text_write_string(f, date_date_string(date_current_datetime()) + " " + date_time_string(date_current_datetime()) + "  " + line);
+    file_text_writeln(f);
+    file_text_close(f);
+}
+
 function vs_songstore_set_err(_msg)
 {
     if (variable_global_exists("vs_dlmgr_dl"))
     {
         global.vs_dlmgr_dl.err = _msg;
     }
-    show_debug_message("VS DL: " + string(_msg));
+    vs_songstore_log(string(_msg));
+}
+
+function vs_songstore_sweep_tmp()
+{
+    var keep = "";
+    if (variable_global_exists("vs_dl_busy") && global.vs_dl_busy && variable_global_exists("vs_dl_state"))
+    {
+        keep = string(global.vs_dl_state.tmpPath);
+    }
+    var names = [];
+    var n = file_find_first("vsonline_dl_*.bin", 0);
+    while (n != "")
+    {
+        array_push(names, n);
+        n = file_find_next();
+    }
+    file_find_close();
+    n = file_find_first(working_directory + "vsonline_dl_*.bin", 0);
+    while (n != "")
+    {
+        array_push(names, working_directory + n);
+        n = file_find_next();
+    }
+    file_find_close();
+    var i = 0;
+    repeat (array_length(names))
+    {
+        var p = names[i];
+        if (keep != "" && (p == keep || p == working_directory + keep || filename_name(p) == filename_name(keep)))
+        {
+            i++;
+            continue;
+        }
+        if (file_exists(p)) file_delete(p);
+        i++;
+    }
+    if (keep == "" || keep != "vsonline_dl.bin")
+    {
+        if (file_exists("vsonline_dl.bin")) file_delete("vsonline_dl.bin");
+        if (file_exists(working_directory + "vsonline_dl.bin")) file_delete(working_directory + "vsonline_dl.bin");
+    }
 }
 
 function vs_songstore_dl_init()
@@ -358,6 +412,7 @@ function vs_songstore_dl_init()
         global.vs_dl_busy = false;
         global.vs_dl_scheduled = false;
         global.vs_dl_state = { rid: -1, gen: 0, url: "", localPath: "", tmpPath: "vsonline_dl.bin", on_done: undefined, got: 0, total: 0 };
+        vs_songstore_sweep_tmp();
     }
 }
 
@@ -433,7 +488,7 @@ function vs_songstore_dl_pump()
     }
     array_push(global.vs_dl_to, global.vs_dl_state.gen);
     call_later(60 * 300, time_source_units_frames, vs_songstore_dl_on_timeout);
-    show_debug_message("VS DL: start " + string(job.localPath) + " url=" + url + " rid=" + string(global.vs_dl_state.rid));
+    vs_songstore_log("start " + string(job.localPath) + " url=" + url + " rid=" + string(global.vs_dl_state.rid));
 }
 
 function vs_songstore_dl_on_timeout()
@@ -464,16 +519,18 @@ function vs_songstore_dl_commit(_ok)
             vs_songstore_ensure_dir(vs_songstore_parent(dest));
             if (file_exists(put)) file_delete(put);
             file_copy(tmp, put);
-            file_delete(tmp);
+            if (file_exists(tmp)) file_delete(tmp);
             dest = put;
         }
         _ok = file_exists(dest);
         if (!_ok) vs_songstore_set_err("could not write " + string(dest));
+        else vs_songstore_log("wrote " + string(dest));
     }
     else if (tmp != "" && file_exists(tmp))
     {
         file_delete(tmp);
     }
+    vs_songstore_sweep_tmp();
     return _ok;
 }
 
@@ -523,7 +580,7 @@ function vs_songstore_on_http()
         ok = false;
     }
     if (!ok) vs_songstore_set_err("http " + string(httpStatus) + " for " + string(st.url));
-    show_debug_message("VS DL: done " + string(st.localPath) + " ok=" + string(ok) + " http=" + string(httpStatus) + " st=" + string(gmStatus));
+    vs_songstore_log("done " + string(st.localPath) + " ok=" + string(ok) + " http=" + string(httpStatus) + " st=" + string(gmStatus));
     vs_songstore_dl_finish(ok);
 }
 
