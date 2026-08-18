@@ -347,10 +347,7 @@ function vs_http_finish(_job, _ok, _text, _status)
     {
         if (_ok && data != undefined)
         {
-            var cfg = vs_online_get_config();
-            if (variable_struct_exists(data, "name")) { cfg.name = data.name; }
-            if (variable_struct_exists(data, "avatar")) { cfg.avatar = data.avatar; }
-            vs_online_save_config();
+            vs_online_apply_me(data);
         }
         if (cb != undefined) { cb(_ok, data); }
         return;
@@ -405,6 +402,31 @@ function vs_online_player_name()
 {
     var cfg = vs_online_get_config();
     return (variable_struct_exists(cfg, "name")) ? cfg.name : "";
+}
+
+// Persist /players/me into the local config. OAuth login only stored tokens
+// before — missing playerId made Worldcross show Disconnected and broke host checks.
+function vs_online_apply_me(_data)
+{
+    if (_data == undefined) return;
+    var cfg = vs_online_get_config();
+    if (variable_struct_exists(_data, "playerId") && _data.playerId != "")
+    {
+        cfg.playerId = _data.playerId;
+    }
+    if (variable_struct_exists(_data, "name") && _data.name != "")
+    {
+        cfg.name = _data.name;
+    }
+    if (variable_struct_exists(_data, "avatar"))
+    {
+        cfg.avatar = _data.avatar;
+    }
+    if (variable_struct_exists(_data, "email") && _data.email != "")
+    {
+        cfg.email = _data.email;
+    }
+    vs_online_save_config();
 }
 
 function vs_online_create_player(_on_done)
@@ -572,9 +594,7 @@ function vs_online_ensure_identity_me(_ok, _data, _status)
 {
     if (_ok)
     {
-        var cfg = vs_online_get_config();
-        if (variable_struct_exists(_data, "name") && cfg.name == "") { cfg.name = _data.name; }
-        if (variable_struct_exists(_data, "avatar")) { cfg.avatar = _data.avatar; }
+        vs_online_apply_me(_data);
         vs_online_ensure_identity_pop(true, _data);
     }
     else
@@ -659,7 +679,8 @@ function vs_online_clear_achievement(_name)
 function vs_online_upload_score(_chartId, _difficulty, _sha1, _score, _data)
 {
     if (!vs_online_is_account()) return;
-    var body = { chartId: _chartId, difficulty: vs_online_diff_api(_difficulty), sha1: _sha1, score: _score };
+    var body = { chartId: _chartId, difficulty: vs_online_diff_api(_difficulty), sha1: _sha1 };
+    variable_struct_set(body, "score", _score);
     if (_data != undefined && _data != "")
     {
         body.data = _data;
@@ -809,14 +830,15 @@ function vs_online_lb_apply(_data)
     {
         var e = _data.entries[i];
         var nm = (variable_struct_exists(e, "name") && e.name != "") ? e.name : e.playerId;
-        array_push(inst.data,
+        var row =
         {
             userid: e.playerId,
             name: nm,
-            score: e.score,
             rank: e.rank,
             timestamp: variable_struct_exists(e, "uploadedAt") ? e.uploadedAt : 0
-        });
+        };
+        variable_struct_set(row, "score", variable_struct_exists(e, "score") ? variable_struct_get(e, "score") : 0);
+        array_push(inst.data, row);
         i++;
     }
 }
@@ -907,7 +929,7 @@ function vs_online_rating_fill_window(_data)
         {
             var e = _data.top[i];
             var sid = get_song_id_from_name(variable_struct_exists(e, "song") ? e.song : "");
-            var sc = variable_struct_exists(e, "score") ? e.score : 0;
+            var sc = variable_struct_exists(e, "score") ? variable_struct_get(e, "score") : 0;
             var df = vs_online_rating_diff_index(variable_struct_exists(e, "difficulty") ? e.difficulty : "");
             var rt = variable_struct_exists(e, "rating") ? (e.rating * 1000) : 0;
             var lp = vs_online_rating_lamp(variable_struct_exists(e, "lamp") ? e.lamp : "");

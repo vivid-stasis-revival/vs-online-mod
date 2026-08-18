@@ -347,7 +347,7 @@
     {
         "Entry": "gml_Object_o_2023res_songwindow_Draw_0",
         "Find": "var members = o_st_handle.lobbyMembers;",
-        "Value": "var members = o_st_handle.lobbyMembers;array_sort(members, function(arg0, arg1){return arg1.score - arg0.score;});",
+        "Value": "var members = o_st_handle.lobbyMembers;array_sort(members, function(arg0, arg1){return vs_member_get_score(arg1) - vs_member_get_score(arg0);});",
         "Type": 1
     },
     {
@@ -553,6 +553,18 @@
         "Entry": "gml_GlobalScript_SendPlayerInfoPacket",
         "Find": "member.class = arg0.class;",
         "Value": "member.class = arg0.class;member.has_bwp = arg0.has_bwp;",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_Object_obj_multiplayer_lobby_Draw_64",
+        "Find": "if (member.score != 0)",
+        "Value": "if (vs_member_get_score(member) != 0)",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_Object_obj_multiplayer_lobby_Draw_64",
+        "Find": "format_score(member.score)",
+        "Value": "format_score(vs_member_get_score(member))",
         "Type": 0
     },
     {

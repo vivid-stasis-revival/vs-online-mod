@@ -60,9 +60,26 @@ function vs_online_is_connected()
 {
     if (vs_online_is_custom())
     {
-        return vs_online_player_id() != "";
+        return vs_online_is_account() || vs_online_player_id() != "" || vs_online_token() != "";
     }
     return steam_is_user_logged_on();
+}
+
+// vsml treats `score` as the built-in instance var. Never read/write
+// member.score with the identifier — use these string-key helpers.
+function vs_member_get_score(_m)
+{
+    if (_m == undefined) return 0;
+    if (variable_struct_exists(_m, "score")) return variable_struct_get(_m, "score");
+    if (variable_struct_exists(_m, "score_")) return variable_struct_get(_m, "score_");
+    return 0;
+}
+
+function vs_member_set_score(_m, _v)
+{
+    if (_m == undefined) return;
+    variable_struct_set(_m, "score", _v);
+    variable_struct_set(_m, "score_", _v);
 }
 
 // --- member struct ---------------------------------------------------------
@@ -180,12 +197,11 @@ function vs_lobby_build_member(_mv)
         var fetched = vs_online_avatar_ensure(_mv.playerId, _mv.avatar);
         if (fetched != undefined) av = fetched;
     }
-    return
+    var m =
     {
         id: _mv.playerId,
         name: variable_struct_exists(_mv, "name") ? _mv.name : "",
         ready: variable_struct_exists(_mv, "ready") ? _mv.ready : 0,
-        score: variable_struct_exists(_mv, "score") ? _mv.score : 0,
         scoreFlag: variable_struct_exists(_mv, "scoreFlag") ? _mv.scoreFlag : 1,
         avatar: av,
         reportedScore: true,
@@ -209,6 +225,9 @@ function vs_lobby_build_member(_mv)
             }
         }
     };
+    var sc = variable_struct_exists(_mv, "score") ? variable_struct_get(_mv, "score") : 0;
+    vs_member_set_score(m, sc);
+    return m;
 }
 
 function vs_lobby_apply_roster(_members)
@@ -482,7 +501,7 @@ function vs_lobby_handle_control(_j)
                     {
                         send_packet(UpdateScorePacket,
                         {
-                            score_: o_st_handle.currentMember.score,
+                            score_: vs_member_get_score(o_st_handle.currentMember),
                             flag: o_st_handle.currentMember.scoreFlag
                         });
                     }

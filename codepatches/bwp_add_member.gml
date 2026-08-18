@@ -27,7 +27,7 @@ addMember = function(arg0)
             TweenFire(o_st_handle.getMember(userId), EaseOutExpo, 0, true, 0, 0.5, "sticker_alpha", 0, 1);
         }
     };
-    member.score = 0;
+    vs_member_set_score(member, 0);
     array_push(lobbyMembers, member);
 };
 addMember_deprecated = function(arg0)
