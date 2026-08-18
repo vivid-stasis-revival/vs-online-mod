@@ -592,10 +592,142 @@ function vs_online_error_setup(_on_retry)
 {
     on_retry = _on_retry;
     server_url = vs_online_server_url();
-    message = "The custom server could not be reached.\n\n" +
-        "Address: " + server_url + "\n\n" +
-        "Check that vs-server-go is running, then retry.\n" +
-        "Or switch back to Steam.";
+    message = "The custom server could not be reached.\n" +
+        server_url + "\n" +
+        "Retry, or switch back to Steam.";
+}
+
+function vs_online_error_break(_text, _maxw)
+{
+    var src = string(_text);
+    var out = "";
+    var line = "";
+    var i = 1;
+    var n = string_length(src);
+    while (i <= n)
+    {
+        var c = string_char_at(src, i);
+        if (c == "\n" || c == chr(10) || c == chr(13))
+        {
+            if (c != chr(13))
+            {
+                out += line + "\n";
+                line = "";
+            }
+        }
+        else if (line != "" && string_width(line + c) > _maxw)
+        {
+            out += line + "\n";
+            line = c;
+        }
+        else line += c;
+        i++;
+    }
+    return out + line;
+}
+
+function vs_online_error_clip(_text, _maxw)
+{
+    var s = string(_text);
+    if (string_width(s) <= _maxw) return s;
+    while (string_length(s) > 1 && string_width(s + "..") > _maxw)
+    {
+        s = string_copy(s, 1, string_length(s) - 1);
+    }
+    return s + "..";
+}
+
+function vs_online_error_draw()
+{
+    var cw = display_get_gui_width();
+    var ch = display_get_gui_height();
+    var bw = min(280, max(80, cw - 8));
+    var bh = min(130, max(70, ch - 8));
+    var bx = (cw - bw) / 2;
+    var by = (ch - bh) / 2;
+    var pad = 8;
+    var maxw = bw - pad * 2;
+    var btn_h = 18;
+    var yb = by + bh - btn_h - pad;
+    var sep = 11;
+
+    draw_set_alpha(0.7);
+    draw_set_color(c_black);
+    draw_rectangle(0, 0, cw, ch, false);
+    draw_set_alpha(1);
+
+    draw_set_color(c_black);
+    draw_rectangle(bx - 2, by - 2, bx + bw + 2, by + bh + 2, false);
+    draw_set_color(c_white);
+    draw_rectangle(bx, by, bx + bw, by + bh, true);
+
+    draw_set_halign(fa_center);
+    draw_set_valign(fa_top);
+    draw_set_font(fnt_monacovs);
+    draw_set_color(c_red);
+    var ttl = vs_online_error_clip(title, maxw);
+    draw_text(bx + bw / 2, by + 5, ttl);
+
+    draw_set_font(global.default_font);
+    draw_set_color(c_white);
+    draw_set_halign(fa_left);
+    var msg = vs_online_error_break(message, maxw);
+    var msgTop = by + 22;
+    var msgH = yb - msgTop - 4;
+    var maxLines = max(1, floor(msgH / sep));
+    var shown = "";
+    var line = "";
+    var used = 0;
+    var i = 1;
+    var n = string_length(msg);
+    while (i <= n && used < maxLines)
+    {
+        var c = string_char_at(msg, i);
+        if (c == "\n")
+        {
+            if (used > 0) shown += "\n";
+            shown += line;
+            line = "";
+            used += 1;
+        }
+        else line += c;
+        i++;
+    }
+    if (line != "" && used < maxLines)
+    {
+        if (used > 0) shown += "\n";
+        shown += line;
+    }
+    draw_text_ext(bx + pad, msgTop, shown, sep, maxw);
+
+    var btn_w = floor((bw - pad * 3) / 2);
+    var bi = 0;
+    repeat (array_length(buttons))
+    {
+        var xb = bx + pad + bi * (btn_w + pad);
+        var isSel = (bi == selected);
+        if (isSel)
+        {
+            draw_set_color(c_yellow);
+            draw_rectangle(xb, yb, xb + btn_w, yb + btn_h, false);
+            draw_set_color(c_black);
+        }
+        else
+        {
+            draw_set_color(make_color_rgb(48, 48, 48));
+            draw_rectangle(xb, yb, xb + btn_w, yb + btn_h, false);
+            draw_set_color(c_gray);
+            draw_rectangle(xb, yb, xb + btn_w, yb + btn_h, true);
+            draw_set_color(c_white);
+        }
+        draw_set_halign(fa_center);
+        draw_set_valign(fa_middle);
+        draw_text(xb + btn_w / 2, yb + btn_h / 2, vs_online_error_clip(buttons[bi], btn_w - 4));
+        bi++;
+    }
+
+    draw_set_halign(fa_left);
+    draw_set_valign(fa_top);
 }
 
 function vs_online_error_step()
