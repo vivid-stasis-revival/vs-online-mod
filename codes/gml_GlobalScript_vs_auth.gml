@@ -10,12 +10,13 @@ function vs_auth_flow_started(_ok, _data)
         stage = 1;
         device_code = _data.device_code;
         user_code = _data.user_code;
-        verification_uri = variable_struct_exists(_data, "verification_uri") ? _data.verification_uri : "";
+        verification_uri = vs_online_device_page_url("");
         expires_at = current_time / 1000 + (variable_struct_exists(_data, "expires_in") ? _data.expires_in : 600);
         interval = variable_struct_exists(_data, "interval") ? max(_data.interval, 5) : 5;
         poll_at = current_time + interval * 1000;
         message = "Waiting for approval...";
         play_se(sfx_songsel_select);
+        vs_auth_open_device_page();
     }
     else
     {
@@ -82,6 +83,17 @@ function vs_auth_pressed_close()
     if (keyboard_check_pressed(vk_escape)) return true;
     if (variable_global_exists("menu_cancel") && keyboard_check_pressed(global.menu_cancel)) return true;
     return false;
+}
+
+function vs_auth_open_device_page()
+{
+    var page = vs_online_device_page_url(user_code);
+    verification_uri = vs_online_device_page_url("");
+    if (page != "")
+    {
+        url_open(page);
+        message = "Opened device page - enter the code if asked.";
+    }
 }
 
 function vs_auth_start_flow()
@@ -177,6 +189,11 @@ function vs_auth_step()
             }
         }
         return;
+    }
+
+    if (!signed_in && user_code != "" && (keyboard_check_pressed(vk_enter) || keyboard_check_pressed(vk_space)))
+    {
+        vs_auth_open_device_page();
     }
 
     if (busy)
@@ -288,7 +305,7 @@ function vs_auth_draw()
             draw_set_halign(fa_left);
 
             draw_set_color(c_white);
-            draw_text_ext(bx + 12, by + 44, "Open this page in your browser and enter the code:", 10, bw - 24);
+            draw_text_ext(bx + 12, by + 44, "Enter opens the device page. Sign in and enter the code:", 10, bw - 24);
             draw_set_color(c_lime);
             draw_text_ext(bx + 12, by + 66, verification_uri, 10, bw - 24);
             draw_set_color(c_gray);
@@ -296,7 +313,7 @@ function vs_auth_draw()
             draw_set_color(c_yellow);
             draw_text(bx + 12, by + 106, message);
             draw_set_color(c_gray);
-            draw_text(bx + 12, by + 118, "Esc: close");
+            draw_text(bx + 12, by + 118, "Enter: open page   Esc: close");
         }
         else
         {

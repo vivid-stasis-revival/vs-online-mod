@@ -18,7 +18,8 @@
 //
 // Config file: <game save dir>/vsonline   (JSON, no extension)
 // {
-//   "server": "https://online.vividstasis.cn", // REST base URL
+//   "server": "https://online.vividstasis.cn", // REST / API base URL
+//   "frontend": "https://online.vividstasis.cn", // device-flow / account website
 //   "ws": "wss://online.vividstasis.cn",       // optional lobby WS (derived from server if omitted)
 //   "playerId": "...",                        // filled in by M2 (identity)
 //   "token": "...",                           // bearer token
@@ -38,6 +39,25 @@ function vs_online_config_path()
 function vs_online_default_server()
 {
     return "https://online.vividstasis.cn";
+}
+
+function vs_online_default_frontend()
+{
+    return "https://online.vividstasis.cn";
+}
+
+function vs_online_trim_url(_s)
+{
+    var s = string(_s);
+    while (string_length(s) > 0 && string_char_at(s, string_length(s)) == "/")
+    {
+        s = string_copy(s, 1, string_length(s) - 1);
+    }
+    if (s != "" && string_pos("://", s) <= 0)
+    {
+        s = "https://" + s;
+    }
+    return s;
 }
 
 // Read (and cache) the vsonline config. Creates a default file if missing.
@@ -79,6 +99,12 @@ function vs_online_get_config()
     {
         cfg.server = vs_online_default_server();
     }
+    if (!variable_struct_exists(cfg, "frontend") || cfg.frontend == "")
+    {
+        cfg.frontend = vs_online_default_frontend();
+    }
+    cfg.server = vs_online_trim_url(cfg.server);
+    cfg.frontend = vs_online_trim_url(cfg.frontend);
     global.vs_online_config = cfg;
     return cfg;
 }
@@ -86,6 +112,21 @@ function vs_online_get_config()
 function vs_online_server_url()
 {
     return vs_online_get_config().server;
+}
+
+function vs_online_frontend_url()
+{
+    return vs_online_get_config().frontend;
+}
+
+function vs_online_device_page_url(_userCode)
+{
+    var page = vs_online_frontend_url() + "/device";
+    if (_userCode != undefined && _userCode != "")
+    {
+        page += "?user_code=" + vs_online_url_encode(_userCode);
+    }
+    return page;
 }
 
 // sha1 hex prefix as a non-negative real. string_hash is not a GML builtin
