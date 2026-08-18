@@ -23,21 +23,6 @@ function vs_localcharts_dir()
     return vs_songstore_root();
 }
 
-function vs_localcharts_scan_roots()
-{
-    var rel = vs_localcharts_dir();
-    var out = [rel];
-    var save = working_directory + rel;
-    if (save != rel) array_push(out, save);
-    var gr = vs_songstore_game_root();
-    if (gr != "")
-    {
-        var gd = gr + rel;
-        if (gd != rel && gd != save) array_push(out, gd);
-    }
-    return out;
-}
-
 // "Custom Songs/xyz/" -> "xyz"
 function vs_localcharts_folder_name(_dir)
 {
@@ -172,47 +157,30 @@ function vs_localcharts_read_shatter(_dir, _pack)
 function vs_localcharts_scan()
 {
     var out = [];
-    var seen = ds_map_create();
-    var roots = vs_localcharts_scan_roots();
-    var ri = 0;
+    if (!directory_exists(vs_localcharts_dir())) return out;
+
     var packs = [];
-    repeat (array_length(roots))
+    var d = file_find_first(vs_localcharts_dir() + "*", 16);
+    while (d != "")
     {
-        var root = roots[ri];
-        if (directory_exists(root))
+        var p = vs_localcharts_dir() + d + "/";
+        if (file_exists(p + "info.json"))
         {
-            var d = file_find_first(root + "*", 16);
-            while (d != "")
-            {
-                var p = root + d + "/";
-                if (file_exists(p + "info.json"))
-                {
-                    var s = vs_localcharts_read_info(p, "Unpacked");
-                    if (s != undefined && !ds_map_exists(seen, s.chart_id))
-                    {
-                        ds_map_add(seen, s.chart_id, true);
-                        array_push(out, s);
-                    }
-                }
-                else if (file_exists(p + "shatterinfo.json"))
-                {
-                    var sh = vs_localcharts_read_shatter(p, "Shatter");
-                    if (sh != undefined && !ds_map_exists(seen, sh.chart_id))
-                    {
-                        ds_map_add(seen, sh.chart_id, true);
-                        array_push(out, sh);
-                    }
-                }
-                else if (file_exists(p + "songpack_info.json"))
-                {
-                    array_push(packs, p);
-                }
-                d = file_find_next();
-            }
-            file_find_close();
+            var s = vs_localcharts_read_info(p, "Unpacked");
+            if (s != undefined) array_push(out, s);
         }
-        ri++;
+        else if (file_exists(p + "shatterinfo.json"))
+        {
+            var sh = vs_localcharts_read_shatter(p, "Shatter");
+            if (sh != undefined) array_push(out, sh);
+        }
+        else if (file_exists(p + "songpack_info.json"))
+        {
+            array_push(packs, p);
+        }
+        d = file_find_next();
     }
+    file_find_close();
 
     for (var i = 0; i < array_length(packs); i++)
     {
@@ -224,26 +192,17 @@ function vs_localcharts_scan()
             if (file_exists(pp + "info.json"))
             {
                 var s2 = vs_localcharts_read_info(pp, pk.name);
-                if (s2 != undefined && !ds_map_exists(seen, s2.chart_id))
-                {
-                    ds_map_add(seen, s2.chart_id, true);
-                    array_push(out, s2);
-                }
+                if (s2 != undefined) array_push(out, s2);
             }
             else if (file_exists(pp + "shatterinfo.json"))
             {
                 var sh2 = vs_localcharts_read_shatter(pp, pk.name);
-                if (sh2 != undefined && !ds_map_exists(seen, sh2.chart_id))
-                {
-                    ds_map_add(seen, sh2.chart_id, true);
-                    array_push(out, sh2);
-                }
+                if (sh2 != undefined) array_push(out, sh2);
             }
             dd = file_find_next();
         }
         file_find_close();
     }
-    ds_map_destroy(seen);
 
     array_sort(out, function(_a, _b)
     {

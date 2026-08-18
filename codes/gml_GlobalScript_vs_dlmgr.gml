@@ -116,16 +116,6 @@ function vs_dlmgr_row_status(_r)
 
 function vs_dlmgr_meta_path(_chartId)
 {
-    var play = vs_songstore_chart_dir(_chartId);
-    if (play != "") return play + ".vs_download.json";
-    var dirs = vs_songstore_dir_candidates(_chartId);
-    var i = 0;
-    repeat (array_length(dirs))
-    {
-        var p = dirs[i] + ".vs_download.json";
-        if (file_exists(p)) return p;
-        i++;
-    }
     return vs_songstore_local_dir(_chartId) + ".vs_download.json";
 }
 
