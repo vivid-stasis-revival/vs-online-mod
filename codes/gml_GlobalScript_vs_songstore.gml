@@ -135,16 +135,38 @@ function vs_songstore_flatten_name(_name)
 {
     if (_name == undefined) return "";
     var n = string_replace_all(string(_name), "\\", "/");
-    n = string_replace(n, "charts/", "");
-    while (string_pos("/", n) > 0)
+    while (string_pos("//", n) > 0)
     {
-        n = string_copy(n, string_pos("/", n) + 1, string_length(n));
+        n = string_replace_all(n, "//", "/");
     }
+    if (string_copy(n, 1, 1) == "/") n = string_copy(n, 2, string_length(n));
     if (n == "" || n == "." || n == ".." || string_pos("..", n) > 0)
     {
         return "";
     }
     return n;
+}
+
+function vs_songstore_ends_with(_s, _suf)
+{
+    var s = string_lower(string(_s));
+    var f = string_lower(string(_suf));
+    var n = string_length(s);
+    var m = string_length(f);
+    if (n < m) return false;
+    return string_copy(s, n - m + 1, m) == f;
+}
+
+// Runtime / editor sidecars. CSM rewrites *.stats_custom on play; vs-chart.json
+// is web-editor metadata. Neither is a playable chart file — including them
+// in the sha1 diff makes a chart look permanently out of date.
+function vs_songstore_skip_file(_name)
+{
+    var n = string_lower(string(_name));
+    if (n == "vs-chart.json" || n == ".vs_download.json") return true;
+    if (vs_songstore_ends_with(n, ".stats_custom")) return true;
+    if (vs_songstore_ends_with(n, ".stats")) return true;
+    return false;
 }
 
 function vs_songstore_detail(_songId, _on_done)
@@ -173,9 +195,9 @@ function vs_songstore_diff(_files, _chartId)
     {
         var f = _files[i];
         var flat = vs_songstore_flatten_name(f.name);
-        if (flat == "")
+        if (flat == "" || vs_songstore_skip_file(flat))
         {
-            show_debug_message("VS Songstore: skip unsafe file name -> " + string(f.name));
+            if (flat == "") show_debug_message("VS Songstore: skip unsafe file name -> " + string(f.name));
             continue;
         }
         var localPath = dir + flat;

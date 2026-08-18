@@ -242,19 +242,20 @@ function vs_dlmgr_download(_songId, _chartId, _on_done)
         st.name = variable_struct_exists(_detail, "name") ? _detail.name : st.chartId;
         st.need = vs_songstore_diff(_detail.files, st.chartId);
         st.idx = 0;
-        if (array_length(st.need) == 0 && vs_songstore_has_chart(st.chartId))
+        if (array_length(st.need) == 0)
         {
-            vs_dlmgr_write_meta(st.chartId, st.serverId, st.name);
+            if (vs_songstore_has_chart(st.chartId))
+            {
+                vs_dlmgr_write_meta(st.chartId, st.serverId, st.name);
+                var cb = st.on_done;
+                st.on_done = undefined;
+                if (cb != undefined) { cb(true); }
+                return;
+            }
+            vs_songstore_set_err("no chart files on server");
             var cb = st.on_done;
             st.on_done = undefined;
-            if (cb != undefined) { cb(true); }
-            return;
-        }
-        if (!vs_songstore_has_chart(st.chartId))
-        {
-            st.need = [{ name: "package.zip" }];
-            st.fileName = "package.zip";
-            vs_songstore_download_package(st.serverId, st.chartId, vs_dlmgr_dl_pkg_done);
+            if (cb != undefined) { cb(false); }
             return;
         }
         vs_dlmgr_dl_step();
