@@ -460,27 +460,43 @@ function vs_lobby_confirm_opt_is_autoplay(_opt)
 // Add one in Worldcross if nobody else already did.
 function vs_lobby_confirm_ensure_autoplay()
 {
-    if (!variable_instance_exists(id, "options") || !is_array(options)) return;
-    var found = false;
+    if (!variable_instance_exists(id, "options")) return;
+    var opts = variable_instance_get(id, "options");
+    if (!is_array(opts)) return;
+    var keep = -1;
     var i = 0;
-    repeat (array_length(options))
+    while (i < array_length(opts))
     {
-        if (!vs_lobby_confirm_opt_is_autoplay(options[i]))
+        if (!vs_lobby_confirm_opt_is_autoplay(opts[i]))
         {
             i++;
-            continue;
         }
-        if (found)
+        else if (keep < 0)
         {
-            array_delete(options, i, 1);
-            continue;
+            keep = i;
+            i++;
         }
-        found = true;
-        i++;
+        else
+        {
+            var cur = opts[i];
+            var had = opts[keep];
+            var curKey = is_struct(cur) && variable_struct_exists(cur, "key");
+            var hadKey = is_struct(had) && variable_struct_exists(had, "key");
+            if (curKey && !hadKey)
+            {
+                array_delete(opts, keep, 1);
+                keep = i - 1;
+                i = keep + 1;
+            }
+            else
+            {
+                array_delete(opts, i, 1);
+            }
+        }
     }
-    if (!found && variable_global_exists("multiplayerLobby") && global.multiplayerLobby)
+    if (keep < 0 && variable_global_exists("multiplayerLobby") && global.multiplayerLobby)
     {
-        array_push(options, { name: "Autoplay", type: 0, choices: ["OFF", "ON"], prop: [global, "op_autoplay"], key: ["system", "config", "autoplay", 0] });
+        array_push(opts, { name: "Autoplay", type: 0, choices: ["OFF", "ON"], prop: [global, "op_autoplay"], key: ["system", "config", "autoplay", 0] });
     }
 }
 
@@ -1670,10 +1686,13 @@ function vs_lobby_count_st()
 {
     // Keep flag names off the function namespace. `global.vs_lobby_count_busy`
     // was the script itself (always truthy), so GET /lobbies never ran.
-    if (!variable_global_exists("vs_lobby_cnt"))
+    if (!variable_global_exists("vs_lobby_cnt") || !is_struct(global.vs_lobby_cnt))
     {
-        global.vs_lobby_cnt = { inflight: false, wait: false };
+        global.vs_lobby_cnt = { inflight: false, wait: false, t0: 0 };
     }
+    if (!variable_struct_exists(global.vs_lobby_cnt, "inflight")) global.vs_lobby_cnt.inflight = false;
+    if (!variable_struct_exists(global.vs_lobby_cnt, "wait")) global.vs_lobby_cnt.wait = false;
+    if (!variable_struct_exists(global.vs_lobby_cnt, "t0")) global.vs_lobby_cnt.t0 = 0;
     return global.vs_lobby_cnt;
 }
 
@@ -1689,7 +1708,8 @@ function vs_lobby_count_schedule()
 
 function vs_lobby_count_on_timer()
 {
-    vs_lobby_count_st().wait = false;
+    var st = vs_lobby_count_st();
+    st.wait = false;
     vs_lobby_refresh_count();
 }
 
@@ -1697,12 +1717,17 @@ function vs_lobby_refresh_count()
 {
     if (!instance_exists(obj_multiplayer_lobby) || !vs_online_is_custom()) return;
     var st = vs_lobby_count_st();
-    if (vs_lobby_has_code() || st.inflight)
+    // Landing is vs_lobby_lobby_id()<=0. A leftover invite code must not
+    // block the public list; a stuck HTTP flag also must not last forever.
+    var inRoom = vs_lobby_lobby_id() > 0;
+    var blocked = st.inflight && (current_time - st.t0) < 15000;
+    if (inRoom || blocked)
     {
         vs_lobby_count_schedule();
         return;
     }
     st.inflight = true;
+    st.t0 = current_time;
     vs_online_get_json("/api/v1/lobbies", false, vs_lobby_count_done);
 }
 

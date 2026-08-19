@@ -10,6 +10,7 @@ if (vs_online_is_custom())
         txt: "Kick",
         callback: "kick"
     });
+    vs_lobby_count_st().inflight = false;
     vs_lobby_refresh_count();
     if (vs_lobby_has_code())
     {
