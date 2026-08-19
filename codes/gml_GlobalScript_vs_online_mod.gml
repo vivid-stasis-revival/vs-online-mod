@@ -468,9 +468,10 @@ function vs_online_conn_state()
     return variable_global_get("vs_online_conn");
 }
 
-// Lightweight reachability probe: GET /healthz (no auth). Falls back to
-// "unreachable" after ~1s (60 frames) even if the coroutine dispatcher never
-// responds, so the player is never left waiting forever.
+// Lightweight reachability probe: GET /healthz (no auth). Each attempt waits
+// a bit longer than the HTTP timeout so TLS/cold-start to the API is not
+// marked dead at 1s. Failures automatically retry (3 tries) before the
+// on-screen Retry dialog.
 //
 // NOTE: probe state lives in a global struct, NOT a captured `var` local.
 // Anonymous functions in the loader-injected scripts can capture arguments
@@ -478,6 +479,11 @@ function vs_online_conn_state()
 // directly in a regular function (that compiled to an instance-variable read
 // and crashed: "Variable obj_multiplayer_lobby.pending not set before
 // reading it"). Globals are always reachable from any callback.
+function vs_online_probe_max()
+{
+    return 3;
+}
+
 function vs_online_probe(_on_done)
 {
     if (!variable_global_exists("vs_probe_q"))
@@ -486,34 +492,55 @@ function vs_online_probe(_on_done)
         global.vs_probe_inflight = false;
         global.vs_probe_gen = 0;
         global.vs_probe_to = [];
-        global.vs_probe_st = { done: false, gen: 0 };
+        global.vs_probe_http = [];
+        global.vs_probe_st = { done: false, gen: 0, attempt: 0 };
+    }
+    if (!variable_global_exists("vs_probe_http") || !is_array(global.vs_probe_http))
+    {
+        global.vs_probe_http = [];
     }
     if (!variable_global_exists("vs_probe_st") || !is_struct(global.vs_probe_st))
     {
-        global.vs_probe_st = { done: false, gen: 0 };
+        global.vs_probe_st = { done: false, gen: 0, attempt: 0 };
     }
+    if (!variable_struct_exists(global.vs_probe_st, "attempt")) global.vs_probe_st.attempt = 0;
     array_push(global.vs_probe_q, _on_done);
     if (global.vs_probe_inflight)
     {
         return;
     }
     global.vs_probe_inflight = true;
-    global.vs_probe_gen += 1;
     global.vs_probe_st.done = false;
-    global.vs_probe_st.gen = global.vs_probe_gen;
-    array_push(global.vs_probe_to, global.vs_probe_gen);
-    vs_online_get_json("/healthz", false, vs_online_probe_http, 2000);
-    call_later(60, time_source_units_frames, vs_online_probe_timeout);
+    global.vs_probe_st.attempt = 0;
+    vs_online_probe_kick();
 }
 
-function vs_online_probe_settle(_good, _gen)
+function vs_online_probe_kick()
 {
     if (!variable_global_exists("vs_probe_st") || !is_struct(global.vs_probe_st)) return;
     if (global.vs_probe_st.done) return;
-    if (_gen != undefined && _gen != global.vs_probe_st.gen) return;
+    global.vs_probe_st.attempt += 1;
+    global.vs_probe_gen += 1;
+    global.vs_probe_st.gen = global.vs_probe_gen;
+    array_push(global.vs_probe_to, global.vs_probe_st.gen);
+    array_push(global.vs_probe_http, global.vs_probe_st.gen);
+    show_debug_message("VS Online: probe " + string(global.vs_probe_st.attempt) + "/" + string(vs_online_probe_max()) + " GET /healthz");
+    vs_songstore_log("probe " + string(global.vs_probe_st.attempt) + "/" + string(vs_online_probe_max()) + " /healthz");
+    vs_online_get_json("/healthz", false, vs_online_probe_http, 3000);
+    // HTTP 3000ms → 180 frames at 60fps. Stay behind that so the request can
+    // finish (or its own timeout can fire) before this fallback.
+    call_later(210, time_source_units_frames, vs_online_probe_timeout);
+}
+
+function vs_online_probe_finish(_good)
+{
+    if (!variable_global_exists("vs_probe_st") || !is_struct(global.vs_probe_st)) return;
+    if (global.vs_probe_st.done) return;
     global.vs_probe_st.done = true;
     global.vs_probe_inflight = false;
     global.vs_online_conn = _good ? 1 : -1;
+    show_debug_message("VS Online: probe " + (_good ? "ok" : "fail") + " after " + string(global.vs_probe_st.attempt) + " attempt(s)");
+    vs_songstore_log("probe " + (_good ? "ok" : "fail") + " n=" + string(global.vs_probe_st.attempt));
     var q = global.vs_probe_q;
     global.vs_probe_q = [];
     var i = 0;
@@ -524,10 +551,39 @@ function vs_online_probe_settle(_good, _gen)
     }
 }
 
+function vs_online_probe_settle(_good, _gen)
+{
+    if (!variable_global_exists("vs_probe_st") || !is_struct(global.vs_probe_st)) return;
+    if (global.vs_probe_st.done) return;
+    // A late success from an earlier attempt still counts — the server is up.
+    if (_good)
+    {
+        vs_online_probe_finish(true);
+        return;
+    }
+    if (_gen != undefined && _gen != global.vs_probe_st.gen) return;
+    if (global.vs_probe_st.attempt < vs_online_probe_max())
+    {
+        // Invalidate leftover timeout/HTTP for this attempt, then retry.
+        global.vs_probe_gen += 1;
+        global.vs_probe_st.gen = global.vs_probe_gen;
+        show_debug_message("VS Online: probe miss, auto-retry");
+        call_later(30, time_source_units_frames, vs_online_probe_kick);
+        return;
+    }
+    vs_online_probe_finish(false);
+}
+
 function vs_online_probe_http(_ok, _data, _status)
 {
+    var g = 0;
+    if (variable_global_exists("vs_probe_http") && array_length(global.vs_probe_http) > 0)
+    {
+        g = global.vs_probe_http[0];
+        array_delete(global.vs_probe_http, 0, 1);
+    }
     var good = _ok && _data != undefined && variable_struct_exists(_data, "ok") && _data.ok;
-    vs_online_probe_settle(good, global.vs_probe_st.gen);
+    vs_online_probe_settle(good, g);
 }
 
 function vs_online_probe_timeout()
@@ -569,12 +625,6 @@ function vs_online_with_conn(_fn)
         _fn();
         return;
     }
-    if (st == -1)
-    {
-        vs_online_show_error(_fn);
-        vs_online_with_conn_abort();
-        return;
-    }
     if (!variable_global_exists("vs_with_conn_q"))
     {
         global.vs_with_conn_q = [];
@@ -602,7 +652,8 @@ function vs_online_with_conn_probed(_ok)
         else { vs_online_show_error(q[i]); }
         i++;
     }
-    if (!_ok) vs_online_with_conn_abort();
+    // Keep lobby/downloader callbacks so Retry can still use them. Abort only
+    // when the player dismisses the dialog without retrying.
 }
 
 function vs_online_with_conn_abort()
@@ -887,12 +938,14 @@ function vs_online_error_step()
         }
         else
         {
+            vs_online_with_conn_abort();
             vs_online_disable_custom();
             instance_destroy();
         }
     }
     else if (keyboard_check_pressed(vk_escape) || input_check_pressed(5))
     {
+        vs_online_with_conn_abort();
         instance_destroy();
     }
 }
@@ -906,7 +959,7 @@ function vs_online_error_on_probe(_ok)
         {
             var cb = on_retry;
             instance_destroy();
-            if (is_method(cb)) cb();
+            if (cb != undefined) { cb(); }
         }
         else
         {
