@@ -747,43 +747,23 @@ function vs_songstore_on_http()
     }
     var doneProg = (st.total > 0 && st.got >= st.total);
     var tmpHere = (vs_songstore_tmp_src(st.tmpPath) != "");
-    // status=1 is progress. Tiny files (info.json) report got==total before
-    // the temp file exists; finishing here writes nothing.
-    if (gmStatus == 1)
-    {
-        if (!(tmpHere && doneProg))
-        {
-            if (doneProg && !tmpHere) vs_songstore_dl_wait_tmp();
-            return;
-        }
-    }
     var httpStatus = vs_http_num(ds_map_find_value(async_load, "http_status"), -1);
     if (variable_global_exists("vs_dlmgr_dl") && global.vs_dlmgr_dl.cancel)
     {
         vs_songstore_dl_finish(false);
         return;
     }
-    if (gmStatus < 0)
+    var settle = vs_http_file_settle(gmStatus, httpStatus, tmpHere, doneProg);
+    if (settle == 0)
     {
-        vs_songstore_set_err("download file missing after http " + string(httpStatus) + " st=" + string(gmStatus));
-        vs_songstore_log("done " + string(st.localPath) + " ok=0 http=" + string(httpStatus) + " st=" + string(gmStatus) + " tmp=" + string(tmpHere));
-        vs_songstore_dl_finish(false);
+        if (doneProg || gmStatus == 0) vs_songstore_dl_wait_tmp();
         return;
     }
-    if (httpStatus >= 400)
-    {
-        vs_songstore_set_err("http " + string(httpStatus) + " for " + string(st.url));
-        vs_songstore_log("done " + string(st.localPath) + " ok=0 http=" + string(httpStatus) + " st=" + string(gmStatus) + " tmp=" + string(tmpHere));
-        vs_songstore_dl_finish(false);
-        return;
-    }
-    if (!tmpHere)
-    {
-        vs_songstore_dl_wait_tmp();
-        return;
-    }
-    vs_songstore_log("done " + string(st.localPath) + " ok=1 http=" + string(httpStatus) + " st=" + string(gmStatus) + " tmp=1");
-    vs_songstore_dl_finish(true);
+    var ok = (settle > 0);
+    if (!ok && httpStatus >= 400) vs_songstore_set_err("http " + string(httpStatus) + " for " + string(st.url));
+    else if (!ok) vs_songstore_set_err("download file missing after http " + string(httpStatus) + " st=" + string(gmStatus));
+    vs_songstore_log("done " + string(st.localPath) + " ok=" + string(ok) + " http=" + string(httpStatus) + " st=" + string(gmStatus) + " tmp=" + string(tmpHere));
+    vs_songstore_dl_finish(ok);
 }
 
 function vs_songstore_download_package(_songId, _chartId, _on_done)

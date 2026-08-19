@@ -205,6 +205,29 @@ function vs_http_num(_v, _fallback)
     return r;
 }
 
+// http_get_file: 1 = file is on disk, 0 = keep waiting, -1 = fail.
+// Tiny files report got==total (status=1, http_status=-1) before the dest
+// exists; treating that as success writes nothing.
+function vs_http_file_settle(_gmStatus, _httpStatus, _fileReady, _doneProg)
+{
+    if (_gmStatus == 1)
+    {
+        if (_fileReady && _doneProg) return 1;
+        return 0;
+    }
+    if (_gmStatus < 0) return -1;
+    if (_httpStatus >= 400) return -1;
+    if (!_fileReady) return 0;
+    return 1;
+}
+
+function vs_http_file_here(_rel)
+{
+    if (_rel == undefined || _rel == "") return false;
+    if (file_exists(_rel)) return true;
+    return file_exists(vs_songstore_install_path(_rel));
+}
+
 function vs_http_timeout_ms()
 {
     vs_http_q_init();

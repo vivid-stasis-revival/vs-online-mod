@@ -4,9 +4,8 @@
 // Cache files go in the save area (working_directory/vs_jackets|vs_previews).
 // http_get_file starts on the next frame — starting it from a JSON HTTP
 // callback (list load -> selected_refresh) never completes on this runner.
-// HTTP completion matches chart downloads: status 0, or status 1 with
-// sizeDownloaded >= contentLength. sprite_add / audio_create_stream run
-// the frame after the file is on disk.
+// Finish only when the dest file exists (same settle as chart downloads).
+// sprite_add / audio_create_stream run the frame after the file is on disk.
 // ============================================================================
 
 function vs_media_init()
@@ -32,6 +31,13 @@ function vs_media_init()
         global.vs_media_got = 0;
         global.vs_media_total = 0;
         global.vs_media_bgm_paused = false;
+        global.vs_media_placing = false;
+        global.vs_media_placeTries = 0;
+    }
+    if (!variable_global_exists("vs_media_placing"))
+    {
+        global.vs_media_placing = false;
+        global.vs_media_placeTries = 0;
     }
 }
 
@@ -238,6 +244,8 @@ function vs_media_start()
     global.vs_media_path = dest;
     global.vs_media_got = 0;
     global.vs_media_total = 0;
+    global.vs_media_placing = false;
+    global.vs_media_placeTries = 0;
     if (file_exists(vs_media_abs(dest)) || file_exists(dest))
     {
         vs_media_finish(true);
@@ -273,6 +281,8 @@ function vs_media_finish(_ok)
     global.vs_media_kind = "";
     global.vs_media_id = "";
     global.vs_media_path = "";
+    global.vs_media_placing = false;
+    global.vs_media_placeTries = 0;
     if (_ok && key != "")
     {
         if (kind == "jacket")
@@ -327,6 +337,34 @@ function vs_media_load_folder(_key, _dir)
     }
 }
 
+function vs_media_wait_file()
+{
+    if (global.vs_media_placing) return;
+    global.vs_media_placing = true;
+    global.vs_media_placeTries = 0;
+    call_later(1, time_source_units_frames, vs_media_on_place);
+}
+
+function vs_media_on_place()
+{
+    vs_media_init();
+    if (!global.vs_media_busy || !global.vs_media_placing) return;
+    if (vs_http_file_here(global.vs_media_path) || file_exists(vs_media_abs(global.vs_media_path)))
+    {
+        show_debug_message("VS Media: file ready " + string(global.vs_media_kind) + " " + string(global.vs_media_id));
+        vs_media_finish(true);
+        return;
+    }
+    global.vs_media_placeTries += 1;
+    if (global.vs_media_placeTries >= 45)
+    {
+        show_debug_message("VS Media: file missing " + string(global.vs_media_kind) + " " + string(global.vs_media_id));
+        vs_media_finish(false);
+        return;
+    }
+    call_later(1, time_source_units_frames, vs_media_on_place);
+}
+
 function vs_media_on_http()
 {
     vs_media_init();
@@ -340,13 +378,15 @@ function vs_media_on_http()
     if (got >= 0) global.vs_media_got = got;
     if (tot >= 0) global.vs_media_total = tot;
     var doneProg = (global.vs_media_total > 0 && global.vs_media_got >= global.vs_media_total);
-    if (gmStatus == 1 && !doneProg)
+    var here = vs_http_file_here(global.vs_media_path) || file_exists(vs_media_abs(global.vs_media_path));
+    var httpStatus = vs_http_num(ds_map_find_value(async_load, "http_status"), -1);
+    var settle = vs_http_file_settle(gmStatus, httpStatus, here, doneProg);
+    if (settle == 0)
     {
+        if (doneProg || gmStatus == 0) vs_media_wait_file();
         return;
     }
-    var httpStatus = vs_http_num(ds_map_find_value(async_load, "http_status"), -1);
-    var httpOk = (httpStatus < 0 || (httpStatus >= 200 && httpStatus < 300));
-    var ok = ((gmStatus >= 0) || doneProg) && httpOk;
+    var ok = (settle > 0);
     show_debug_message("VS Media: done " + string(global.vs_media_kind) + " " + string(global.vs_media_id) + " ok=" + string(ok) + " http=" + string(httpStatus) + " st=" + string(gmStatus));
     vs_media_finish(ok);
 }

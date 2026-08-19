@@ -864,6 +864,13 @@ function vs_online_avatar_cache()
         global.vs_avatar_dest = "";
         global.vs_avatar_pending = {};
         global.vs_avatar_fail = {};
+        global.vs_avatar_placing = false;
+        global.vs_avatar_placeTries = 0;
+    }
+    if (!variable_global_exists("vs_avatar_placing"))
+    {
+        global.vs_avatar_placing = false;
+        global.vs_avatar_placeTries = 0;
     }
     return global.vs_avatar_spr;
 }
@@ -945,6 +952,8 @@ function vs_online_avatar_pump()
     global.vs_avatar_cur = job.id;
     global.vs_avatar_got = 0;
     global.vs_avatar_total = 0;
+    global.vs_avatar_placing = false;
+    global.vs_avatar_placeTries = 0;
     if (!directory_exists("vs_avatars")) directory_create("vs_avatars");
     var dest = vs_online_avatar_rel(job.id);
     global.vs_avatar_dest = dest;
@@ -954,6 +963,34 @@ function vs_online_avatar_pump()
         show_debug_message("VS Online: avatar http_get_file failed " + string(job.url));
         vs_online_avatar_finish(false);
     }
+}
+
+function vs_online_avatar_wait_file()
+{
+    if (global.vs_avatar_placing) return;
+    global.vs_avatar_placing = true;
+    global.vs_avatar_placeTries = 0;
+    call_later(1, time_source_units_frames, vs_online_avatar_on_place);
+}
+
+function vs_online_avatar_on_place()
+{
+    vs_online_avatar_cache();
+    if (!global.vs_avatar_busy || !global.vs_avatar_placing) return;
+    if (vs_http_file_here(global.vs_avatar_dest))
+    {
+        show_debug_message("VS Online: avatar file ready pid=" + string(global.vs_avatar_cur));
+        vs_online_avatar_finish(true);
+        return;
+    }
+    global.vs_avatar_placeTries += 1;
+    if (global.vs_avatar_placeTries >= 45)
+    {
+        show_debug_message("VS Online: avatar file missing pid=" + string(global.vs_avatar_cur));
+        vs_online_avatar_finish(false);
+        return;
+    }
+    call_later(1, time_source_units_frames, vs_online_avatar_on_place);
 }
 
 // Same HTTP event as jackets/previews: wait until the file is actually on
@@ -972,12 +1009,16 @@ function vs_online_avatar_on_http()
     if (got >= 0) global.vs_avatar_got = got;
     if (tot >= 0) global.vs_avatar_total = tot;
     var doneProg = (global.vs_avatar_total > 0 && global.vs_avatar_got >= global.vs_avatar_total);
-    if (gmStatus == 1 && !doneProg) return;
-    var httpStatus = vs_http_num(ds_map_find_value(async_load, "http_status"), -1);
-    var httpOk = (httpStatus < 0 || (httpStatus >= 200 && httpStatus < 300));
     var dest = global.vs_avatar_dest;
-    var here = (dest != "" && (file_exists(dest) || file_exists(vs_songstore_install_path(dest))));
-    var ok = httpOk && ((gmStatus >= 0) || doneProg || here);
+    var here = vs_http_file_here(dest);
+    var httpStatus = vs_http_num(ds_map_find_value(async_load, "http_status"), -1);
+    var settle = vs_http_file_settle(gmStatus, httpStatus, here, doneProg);
+    if (settle == 0)
+    {
+        if (doneProg || gmStatus == 0) vs_online_avatar_wait_file();
+        return;
+    }
+    var ok = (settle > 0);
     show_debug_message("VS Online: avatar done pid=" + string(global.vs_avatar_cur)
         + " ok=" + string(ok) + " http=" + string(httpStatus) + " st=" + string(gmStatus));
     vs_online_avatar_finish(ok);
@@ -1007,6 +1048,8 @@ function vs_online_avatar_finish(_ok)
     global.vs_avatar_busy = false;
     global.vs_avatar_cur = "";
     global.vs_avatar_req = -1;
+    global.vs_avatar_placing = false;
+    global.vs_avatar_placeTries = 0;
     vs_online_avatar_pump();
 }
 
