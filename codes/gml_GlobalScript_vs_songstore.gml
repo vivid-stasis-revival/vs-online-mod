@@ -81,6 +81,31 @@ function vs_songstore_clear_save_songs()
 {
 }
 
+function vs_songstore_destroy_dir(_dir)
+{
+    if (_dir == undefined || _dir == "") return;
+    var d = string_replace_all(string(_dir), "\\", "/");
+    if (d != "" && string_char_at(d, string_length(d)) != "/") d += "/";
+    if (d == "" || d == "/" || !directory_exists(d)) return;
+    var files = vs_songstore_list_names(d, false);
+    var i = 0;
+    repeat (array_length(files))
+    {
+        var f = d + files[i];
+        if (file_exists(f) && !directory_exists(f)) file_delete(f);
+        i++;
+    }
+    var dirs = vs_songstore_list_names(d, true);
+    i = 0;
+    repeat (array_length(dirs))
+    {
+        var sub = dirs[i];
+        if (sub != "." && sub != "..") vs_songstore_destroy_dir(d + sub + "/");
+        i++;
+    }
+    directory_destroy(d);
+}
+
 function vs_songstore_file_ready(_rel)
 {
     if (_rel == undefined || _rel == "") return false;
@@ -139,9 +164,28 @@ function vs_songstore_ensure_dir(_dir)
 function vs_songstore_remove_chart(_chartId)
 {
     if (_chartId == undefined || _chartId == "") return;
+    try { vs_media_stop_preview(); } catch (_m) { }
     vs_songstore_clear_save_songs();
-    var d = vs_songstore_install_path(vs_songstore_local_dir(_chartId));
-    if (directory_exists(d)) directory_destroy(d);
+    var rel = vs_songstore_local_dir(_chartId);
+    var paths = [rel, vs_songstore_install_path(rel)];
+    var save = vs_csm_save_songs_root();
+    if (save != "") array_push(paths, save + _chartId + "/");
+    var steam = vs_csm_steam_songs_root();
+    if (steam != "") array_push(paths, steam + _chartId + "/");
+    var seen = {};
+    var i = 0;
+    repeat (array_length(paths))
+    {
+        var d = paths[i];
+        var key = string_lower(string_replace_all(string(d), "\\", "/"));
+        if (d != "" && !variable_struct_exists(seen, key))
+        {
+            variable_struct_set(seen, key, true);
+            vs_songstore_destroy_dir(d);
+        }
+        i++;
+    }
+    try { vs_dlmgr_untrack(_chartId); } catch (_u) { }
 }
 
 function vs_songstore_cleanup_stub(_chartId)
@@ -149,12 +193,7 @@ function vs_songstore_cleanup_stub(_chartId)
     if (_chartId == undefined || _chartId == "") return;
     vs_songstore_clear_save_songs();
     if (vs_songstore_has_chart(_chartId)) return;
-    var d = vs_songstore_install_path(vs_songstore_local_dir(_chartId));
-    if (directory_exists(d) && !vs_songstore_dir_has_chart(d))
-    {
-        if (file_exists(d + ".vs_download.json")) file_delete(d + ".vs_download.json");
-        directory_destroy(d);
-    }
+    vs_songstore_remove_chart(_chartId);
 }
 
 function vs_songstore_list_names(_dir, _dirs)

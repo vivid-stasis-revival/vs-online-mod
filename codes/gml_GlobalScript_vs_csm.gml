@@ -80,17 +80,45 @@ function vs_csm_rel_tail(_rel)
     return s;
 }
 
-// Prefer an absolute folder that actually has the files so audio_create_stream
-// does not look in the Steam tree for an AppData download.
+function vs_csm_dir_has_info(_dir)
+{
+    if (_dir == undefined || _dir == "") return false;
+    return file_exists(_dir + "info.json") || file_exists(_dir + "shatterinfo.json");
+}
+
+function vs_csm_dir_has_charts(_dir)
+{
+    if (_dir == undefined || _dir == "") return false;
+    var names = ["OPENING", "MIDDLE", "FINALE", "ENCORE", "PRELUDE"];
+    for (var i = 0; i < array_length(names); i++)
+    {
+        if (file_exists(_dir + names[i] + ".vsc") || file_exists(_dir + names[i] + ".vsb")
+            || file_exists(_dir + string_lower(names[i]) + ".vsc") || file_exists(_dir + string_lower(names[i]) + ".vsb"))
+            return true;
+    }
+    return false;
+}
+
 function vs_csm_pick_load_dir(_rel)
 {
     var tail = vs_csm_rel_tail(_rel);
+    var cands = [];
     var save = vs_csm_save_songs_root();
-    if (save != "" && (file_exists(save + tail + "info.json") || file_exists(save + tail + "shatterinfo.json")))
-        return save + tail;
+    if (save != "") array_push(cands, save + tail);
     var steam = vs_csm_steam_songs_root();
-    if (steam != "" && (file_exists(steam + tail + "info.json") || file_exists(steam + tail + "shatterinfo.json")))
-        return steam + tail;
+    if (steam != "") array_push(cands, steam + tail);
+    array_push(cands, vs_csm_norm_dir(_rel));
+    var fallback = "";
+    for (var i = 0; i < array_length(cands); i++)
+    {
+        var d = cands[i];
+        if (!vs_csm_dir_has_info(d)) continue;
+        if (fallback == "") fallback = d;
+        // AppData stubs (info.json, no .vsc) used to win over a complete
+        // Steam copy of the same chart_id, which hid ENCORE on encore-only songs.
+        if (vs_csm_dir_has_charts(d)) return d;
+    }
+    if (fallback != "") return fallback;
     return vs_csm_norm_dir(_rel);
 }
 
@@ -264,12 +292,26 @@ function vs_csm_ensure_unlock(_song)
 function vs_csm_has_encore_file(_dir)
 {
     if (_dir == undefined || _dir == "") return false;
-    return file_exists(_dir + "ENCORE.vsc") || file_exists(_dir + "ENCORE.vsb");
+    return file_exists(_dir + "ENCORE.vsc") || file_exists(_dir + "ENCORE.vsb")
+        || file_exists(_dir + "encore.vsc") || file_exists(_dir + "encore.vsb");
 }
 
 function vs_csm_json_has_encore(_v)
 {
-    return (_v == true || _v == 1 || _v == "1.0" || _v == "true");
+    if (_v == true || _v == 1) return true;
+    var s = string_lower(string(_v));
+    return (s == "1.0" || s == "1" || s == "true" || s == "yes");
+}
+
+function vs_csm_meta_has_encore(_song)
+{
+    if (_song == undefined) return false;
+    if (variable_struct_exists(_song, "has_encore") && vs_csm_json_has_encore(_song.has_encore))
+        return true;
+    var c4 = vs_csm_safe_real(struct_get_fallback(_song, "difficulty_constant_4", 0), 0);
+    if (c4 > 0) return true;
+    var d4 = string(struct_get_fallback(_song, "difficulty_display_4", "0"));
+    return (d4 != "" && d4 != "0" && d4 != "0.0" && d4 != "N/A");
 }
 
 // Official select stores has_encore as the string "1.0" (from the vsd) and
@@ -278,10 +320,9 @@ function vs_csm_json_has_encore(_v)
 // and the old select never lets you cursor onto difficulty 3.
 function vs_csm_apply_has_encore(_song, _dir)
 {
-    var yes = vs_csm_has_encore_file(_dir);
-    if (!yes && variable_struct_exists(_song, "has_encore"))
-        yes = vs_csm_json_has_encore(_song.has_encore);
+    var yes = vs_csm_has_encore_file(_dir) || vs_csm_meta_has_encore(_song);
     _song.has_encore = yes ? "1.0" : false;
+    if (!variable_struct_exists(_song, "show_encore")) _song.show_encore = true;
 }
 
 function vs_csm_first_chart_diff(_dir)

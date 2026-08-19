@@ -156,6 +156,40 @@ function vs_dlmgr_tracked(_chartId)
     return vs_dlmgr_log_has(_chartId);
 }
 
+function vs_dlmgr_untrack(_chartId)
+{
+    if (_chartId == undefined || _chartId == "") return;
+    var rel = vs_dlmgr_meta_path(_chartId);
+    if (file_exists(rel)) file_delete(rel);
+    var abs = vs_songstore_install_path(rel);
+    if (file_exists(abs)) file_delete(abs);
+    var path = working_directory + "vsonline.downloads.json";
+    if (!file_exists(path)) return;
+    var f = file_text_open_read(path);
+    var raw = "";
+    while (!file_text_eof(f)) { raw += file_text_readln(f); }
+    file_text_close(f);
+    var list = [];
+    try
+    {
+        var j = json_parse(raw);
+        if (j != undefined && is_array(j)) list = j;
+    }
+    catch (_e) { return; }
+    var out = [];
+    var i = 0;
+    repeat (array_length(list))
+    {
+        var e = list[i];
+        if (e == undefined || !variable_struct_exists(e, "chartId") || string(e.chartId) != string(_chartId))
+            array_push(out, e);
+        i++;
+    }
+    var fw = file_text_open_write(path);
+    file_text_write_string(fw, json_stringify(out));
+    file_text_close(fw);
+}
+
 // Write / refresh the per-chart download marker (called after a successful
 // download or update). Preserves the first-downloaded timestamp.
 function vs_dlmgr_write_meta(_chartId, _serverId, _name)

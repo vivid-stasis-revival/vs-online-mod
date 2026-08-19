@@ -97,13 +97,15 @@ function vs_localcharts_read_info(_dir, _pack)
         if (file_exists(_dir + diffNames[i] + ".vsc") || file_exists(_dir + diffNames[i] + ".vsb"))
         {
             array_push(s.diffs, diffNames[i]);
-            if (i == 3) s.has_encore = true;
+            if (i == 3) s.has_encore = "1.0";
         }
     }
     if (array_length(s.diffs) == 0) return undefined; // folder exists but no chart
 
     var he = struct_get_fallback(j, "has_encore", false);
-    if (he == true || he == 1 || he == "1.0") s.has_encore = true;
+    if (he == true || he == 1 || he == "1.0" || string_lower(string(he)) == "true") s.has_encore = "1.0";
+    var c4 = struct_get_fallback(j, "difficulty_constant_4", 0);
+    if (is_real(c4) && c4 > 0) s.has_encore = "1.0";
 
     s.song_id = vs_localcharts_song_id_in_list(s.chart_id);
     s.in_select = (s.song_id >= 0);
