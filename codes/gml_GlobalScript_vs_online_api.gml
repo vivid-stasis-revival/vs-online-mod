@@ -812,11 +812,9 @@ function vs_online_score_clear_type()
 
 function vs_online_score_note_count()
 {
-    if (variable_global_exists("ch_load") && variable_global_exists("df_load"))
-    {
-        var n = LoadSongDataNoteCount(global.ch_load, global.df_load);
-        if (n > 0) return floor(real(n));
-    }
+    // LoadSong's play count (global.notecount) — same clock the server
+    // stores and verifyPlay checks. Do not use LoadSongDataNoteCount:
+    // that is GetSongStats / SongData and diverges on holds.
     if (variable_global_exists("notecount") && global.notecount > 0)
     {
         return floor(real(global.notecount));
