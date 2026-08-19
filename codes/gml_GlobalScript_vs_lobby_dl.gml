@@ -571,7 +571,7 @@ function vs_lobby_dl_draw_checking()
     draw_text(px + pw / 2, py + 8, vs_dlbr_clip_text("Checking", pw - 12));
     draw_set_font(global.default_font);
     draw_set_color(c_white);
-    vs_draw_clip(px + pw / 2, py + 28, vs_lobby_dl_ask_name(), pw - 12);
+    draw_text(px + pw / 2, py + 28, vs_dlbr_clip_text(vs_lobby_dl_ask_name(), pw - 12));
     draw_set_color(c_yellow);
     draw_text(px + pw / 2, py + 52, vs_dlbr_clip_text("ESCAPE", pw - 12));
     draw_set_halign(fa_left);
