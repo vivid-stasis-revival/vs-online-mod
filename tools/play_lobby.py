@@ -260,7 +260,7 @@ class FakeHost:
     async def _run_lobby_emotes(self) -> None:
         try:
             while True:
-                await asyncio.sleep(3.2)
+                await asyncio.sleep(20)
                 if self.in_lobby_idle() and self.has_guest():
                     await self.send_sticker(why="loop")
         except asyncio.CancelledError:
