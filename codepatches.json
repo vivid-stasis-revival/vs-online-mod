@@ -555,6 +555,18 @@
         "Type": 0
     },
     {
+        "Entry": "gml_Object_o_2023res_songwindow_Draw_0",
+        "Find": "draw_text(draw_x_left, curr_y, truncate_string(member.name, 96));",
+        "Value": "draw_text(draw_x_left, curr_y, truncate_string(member.name, 96));vs_lobby_draw_namecard_tags(member, draw_x_left, curr_y + 11, fa_left);",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_Object_o_2023res_playerwindow_Draw_0",
+        "Find": "draw_text_o(x + 156, y + 29, o_2023results.artist);",
+        "Value": "draw_text_o(x + 156, y + 29, o_2023results.artist);if (global.multiplayerLobby) vs_lobby_draw_local_tags(x + 310, y + 29, fa_right);",
+        "Type": 0
+    },
+    {
         "Entry": "gml_Object_obj_multiplayer_lobby_Create_0",
         "Find": "var s = o_st_handle.songQueue[0];",
         "Value": "var s = o_st_handle.songQueue[0];var song = struct_copy(global.song_list[s.songId]);if (variable_struct_exists(global.song_list[s.songId], \"enc_data\")) song.allowed_difficulties = (s.difficulty == 3) ? [3] : [0, 1, 2];",
@@ -727,7 +739,19 @@
     {
         "Entry": "gml_GlobalScript_ReportScorePacket",
         "Find": "        member.score = arg0.score;\n        member.scoreFlag = arg0.flag;",
-        "Value": "        vs_member_set_score(member, arg0.score);\n        vs_member_set_flag(member, arg0.flag);",
+        "Value": "        vs_member_set_score(member, arg0.score);\n        vs_member_set_flag(member, arg0.flag);member.play_diff = struct_get_fallback(arg0, \"play_diff\", -1);member.autoplay = struct_get_fallback(arg0, \"autoplay\", 0);",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_GlobalScript_ReportScorePacket",
+        "Find": "buffer_write(buffer, buffer_u8, arg0.flag);\n        return buffer;",
+        "Value": "buffer_write(buffer, buffer_u8, arg0.flag);buffer_write(buffer, buffer_s8, vs_lobby_local_play_diff());buffer_write(buffer, buffer_u8, vs_lobby_local_autoplay() ? 1 : 0);\n        return buffer;",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_GlobalScript_ReportScorePacket",
+        "Find": "        obj.flag = buffer_read(arg0, buffer_u8);\n        buffer_delete(arg0);",
+        "Value": "        obj.flag = buffer_read(arg0, buffer_u8);try{obj.play_diff = buffer_read(arg0, buffer_s8);}catch(e){obj.play_diff = -1;}try{obj.autoplay = buffer_read(arg0, buffer_u8);}catch(e){obj.autoplay = 0;}\n        buffer_delete(arg0);",
         "Type": 0
     },
     {

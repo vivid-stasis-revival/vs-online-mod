@@ -222,9 +222,16 @@ function vs_member_set_flag(_m, _v)
 
 function vs_lobby_local_play_diff()
 {
+    if (variable_global_exists("songselect_difficulty") && global.songselect_difficulty != undefined)
+    {
+        return global.songselect_difficulty;
+    }
+    if (variable_global_exists("df_load") && global.df_load != undefined && string(global.df_load) != "")
+    {
+        return vs_online_diff_index(global.df_load);
+    }
     if (!instance_exists(o_st_handle)) return -1;
     if (!is_array(o_st_handle.songQueue) || array_length(o_st_handle.songQueue) <= 0) return -1;
-    if (variable_global_exists("songselect_difficulty")) return global.songselect_difficulty;
     var s = o_st_handle.songQueue[0];
     if (s == undefined) return -1;
     if (variable_struct_exists(s, "difficulty")) return s.difficulty;
@@ -256,20 +263,51 @@ function vs_lobby_diff_color(_d)
     return c_white;
 }
 
-function vs_lobby_draw_namecard_tags(_m, _rx, _ry)
+function vs_lobby_tag_diff(_m)
+{
+    if (_m != undefined && variable_struct_exists(_m, "play_diff") && real(_m.play_diff) >= 0)
+    {
+        return _m.play_diff;
+    }
+    if (_m != undefined && variable_struct_exists(_m, "id") && string(_m.id) == string(vs_online_player_id()))
+    {
+        return vs_lobby_local_play_diff();
+    }
+    return -1;
+}
+
+function vs_lobby_tag_ap(_m)
+{
+    if (_m != undefined && variable_struct_exists(_m, "autoplay") && _m.autoplay) return true;
+    if (_m != undefined && variable_struct_exists(_m, "id") && string(_m.id) == string(vs_online_player_id()))
+    {
+        return vs_lobby_local_autoplay();
+    }
+    return false;
+}
+
+function vs_lobby_draw_namecard_tags(_m, _rx, _ry, _halign)
 {
     if (_m == undefined) return;
-    var d = variable_struct_exists(_m, "play_diff") ? _m.play_diff : -1;
+    var d = vs_lobby_tag_diff(_m);
     var lab = vs_lobby_diff_short(d);
-    var ap = variable_struct_exists(_m, "autoplay") && _m.autoplay;
+    var ap = vs_lobby_tag_ap(_m);
     if (lab == "" && !ap) return;
     var bits = lab;
     if (ap) bits = (bits == "") ? "AP" : (bits + " AP");
-    draw_set_halign(fa_right);
+    if (_halign == undefined) _halign = fa_right;
+    draw_set_halign(_halign);
     draw_set_color(ap && lab == "" ? c_yellow : vs_lobby_diff_color(d));
     draw_text_o(_rx, _ry, bits);
     draw_set_halign(fa_left);
     draw_set_color(c_white);
+}
+
+function vs_lobby_draw_local_tags(_rx, _ry, _halign)
+{
+    vs_lobby_draw_namecard_tags(
+        { play_diff: vs_lobby_local_play_diff(), autoplay: vs_lobby_local_autoplay() },
+        _rx, _ry, _halign);
 }
 
 function vs_lobby_keep_play_tags(_dst, _src)
