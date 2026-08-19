@@ -52,25 +52,25 @@
     {
         "Entry": "gml_Object_obj_multiplayer_lobby_Create_0",
         "Find": "steam_lobby_create(2, 8);",
-        "Value": "if (vs_online_is_custom()) { vs_lobby_create(true); } else { steam_lobby_create(2, 8); }",
+        "Value": "if (vs_online_is_custom()) { vs_lobby_log(\"ui hostlobby\"); vs_lobby_create(true); } else { steam_lobby_create(2, 8); }",
         "Type": 1
     },
     {
         "Entry": "gml_Object_obj_multiplayer_lobby_Create_0",
         "Find": "steam_lobby_create(2, global.op_bugfix_multiplayer_size);",
-        "Value": "if (vs_online_is_custom()) { vs_lobby_create(true); } else { steam_lobby_create(2, global.op_bugfix_multiplayer_size); }",
+        "Value": "if (vs_online_is_custom()) { vs_lobby_log(\"ui hostlobby size\"); vs_lobby_create(true); } else { steam_lobby_create(2, global.op_bugfix_multiplayer_size); }",
         "Type": 1
     },
     {
         "Entry": "gml_Object_obj_multiplayer_lobby_Create_0",
         "Find": "var leave = steam_lobby_leave();",
-        "Value": "if (vs_online_is_custom()) { vs_lobby_leave(); } else { var leave = steam_lobby_leave(); }",
+        "Value": "if (vs_online_is_custom()) { vs_lobby_log(\"ui leavelobby\"); vs_lobby_leave(); } else { var leave = steam_lobby_leave(); }",
         "Type": 1
     },
     {
         "Entry": "gml_Object_obj_multiplayer_lobby_Create_0",
         "Find": "steam_lobby_list_request();",
-        "Value": "if (vs_online_is_custom()) { if (keyboard_check(vk_shift)) { vs_lobby_matchmake(); } else { vs_lobby_join(string_upper(keyboard_string)); } } else { steam_lobby_list_request(); }",
+        "Value": "if (vs_online_is_custom()) { if (keyboard_check(vk_shift)) { vs_lobby_log(\"ui matchmake\"); vs_lobby_matchmake(); } else { vs_lobby_log(\"ui join code=\" + string_upper(keyboard_string)); vs_lobby_join(string_upper(keyboard_string)); } } else { steam_lobby_list_request(); }",
         "Type": 1
     },
     {
@@ -142,6 +142,54 @@
         "Find": "steam_lobby_is_owner()",
         "Value": "vs_lobby_is_owner()",
         "Type": 0
+    },
+    {
+        "Entry": "gml_Object_obj_multiplayer_waiting_room_Step_0",
+        "Find": "        send_packet(ShowScorePacket);",
+        "Value": "        if (vs_online_is_custom()) vs_lobby_log(\"waiting_room ShowScore members=\" + string(array_length(members))); send_packet(ShowScorePacket);",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_Object_obj_multiplayer_waiting_room_Create_0",
+        "Find": "send_packet(ReportScorePacket, ",
+        "Value": "if (vs_online_is_custom()) vs_lobby_log(\"report_score pts=\" + string(global.currentscore) + \" flag=\" + string(flag)); send_packet(ReportScorePacket, ",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_GlobalScript_StartGamePacket",
+        "Find": "            if (song != undefined)\n            {",
+        "Value": "            if (song != undefined)\n            {\n                if (vs_online_is_custom()) vs_lobby_log(\"start_game songId=\" + string(song.songId) + \" diff=\" + string(struct_get_fallback(song, \"difficulty\", -1)) + \" members=\" + string(array_length(members)));",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_Object_obj_multiplayer_lobby_Create_0",
+        "Find": "                if (everyoneReady)\n                {\n                    send_packet(StartCountdownPacket, 3);\n                }",
+        "Value": "                if (everyoneReady)\n                {\n                    if (vs_online_is_custom()) vs_lobby_log(\"ui startgame ok members=\" + string(array_length(members)));\n                    send_packet(StartCountdownPacket, 3);\n                }\n                else if (vs_online_is_custom()) vs_lobby_log(\"ui startgame skip not-ready members=\" + string(array_length(members)));",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_GlobalScript_SendQueuePacket",
+        "Find": "        o_st_handle.songQueue = arg0;",
+        "Value": "        o_st_handle.songQueue = arg0; if (vs_online_is_custom()) vs_lobby_log(\"queue recv n=\" + string(array_length(arg0)));",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_GlobalScript_ReportScorePacket",
+        "Find": "        member.reportedScore = true;",
+        "Value": "        member.reportedScore = true; if (vs_online_is_custom()) vs_lobby_log(\"recv ReportScore from=\" + string(arg1) + \" pts=\" + string(arg0.score) + \" flag=\" + string(arg0.flag));",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_GlobalScript_SendReadyPacket",
+        "Find": "            member.ready = arg0;",
+        "Value": "            member.ready = arg0; if (vs_online_is_custom()) vs_lobby_log(\"ready from=\" + string(arg1) + \" ready=\" + string(arg0));",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_GlobalScript_ShowScorePacket",
+        "Find": "        if (room == scene_multiplayer_waiting_room)",
+        "Value": "        if (vs_online_is_custom()) vs_lobby_log(\"ShowScore recv room=\" + string(room) + \" members=\" + string(array_length(members)));\n        if (room == scene_multiplayer_waiting_room)",
+        "Type": 1
     },
 
     {
@@ -279,7 +327,7 @@
     {
         "Entry": "gml_Object_obj_multiplayer_lobby_Create_0",
         "Find": "updateButtons();\n            send_packet(SendPlayerInfoPacket);\n            global.winner = \"\";\n            member_y_offset = 0;",
-        "Value": "updateButtons();\n            if (!vs_online_is_custom()) send_packet(SendPlayerInfoPacket);\n            global.winner = \"\";\n            member_y_offset = 0;",
+        "Value": "updateButtons();\n            if (vs_online_is_custom()) { vs_lobby_log(\"hostlobby skip SendPlayerInfo until welcome\"); } else send_packet(SendPlayerInfoPacket);\n            global.winner = \"\";\n            member_y_offset = 0;",
         "Type": 1
     },
 
@@ -470,7 +518,7 @@
     {
         "Entry": "gml_Object_o_songselect_main_Create_0",
         "Find": "send_packet(AddSongPacket, ",
-        "Value": "send_packet(vs_lobby_is_owner() ? AddSongPacket : SuggestSongPacket, ",
+        "Value": "if (vs_online_is_custom()) vs_lobby_log(vs_lobby_is_owner() ? \"ui AddSong\" : \"ui SuggestSong\"); send_packet(vs_lobby_is_owner() ? AddSongPacket : SuggestSongPacket, ",
         "Type": 0
     },
     {
@@ -511,7 +559,7 @@
     {
         "Entry": "gml_GlobalScript_AddSongPacket",
         "Find": "o_st_handle.songQueue = [arg0];",
-        "Value": "o_st_handle.songQueue = [arg0];global.songselect_difficulty = arg0.difficulty;",
+        "Value": "o_st_handle.songQueue = [arg0];global.songselect_difficulty = arg0.difficulty; if (vs_online_is_custom()) vs_lobby_log(\"AddSong songId=\" + string(arg0.songId) + \" diff=\" + string(arg0.difficulty));",
         "Type": 0
     },
     {
@@ -523,7 +571,7 @@
     {
         "Entry": "gml_GlobalScript_StartCountdownPacket",
         "Find": "play_se(asset_get_index(@@string@@(\"sfx_count{0}\", arg0)));",
-        "Value": "play_se(vs_online_countdown_sound(arg0));",
+        "Value": "if (vs_online_is_custom()) vs_lobby_log(\"countdown n=\" + string(arg0)); play_se(vs_online_countdown_sound(arg0));",
         "Type": 0
     },
     {

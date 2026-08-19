@@ -21,12 +21,22 @@ function SuggestSongPacket(arg0) : BasePacket(arg0, false, 3, 1) constructor
     {
         if (vs_lobby_is_owner())
         {
+            vs_lobby_log("suggest recv songId=" + string(arg0.songId)
+                + " diff=" + string(arg0.difficulty)
+                + " from=" + string(arg1)
+                + " q=" + string(array_length(o_st_handle.suggestQueue) + 1));
             array_push(o_st_handle.suggestQueue,
             {
                 member: arg1,
                 songId: arg0.songId,
                 difficulty: arg0.difficulty
             });
+        }
+        else
+        {
+            vs_lobby_log("suggest recv skip not-owner songId=" + string(arg0.songId)
+                + " diff=" + string(arg0.difficulty)
+                + " from=" + string(arg1));
         }
     };
 }

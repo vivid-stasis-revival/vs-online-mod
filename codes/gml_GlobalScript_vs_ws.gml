@@ -37,6 +37,21 @@ function vs_ws_state()
     return variable_global_get("vs_ws");
 }
 
+function vs_ws_log(_msg)
+{
+    var line = "VS WS: " + string(_msg);
+    show_debug_message(line);
+    vs_songstore_log("WS " + string(_msg));
+}
+
+function vs_ws_url_redact(_url)
+{
+    var u = string(_url);
+    var p = string_pos("token=", u);
+    if (p <= 0) return u;
+    return string_copy(u, 1, p + 5) + "***";
+}
+
 // --- URL helpers -----------------------------------------------------------
 
 // scheme / host / port from vs_online_ws_url(). Path on the base URL is ignored
@@ -113,6 +128,7 @@ function vs_ws_connect(_path, _token)
     var ws = vs_ws_state();
     if (ws.socket >= 0)
     {
+        vs_ws_log("connect replace existing state=" + string(ws.state));
         vs_ws_close();
     }
     var base = vs_ws_parse_base();
@@ -120,7 +136,11 @@ function vs_ws_connect(_path, _token)
     ws.port = base.port;
     ws.token = _token;
     var path = _path;
-    if (_token != undefined && _token != "")
+    if (_token == undefined || _token == "")
+    {
+        vs_ws_log("connect no token path=" + string(_path));
+    }
+    else
     {
         path += (string_pos("?", path) > 0 ? "&" : "?") + "token=" + vs_online_url_encode(_token);
     }
@@ -140,19 +160,19 @@ function vs_ws_connect(_path, _token)
     if (ws.socket < 0)
     {
         ws.lastError = "socket_create";
-        show_debug_message("VS WS: network_create_socket failed (type=" + string(sockType) + ")");
+        vs_ws_log("network_create_socket failed type=" + string(sockType) + " secure=" + string(base.secure));
         return;
     }
     ws.state = 1;
     var rc = network_connect_raw_async(ws.socket, url, ws.port);
     if (rc < 0)
     {
-        show_debug_message("VS WS: connect start failed " + url + " :" + string(ws.port));
+        vs_ws_log("connect start failed " + vs_ws_url_redact(url) + " :" + string(ws.port) + " rc=" + string(rc));
         ws.lastError = "connect_start";
         vs_ws_reset();
         return;
     }
-    show_debug_message("VS WS: connecting " + url + " :" + string(ws.port));
+    vs_ws_log("connecting " + vs_ws_url_redact(url) + " :" + string(ws.port) + " path=" + string(_path));
 }
 
 function vs_ws_is_open()
@@ -165,8 +185,13 @@ function vs_ws_close()
     var ws = vs_ws_state();
     if (ws.socket >= 0)
     {
+        vs_ws_log("close sock=" + string(ws.socket) + " state=" + string(ws.state));
         network_destroy(ws.socket);
         ws.socket = -1;
+    }
+    else if (ws.state != 0)
+    {
+        vs_ws_log("close no sock state=" + string(ws.state));
     }
     ws.state = 0;
 }
@@ -199,11 +224,11 @@ function vs_ws_handle_net_event()
         if (ds_map_find_value(async_load, "succeeded"))
         {
             ws.state = 3;
-            show_debug_message("VS WS: open " + ws.url);
+            vs_ws_log("open " + vs_ws_url_redact(ws.url));
         }
         else
         {
-            show_debug_message("VS WS: connect failed " + ws.url);
+            vs_ws_log("connect failed " + vs_ws_url_redact(ws.url));
             ws.lastError = "connect_failed";
             vs_ws_reset();
         }
@@ -211,20 +236,25 @@ function vs_ws_handle_net_event()
     else if (type == network_type_connect)
     {
         ws.state = 3;
-        show_debug_message("VS WS: open (sync) " + ws.url);
+        vs_ws_log("open (sync) " + vs_ws_url_redact(ws.url));
     }
     else if (type == network_type_data)
     {
         if (ws.state != 3)
         {
+            vs_ws_log("data while state=" + string(ws.state) + " ignored");
             return;
         }
         vs_ws_dispatch_payload();
     }
     else if (type == network_type_disconnect)
     {
-        show_debug_message("VS WS: disconnected");
+        vs_ws_log("disconnected url=" + vs_ws_url_redact(ws.url));
         vs_ws_reset();
+    }
+    else
+    {
+        vs_ws_log("net event type=" + string(type) + " state=" + string(ws.state));
     }
 }
 
@@ -262,6 +292,7 @@ function vs_ws_send_binary(_buffer)
     var ws = vs_ws_state();
     if (ws.socket < 0 || ws.state != 3)
     {
+        vs_ws_log("send skip state=" + string(ws.state) + " sock=" + string(ws.socket));
         return;
     }
     network_send_raw(ws.socket, _buffer, buffer_get_size(_buffer));
