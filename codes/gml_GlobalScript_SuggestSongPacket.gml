@@ -4,7 +4,7 @@ function SuggestSongPacket(arg0) : BasePacket(arg0, false, 3, 1) constructor
     {
         var buffer = self.getBuffer();
         buffer_write(buffer, buffer_s8, arg0.difficulty);
-        buffer_write(buffer, buffer_string, global.song_list[arg0.songId].chart_id);
+        buffer_write(buffer, buffer_string, vs_online_chart_id_of_song(arg0.songId));
         return buffer;
     };
 

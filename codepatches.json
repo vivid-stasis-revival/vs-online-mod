@@ -784,6 +784,24 @@
         "Type": 0
     },
     {
+        "Entry": "gml_GlobalScript_SendPlayerInfoPacket",
+        "Find": "        var member = o_st_handle.getMember(arg1);\n        member.rate = arg0.rate;",
+        "Value": "        var member = o_st_handle.getMember(arg1); if (member == undefined) { if (vs_online_is_custom()) vs_lobby_log(\"SendPlayerInfo drop no member\"); exit; }\n        member.rate = arg0.rate;",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_GlobalScript_UpdateScorePacket",
+        "Find": "        var member = o_st_handle.getMember(arg1);",
+        "Value": "        var member = o_st_handle.getMember(arg1); if (member == undefined) { if (vs_online_is_custom()) vs_lobby_log(\"UpdateScore drop no member\"); exit; }",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_GlobalScript_ReportScorePacket",
+        "Find": "        var member = o_st_handle.getMember(arg1);",
+        "Value": "        var member = o_st_handle.getMember(arg1); if (member == undefined) { if (vs_online_is_custom()) vs_lobby_log(\"ReportScore drop no member\"); exit; }",
+        "Type": 0
+    },
+    {
         "Entry": "gml_Object_obj_multiplayer_lobby_Draw_64",
         "Find": "if (member.score != 0)",
         "Value": "if (vs_member_get_score(member) != 0)",
@@ -1063,7 +1081,7 @@
     {
         "Entry": "gml_GlobalScript_AddSongPacket",
         "Find": "return buffer;",
-        "Value": "buffer_write(buffer, buffer_string, global.song_list[arg0.songId].chart_id);return buffer;",
+        "Value": "buffer_write(buffer, buffer_string, vs_online_chart_id_of_song(arg0.songId));return buffer;",
         "Type": 1
     },
     {
@@ -1081,13 +1099,19 @@
     {
         "Entry": "gml_GlobalScript_ShadowSongPacket",
         "Find": "return buffer;",
-        "Value": "buffer_write(buffer, buffer_string, global.song_list[arg0.songId].chart_id);return buffer;",
+        "Value": "buffer_write(buffer, buffer_string, vs_online_chart_id_of_song(arg0.songId));return buffer;",
         "Type": 1
     },
     {
         "Entry": "gml_GlobalScript_ShadowSongPacket",
         "Find": "buffer_delete(arg0);",
         "Value": "try{obj.songId = vs_online_song_id_from_chart(buffer_read(arg0, buffer_string));}catch (ex){}buffer_delete(arg0);",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_GlobalScript_ShadowSongPacket",
+        "Find": "BasePacket(arg0, true, 3)",
+        "Value": "BasePacket(arg0, true, 3, buffer_grow)",
         "Type": 1
     },
     {

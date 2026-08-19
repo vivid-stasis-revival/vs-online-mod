@@ -103,6 +103,16 @@ function vs_online_missing_song()
     return { name: "Missing chart", chart_id: "", is_missing: true };
 }
 
+function vs_online_chart_id_of_song(_songId)
+{
+    var s = vs_online_song_from_id(_songId);
+    if (s == undefined || !variable_struct_exists(s, "chart_id") || s.chart_id == undefined)
+    {
+        return "";
+    }
+    return string(s.chart_id);
+}
+
 // --- steam_* shims (used via codepatches so the WP UI reads server state) ---
 
 function vs_lobby_lobby_id()
@@ -120,7 +130,7 @@ function vs_lobby_get_host_id()
     if (!instance_exists(o_st_handle)) return "";
     if (!variable_instance_exists(o_st_handle, "vs_hostId")) return "";
     if (o_st_handle.vs_hostId == undefined) return "";
-    return o_st_handle.vs_hostId;
+    return string(o_st_handle.vs_hostId);
 }
 
 function vs_lobby_sender_ok(_id)
@@ -400,7 +410,7 @@ function vs_lobby_build_member(_mv)
     }
     var m =
     {
-        id: _mv.playerId,
+        id: variable_struct_exists(_mv, "playerId") ? string(_mv.playerId) : "",
         name: variable_struct_exists(_mv, "name") ? _mv.name : "",
         ready: variable_struct_exists(_mv, "ready") ? _mv.ready : 0,
         avatar: av,
@@ -633,8 +643,8 @@ function vs_lobby_pkt_quiet(_type)
 }
 
 // Host copies queue / player info / score to everyone who is Connected.
-// member_joined fires at REST join (guest WS usually still down), so this is
-// also called when the host first sees the joiner's welcome SendPlayerInfo.
+// REST member_joined is too early (guest WS is still down). The server notifies
+// again on WS attach; SendPlayerInfo from the joiner is a third fallback.
 function vs_lobby_host_sync(_why)
 {
     if (!vs_lobby_is_owner()) return;
@@ -673,6 +683,10 @@ function vs_lobby_ensure_sender(_senderId)
         order: array_length(o_st_handle.lobbyMembers)
     }));
     vs_lobby_fetch_members("unknown sender");
+    if (vs_lobby_is_owner())
+    {
+        vs_lobby_host_sync("ensure sender");
+    }
     return true;
 }
 
@@ -991,6 +1005,9 @@ function vs_lobby_reset()
 // Called from the patched send_packet while on the custom server.
 function vs_lobby_apply_local(_type, _buffer)
 {
+    // SendQueue.read replaces lobbyMembers from packet ids. A local echo after
+    // member_joined can drop the joiner if UUID string/u64 decoding misses.
+    if (_type == 6 || _type == SendQueuePacket) return;
     var sz = buffer_get_size(_buffer);
     if (sz <= 0) return;
     if (!vs_lobby_pkt_quiet(_type))
