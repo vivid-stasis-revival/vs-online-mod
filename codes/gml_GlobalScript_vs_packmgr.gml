@@ -402,13 +402,6 @@ function vs_packmgr_install_got(_ok, _data, _status)
     st.members = members;
     st.name = variable_struct_exists(_data, "name") ? _data.name : st.packId;
     st.version = variable_struct_exists(_data, "version") ? _data.version : 1;
-    vs_packmgr_upsert(
-    {
-        id: st.packId,
-        name: st.name,
-        version: st.version,
-        songs: members
-    });
     st.queue = vs_packmgr_queue_from_members(members);
     st.idx = 0;
     vs_packmgr_install_next();
@@ -451,6 +444,16 @@ function vs_packmgr_install_finish(_ok)
     var cb = st.on_done;
     st.on_done = undefined;
     st.mode = "";
+    if (_ok)
+    {
+        vs_packmgr_upsert(
+        {
+            id: st.packId,
+            name: st.name,
+            version: st.version,
+            songs: st.members
+        });
+    }
     if (cb != undefined) cb(_ok);
 }
 

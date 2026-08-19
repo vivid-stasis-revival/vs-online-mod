@@ -6,9 +6,46 @@ function vs_lobby_dl_st()
 {
     if (!variable_global_exists("vs_lobby_dl"))
     {
-        global.vs_lobby_dl = { open: false, ask: false, looking: false, checking: false, need_upd: false, chartId: "", serverId: "", seq: 0, err: "" };
+        global.vs_lobby_dl = { open: false, ask: false, looking: false, checking: false, need_upd: false, chartId: "", serverId: "", seq: 0, err: "", qseq: [] };
+    }
+    if (!variable_struct_exists(global.vs_lobby_dl, "qseq") || !is_array(global.vs_lobby_dl.qseq))
+    {
+        global.vs_lobby_dl.qseq = [];
     }
     return global.vs_lobby_dl;
+}
+
+// HTTP callbacks cannot capture enclosing `var` (vsml compiles those as
+// self.seq and crashes on oCoroutineManager). Pair each request with its
+// seq through this FIFO — HTTP is already one-in-flight.
+function vs_lobby_dl_push_seq()
+{
+    var st = vs_lobby_dl_st();
+    array_push(st.qseq, st.seq);
+}
+
+function vs_lobby_dl_pop_seq()
+{
+    var st = vs_lobby_dl_st();
+    if (array_length(st.qseq) <= 0) return -1;
+    var seq = st.qseq[0];
+    array_delete(st.qseq, 0, 1);
+    return seq;
+}
+
+function vs_lobby_dl_check_lookup_http(_ok, _data, _status)
+{
+    vs_lobby_dl_on_check_lookup(vs_lobby_dl_pop_seq(), _ok, _data);
+}
+
+function vs_lobby_dl_check_detail_http(_ok, _data, _status)
+{
+    vs_lobby_dl_on_check_detail(vs_lobby_dl_pop_seq(), _ok, _data);
+}
+
+function vs_lobby_dl_lookup_http(_ok, _data, _status)
+{
+    vs_lobby_dl_on_lookup(vs_lobby_dl_pop_seq(), _ok, _data);
 }
 
 function vs_lobby_dl_open()
@@ -105,15 +142,11 @@ function vs_lobby_dl_arm_check()
     if (cid == "" || vs_lobby_local_missing()) return;
     if (!vs_dlmgr_tracked(cid) || !vs_songstore_has_chart(cid)) return;
     st.seq += 1;
-    var seq = st.seq;
     st.chartId = cid;
     st.checking = true;
     vs_lobby_log("dl check chart=" + cid);
-    vs_online_get_json("/api/v1/songs?chartId=" + vs_online_url_encode(cid) + "&size=1", false,
-        function(_ok, _data, _status)
-        {
-            vs_lobby_dl_on_check_lookup(seq, _ok, _data);
-        });
+    vs_lobby_dl_push_seq();
+    vs_online_get_json("/api/v1/songs?chartId=" + vs_online_url_encode(cid) + "&size=1", false, vs_lobby_dl_check_lookup_http);
 }
 
 function vs_lobby_dl_on_check_lookup(_seq, _ok, _data)
@@ -128,11 +161,8 @@ function vs_lobby_dl_on_check_lookup(_seq, _ok, _data)
         return;
     }
     st.serverId = sid;
-    vs_online_get_json("/api/v1/songs/" + sid, false,
-        function(_ok2, _data2, _status2)
-        {
-            vs_lobby_dl_on_check_detail(_seq, _ok2, _data2);
-        });
+    vs_lobby_dl_push_seq();
+    vs_online_get_json("/api/v1/songs/" + sid, false, vs_lobby_dl_check_detail_http);
 }
 
 function vs_lobby_dl_on_check_detail(_seq, _ok, _data)
@@ -280,15 +310,11 @@ function vs_lobby_dl_begin(_cid)
         vs_lobby_dl_fail("another download");
         return;
     }
-    var seq = st.seq;
     st.looking = true;
     vs_lobby_dl_seed_popup("Looking up", st.chartId);
     vs_lobby_log("dl lookup chart=" + st.chartId);
-    vs_online_get_json("/api/v1/songs?chartId=" + vs_online_url_encode(st.chartId) + "&size=1", false,
-        function(_ok, _data, _status)
-        {
-            vs_lobby_dl_on_lookup(seq, _ok, _data);
-        });
+    vs_lobby_dl_push_seq();
+    vs_online_get_json("/api/v1/songs?chartId=" + vs_online_url_encode(st.chartId) + "&size=1", false, vs_lobby_dl_lookup_http);
 }
 
 function vs_lobby_dl_try_local(_cid)
@@ -319,10 +345,7 @@ function vs_lobby_dl_on_lookup(_seq, _ok, _data)
         return;
     }
     vs_lobby_log("dl start chart=" + st.chartId + " song=" + sid);
-    vs_dlmgr_download(sid, st.chartId, 0, function(_ok2)
-    {
-        vs_lobby_dl_on_done(_ok2);
-    });
+    vs_dlmgr_download(sid, st.chartId, 0, vs_lobby_dl_on_done);
 }
 
 function vs_lobby_dl_on_done(_ok)
