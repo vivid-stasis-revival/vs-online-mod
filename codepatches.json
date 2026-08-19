@@ -212,13 +212,13 @@
     {
         "Entry": "gml_GlobalScript_upload_score",
         "Find": "function upload_chart_score(arg0, arg1, arg2)\n{",
-        "Value": "function upload_chart_score(arg0, arg1, arg2)\n{\n    if (vs_online_is_custom()) { vs_online_upload_chart(arg0, arg1, arg2); return; }",
+        "Value": "function upload_chart_score(arg0, arg1, arg2)\n{\n    if (vs_online_is_custom()) { vs_online_score_log(\"upload_chart_score idx=\" + string(arg0) + \" diff=\" + string(arg1) + \" pts=\" + string(arg2)); vs_online_upload_chart(arg0, arg1, arg2); return; }",
         "Type": 1
     },
     {
         "Entry": "gml_GlobalScript_upload_score",
         "Find": "function upload_score(arg0, arg1, arg2 = false)\n{",
-        "Value": "function upload_score(arg0, arg1, arg2 = false)\n{\n    if (vs_online_is_custom()) return;",
+        "Value": "function upload_score(arg0, arg1, arg2 = false)\n{\n    if (vs_online_is_custom()) { vs_online_score_log(\"skip steam table \" + string(arg0)); return; }",
         "Type": 1
     },
     {
@@ -860,6 +860,36 @@
         "Entry": "gml_GlobalScript_start_song",
         "Find": "global.loadaudio = song_get_info(song, \"audio_id\", arg1);",
         "Value": "global.loadaudio = song_get_info(song, \"audio_id\", arg1);vs_csm_start_song_guard(song, arg1);",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_Object_o_2023results_Create_0",
+        "Find": "if (!global.op_autoplay)\n{\n    upload_chart_score(global.song_id_last, global.df_load, acc_score);",
+        "Value": "if (vs_online_is_custom()) vs_online_score_log(\"results enter idx=\" + string(global.song_id_last) + \" diff=\" + string(global.df_load) + \" pts=\" + string(acc_score) + \" \" + vs_online_score_play_flags());\nif (!global.op_autoplay)\n{\n    upload_chart_score(global.song_id_last, global.df_load, acc_score);",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_Object_o_2023results_Create_0",
+        "Find": "    lastrecord.max_combo = max(lastrecord.max_combo, max_combo);\n}",
+        "Value": "    lastrecord.max_combo = max(lastrecord.max_combo, max_combo);\n}\nelse if (vs_online_is_custom()) vs_online_score_log(\"skip autoplay no upload_chart_score\");",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_Object_o_lifedepleted_Create_0",
+        "Find": "global.failed = true;",
+        "Value": "global.failed = true; if (vs_online_is_custom()) vs_online_score_log(\"gauge death \" + vs_online_score_play_flags() + \" skip_actual=\" + string(global.actually_skip_results));",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_Object_o_2024pause_Step_0",
+        "Find": "                next_room = global.room_after_song.quit;",
+        "Value": "                next_room = global.room_after_song.quit; if (vs_online_is_custom()) vs_online_score_log(\"pause quit no results/upload\");",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_Object_obj_pausescreen_cursor_Step_0",
+        "Find": "                    next_room = global.room_after_song.quit;",
+        "Value": "                    next_room = global.room_after_song.quit; if (vs_online_is_custom()) vs_online_score_log(\"pause quit no results/upload\");",
         "Type": 1
     }
 ]

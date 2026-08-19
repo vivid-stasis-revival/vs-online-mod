@@ -703,29 +703,103 @@ function vs_online_clear_achievement(_name)
 
 // --- per-chart leaderboards (/charts/scores) -------------------------------
 
+function vs_online_score_log(_msg)
+{
+    show_debug_message("VS SCORE: " + string(_msg));
+    vs_songstore_log("SCORE " + string(_msg));
+}
+
+function vs_online_score_play_flags()
+{
+    var gauge = "";
+    var hasGauge = false;
+    if (variable_global_exists("decrypt_mode") && is_struct(global.decrypt_mode))
+    {
+        gauge = string(struct_get_fallback(global.decrypt_mode, "name", ""));
+        hasGauge = struct_get_fallback(global.decrypt_mode, "gauge", false);
+    }
+    var judged = 0;
+    if (variable_global_exists("count_miss"))
+        judged = global.count_acrit + global.count_crit + global.count_great + global.count_good + global.count_miss;
+    var notes = variable_global_exists("notecount") ? global.notecount : -1;
+    return "failed=" + string(variable_global_exists("failed") && global.failed)
+        + " autoplay=" + string(variable_global_exists("op_autoplay") && global.op_autoplay)
+        + " skip_results=" + string(variable_global_exists("skip_results") && global.skip_results)
+        + " gauge=" + gauge
+        + " has_gauge=" + string(hasGauge)
+        + " judged=" + string(judged)
+        + " notes=" + string(notes);
+}
+
+function vs_online_upload_score_done(_ok, _data, _status)
+{
+    vs_online_score_log("POST result ok=" + string(_ok) + " http=" + string(_status));
+}
+
 function vs_online_upload_score(_chartId, _difficulty, _sha1, _score, _data)
 {
-    if (!vs_online_is_account()) return;
+    if (!vs_online_is_account())
+    {
+        vs_online_score_log("skip no account chart=" + string(_chartId) + " diff=" + string(_difficulty) + " " + vs_online_score_play_flags());
+        return;
+    }
     var body = { chartId: _chartId, difficulty: vs_online_diff_api(_difficulty), sha1: _sha1 };
     variable_struct_set(body, "score", _score);
     if (_data != undefined && _data != "")
     {
         body.data = _data;
     }
-    vs_online_post_json("/api/v1/charts/scores", body, function(_ok, _data, _status) { });
+    vs_online_score_log("POST /charts/scores chart=" + string(_chartId)
+        + " diff=" + string(vs_online_diff_api(_difficulty))
+        + " sha=" + string_copy(string(_sha1), 1, 8)
+        + " pts=" + string(_score)
+        + " " + vs_online_score_play_flags());
+    vs_online_post_json("/api/v1/charts/scores", body, vs_online_upload_score_done);
 }
 
 function vs_online_upload_chart(_songIndex, _difficulty, _score)
 {
-    if (!vs_online_is_account()) return;
-    if (!variable_global_exists("song_list")) return;
-    if (_songIndex < 0 || _songIndex >= array_length(global.song_list)) return;
+    if (!vs_online_is_custom())
+    {
+        vs_online_score_log("skip custom-server off idx=" + string(_songIndex));
+        return;
+    }
+    if (!vs_online_is_account())
+    {
+        vs_online_score_log("skip guest idx=" + string(_songIndex) + " " + vs_online_score_play_flags());
+        return;
+    }
+    if (!variable_global_exists("song_list"))
+    {
+        vs_online_score_log("skip no song_list");
+        return;
+    }
+    if (_songIndex < 0 || _songIndex >= array_length(global.song_list))
+    {
+        vs_online_score_log("skip bad idx=" + string(_songIndex));
+        return;
+    }
     var song = global.song_list[_songIndex];
-    if (song == undefined || !variable_struct_exists(song, "chart_id") || song.chart_id == "") return;
+    if (song == undefined || !variable_struct_exists(song, "chart_id") || song.chart_id == "")
+    {
+        vs_online_score_log("skip no chart_id idx=" + string(_songIndex));
+        return;
+    }
+    var sname = variable_struct_exists(song, "name") ? string(song.name) : "";
+    vs_online_score_log("resolve idx=" + string(_songIndex)
+        + " name=" + sname
+        + " chart=" + string(song.chart_id)
+        + " diff=" + string(_difficulty)
+        + " pts=" + string(_score)
+        + " " + vs_online_score_play_flags());
+    if (variable_global_exists("failed") && global.failed)
+    {
+        vs_online_score_log("failed/gauge-death still uploads (same as official Steam)");
+    }
     var sha = vs_online_chart_sha1(song.chart_id, _difficulty);
     if (sha == "")
     {
-        show_debug_message("VS Online: skip score upload, no local chart file for " + song.chart_id + " " + string(_difficulty));
+        vs_online_score_log("skip no sha1 chart=" + string(song.chart_id) + " diff=" + string(_difficulty) + " " + vs_online_score_play_flags());
         return;
     }
     vs_online_upload_score(song.chart_id, _difficulty, sha, round(_score), "");
