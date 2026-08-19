@@ -29,8 +29,8 @@ function SuggestSongPacket(arg0) : BasePacket(arg0, false, 3, 1) constructor
             vs_lobby_log("suggest recv songId=" + string(arg0.songId)
                 + " diff=" + string(arg0.difficulty)
                 + " from=" + string(arg1)
-                + " q=" + string(array_length(o_st_handle.suggestQueue) + 1));
-            array_push(o_st_handle.suggestQueue,
+                + " q=" + string(array_length(vs_lobby_suggest_q()) + 1));
+            array_push(vs_lobby_suggest_q(),
             {
                 member: arg1,
                 songId: arg0.songId,

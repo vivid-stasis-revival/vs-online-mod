@@ -188,6 +188,24 @@ function vs_http_resolve_timeout(_timeout)
     return vs_http_default_timeout();
 }
 
+// HTTP status / ds_map numbers sometimes arrive as "" or strings.
+// Comparing those with > or == tries to coerce to int64 and crashes.
+function vs_http_num(_v, _fallback)
+{
+    if (_fallback == undefined) _fallback = -1;
+    if (is_real(_v))
+    {
+        if (_v != _v) return _fallback;
+        return _v;
+    }
+    if (_v == undefined) return _fallback;
+    if (!is_string(_v) || _v == "") return _fallback;
+    var r = _fallback;
+    try { r = real(_v); } catch (_e) { r = _fallback; }
+    if (!is_real(r) || r != r) return _fallback;
+    return r;
+}
+
 function vs_http_timeout_ms()
 {
     var job = global.vs_http_cur;
@@ -323,7 +341,7 @@ function vs_http_retry_ms(_text)
             var j = json_parse(_text);
             if (is_struct(j) && variable_struct_exists(j, "retryAfter"))
             {
-                var sec = real(j.retryAfter);
+                var sec = vs_http_num(j.retryAfter, 0);
                 if (sec > 0) return min(sec * 1000, 120000);
             }
         }
@@ -338,7 +356,7 @@ function vs_http_retry_ms(_text)
             if (ra == undefined) ra = ds_map_find_value(hdrs, "retry-after");
             if (ra != undefined)
             {
-                var sec2 = real(ra);
+                var sec2 = vs_http_num(ra, 0);
                 if (sec2 > 0) return min(sec2 * 1000, 120000);
             }
         }
@@ -459,23 +477,23 @@ function vs_http_on_async()
     {
         return false;
     }
-    var gmStatus = ds_map_find_value(async_load, "status");
-    var httpStatus = ds_map_find_value(async_load, "http_status");
+    var gmStatus = vs_http_num(ds_map_find_value(async_load, "status"), -1);
+    var httpStatus = vs_http_num(ds_map_find_value(async_load, "http_status"), -1);
     var text = ds_map_find_value(async_load, "result");
     if (gmStatus == 1)
     {
-        var cl = ds_map_find_value(async_load, "contentLength");
-        var got = ds_map_find_value(async_load, "sizeDownloaded");
-        if (cl != undefined && got != undefined && real(got) < real(cl))
+        var cl = vs_http_num(ds_map_find_value(async_load, "contentLength"), -1);
+        var got = vs_http_num(ds_map_find_value(async_load, "sizeDownloaded"), -1);
+        if (cl > 0 && got >= 0 && got < cl)
         {
             return false;
         }
-        if ((text == undefined || text == "") && (httpStatus == undefined || httpStatus < 200))
+        if ((text == undefined || text == "") && httpStatus < 200)
         {
             return false;
         }
     }
-    if (httpStatus == undefined)
+    if (httpStatus < 0)
     {
         httpStatus = (gmStatus < 0) ? gmStatus : 200;
     }
@@ -494,7 +512,8 @@ function vs_http_complete(_job, _ok, _text, _status)
         ds_map_destroy(_job.hdr);
         _job.hdr = undefined;
     }
-    if (!_ok && _status == 429 && _job.retries < 1)
+    var st = vs_http_num(_status, -1);
+    if (!_ok && st == 429 && _job.retries < 1)
     {
         _job.retries += 1;
         var waitMs = vs_http_retry_ms(_text);
@@ -507,7 +526,7 @@ function vs_http_complete(_job, _ok, _text, _status)
         call_later(frames, time_source_units_frames, vs_http_on_held);
         return;
     }
-    if (!_ok && _status == 401 && _job.authed && _job.retries < 1 && !_job.is_refresh)
+    if (!_ok && st == 401 && _job.authed && _job.retries < 1 && !_job.is_refresh)
     {
         var cfg = vs_online_get_config();
         if (variable_struct_exists(cfg, "refresh_token") && cfg.refresh_token != "")
@@ -764,7 +783,7 @@ function vs_online_apply_oauth_tokens(_data)
     var exp = 86400;
     if (variable_struct_exists(_data, "expires_in"))
     {
-        exp = real(_data.expires_in);
+        exp = vs_http_num(_data.expires_in, 86400);
     }
     if (exp < 120) exp = 120;
     global.vs_token_expires_at = current_time + (exp - 120) * 1000;
@@ -807,17 +826,18 @@ function vs_online_ensure_identity_pop(_ok, _data)
 
 function vs_http_status_transient(_status)
 {
-    if (_status == undefined) return true;
-    if (_status <= 0) return true;
-    if (_status == 408 || _status == 429) return true;
-    if (_status >= 500 && _status <= 599) return true;
+    var st = vs_http_num(_status, -1);
+    if (st <= 0) return true;
+    if (st == 408 || st == 429) return true;
+    if (st >= 500 && st <= 599) return true;
     return false;
 }
 
 function vs_http_status_auth_dead(_status, _data)
 {
-    if (_status == 401 || _status == 403) return true;
-    if (_status == 400)
+    var st = vs_http_num(_status, -1);
+    if (st == 401 || st == 403) return true;
+    if (st == 400)
     {
         if (_data != undefined && is_struct(_data) && variable_struct_exists(_data, "error"))
         {
@@ -885,14 +905,14 @@ function vs_online_ensure_identity_me(_ok, _data, _status)
         vs_online_ensure_identity_pop(false, _data);
         return;
     }
-    if (vs_online_is_account() || _status == 403)
+    if (vs_online_is_account() || vs_http_num(_status, -1) == 403)
     {
         show_debug_message("VS Online: /me fail http=" + string(_status)
             + " account=" + string(vs_online_is_account()) + " — not reminting");
         vs_online_ensure_identity_pop(false, _data);
         return;
     }
-    if (_status == 401)
+    if (vs_http_num(_status, -1) == 401)
     {
         show_debug_message("VS Online: guest token 401 — mint new guest");
         vs_online_create_player(vs_online_ensure_identity_created);

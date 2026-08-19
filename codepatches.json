@@ -267,13 +267,13 @@
     {
         "Entry": "gml_Object_o_st_handle_Create_0",
         "Find": "lobbyId = undefined;\nlobbyCode = undefined;\ncurrentMember = undefined;",
-        "Value": "lobbyId = undefined;\nlobbyCode = undefined;\nvs_hostId = undefined;\ncurrentMember = undefined;",
+        "Value": "lobbyId = undefined;\nlobbyCode = undefined;\nvs_hostId = undefined;\nsuggestQueue = [];\ncurrentMember = undefined;",
         "Type": 1
     },
     {
         "Entry": "gml_Object_o_st_handle_Create_0",
         "Find": "lobbyId = undefined;\nlobbyCode = undefined;\nlobbyMembers = [];",
-        "Value": "lobbyId = undefined;\nlobbyCode = undefined;\nvs_hostId = undefined;\nlobbyMembers = [];",
+        "Value": "lobbyId = undefined;\nlobbyCode = undefined;\nvs_hostId = undefined;\nsuggestQueue = [];\nlobbyMembers = [];",
         "Type": 1
     },
     {

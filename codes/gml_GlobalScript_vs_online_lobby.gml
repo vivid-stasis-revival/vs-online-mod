@@ -122,6 +122,16 @@ function vs_lobby_get_host_id()
     return o_st_handle.vs_hostId;
 }
 
+function vs_lobby_suggest_q()
+{
+    if (!instance_exists(o_st_handle)) return [];
+    if (!variable_instance_exists(o_st_handle, "suggestQueue") || !is_array(o_st_handle.suggestQueue))
+    {
+        o_st_handle.suggestQueue = [];
+    }
+    return o_st_handle.suggestQueue;
+}
+
 function vs_lobby_is_owner()
 {
     if (vs_online_is_custom())

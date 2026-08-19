@@ -334,18 +334,18 @@ function vs_media_on_http()
     if (async_load == -1) return;
     var rid = ds_map_find_value(async_load, "id");
     if (rid == undefined || string(rid) != string(global.vs_media_rid)) return;
-    var gmStatus = ds_map_find_value(async_load, "status");
-    var got = ds_map_find_value(async_load, "sizeDownloaded");
-    var tot = ds_map_find_value(async_load, "contentLength");
-    if (got != undefined) global.vs_media_got = real(got);
-    if (tot != undefined) global.vs_media_total = real(tot);
+    var gmStatus = vs_http_num(ds_map_find_value(async_load, "status"), -1);
+    var got = vs_http_num(ds_map_find_value(async_load, "sizeDownloaded"), -1);
+    var tot = vs_http_num(ds_map_find_value(async_load, "contentLength"), -1);
+    if (got >= 0) global.vs_media_got = got;
+    if (tot >= 0) global.vs_media_total = tot;
     var doneProg = (global.vs_media_total > 0 && global.vs_media_got >= global.vs_media_total);
     if (gmStatus == 1 && !doneProg)
     {
         return;
     }
-    var httpStatus = ds_map_find_value(async_load, "http_status");
-    var httpOk = (httpStatus == undefined || (httpStatus >= 200 && httpStatus < 300));
+    var httpStatus = vs_http_num(ds_map_find_value(async_load, "http_status"), -1);
+    var httpOk = (httpStatus < 0 || (httpStatus >= 200 && httpStatus < 300));
     var ok = ((gmStatus >= 0) || doneProg) && httpOk;
     show_debug_message("VS Media: done " + string(global.vs_media_kind) + " " + string(global.vs_media_id) + " ok=" + string(ok) + " http=" + string(httpStatus) + " st=" + string(gmStatus));
     vs_media_finish(ok);

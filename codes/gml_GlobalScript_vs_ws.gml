@@ -96,7 +96,7 @@ function vs_ws_parse_base()
     if (colon > 0)
     {
         host = string_copy(u, 1, colon - 1);
-        port = real(string_copy(u, colon + 1, string_length(u) - colon));
+        port = vs_http_num(string_copy(u, colon + 1, string_length(u) - colon), defPort);
     }
     return { scheme: scheme, host: host, port: port, secure: (scheme == "wss") };
 }

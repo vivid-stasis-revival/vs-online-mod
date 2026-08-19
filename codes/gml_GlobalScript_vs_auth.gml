@@ -20,8 +20,8 @@ function vs_auth_flow_started(_ok, _data)
         {
             verification_uri_complete = string(_data.verification_uri_complete);
         }
-        expires_at = current_time / 1000 + (variable_struct_exists(_data, "expires_in") ? _data.expires_in : 600);
-        interval = variable_struct_exists(_data, "interval") ? max(_data.interval, 5) : 5;
+        expires_at = current_time / 1000 + vs_http_num(variable_struct_exists(_data, "expires_in") ? _data.expires_in : 600, 600);
+        interval = variable_struct_exists(_data, "interval") ? max(vs_http_num(_data.interval, 5), 5) : 5;
         poll_at = current_time + interval * 1000;
         message = "Waiting for approval...";
         play_se(sfx_songsel_select);
