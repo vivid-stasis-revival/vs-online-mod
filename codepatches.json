@@ -125,7 +125,7 @@
     {
         "Entry": "gml_Object_obj_multiplayer_lobby_Create_0",
         "Find": "case \"startgame\":",
-        "Value": "case \"startgame\": if (vs_lobby_dl_prompt()) break;",
+        "Value": "case \"startgame\": if (vs_lobby_block_start()) break;",
         "Type": 0
     },
 
@@ -194,7 +194,7 @@
     {
         "Entry": "gml_Object_obj_multiplayer_lobby_Create_0",
         "Find": "                if (everyoneReady)\n                {\n                    send_packet(StartCountdownPacket, 3);\n                }",
-        "Value": "                if (everyoneReady)\n                {\n                    if (vs_online_is_custom()) vs_lobby_log(\"ui startgame ok members=\" + string(array_length(members)));\n                    send_packet(StartCountdownPacket, 3);\n                }\n                else if (vs_online_is_custom()) vs_lobby_log(\"ui startgame skip not-ready members=\" + string(array_length(members)));",
+        "Value": "                if (everyoneReady)\n                {\n                    if (vs_online_is_custom() && vs_lobby_anyone_need_dl()) { vs_lobby_log(\"ui startgame skip need_dl\"); vs_lobby_dl_show_wait(); }\n                    else { if (vs_online_is_custom()) vs_lobby_log(\"ui startgame ok members=\" + string(array_length(members))); send_packet(StartCountdownPacket, 3); }\n                }\n                else if (vs_online_is_custom()) vs_lobby_log(\"ui startgame skip not-ready members=\" + string(array_length(members)));",
         "Type": 1
     },
     {
@@ -876,7 +876,7 @@
     {
         "Entry": "gml_GlobalScript_SendPlayerInfoPacket",
         "Find": "member.class = arg0.class;",
-        "Value": "member.class = arg0.class;member.has_bwp = arg0.has_bwp;member.play_diff = struct_get_fallback(arg0, \"play_diff\", -1);member.autoplay = struct_get_fallback(arg0, \"autoplay\", 0);member.need_dl = struct_get_fallback(arg0, \"need_dl\", 0);",
+        "Value": "member.class = arg0.class;member.has_bwp = arg0.has_bwp;member.play_diff = struct_get_fallback(arg0, \"play_diff\", -1);member.autoplay = struct_get_fallback(arg0, \"autoplay\", 0);member.need_dl = struct_get_fallback(arg0, \"need_dl\", 0); vs_lobby_dl_on_member_info();",
         "Type": 0
     },
     {

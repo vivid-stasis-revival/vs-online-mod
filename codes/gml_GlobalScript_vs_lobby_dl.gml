@@ -6,12 +6,13 @@ function vs_lobby_dl_st()
 {
     if (!variable_global_exists("vs_lobby_dl"))
     {
-        global.vs_lobby_dl = { open: false, ask: false, looking: false, checking: false, need_upd: false, chartId: "", serverId: "", seq: 0, err: "", qseq: [] };
+        global.vs_lobby_dl = { open: false, ask: false, wait: false, looking: false, checking: false, need_upd: false, chartId: "", serverId: "", seq: 0, err: "", qseq: [] };
     }
     if (!variable_struct_exists(global.vs_lobby_dl, "qseq") || !is_array(global.vs_lobby_dl.qseq))
     {
         global.vs_lobby_dl.qseq = [];
     }
+    if (!variable_struct_exists(global.vs_lobby_dl, "wait")) global.vs_lobby_dl.wait = false;
     return global.vs_lobby_dl;
 }
 
@@ -74,6 +75,7 @@ function vs_lobby_dl_close()
     var st = vs_lobby_dl_st();
     st.open = false;
     st.ask = false;
+    st.wait = false;
     st.looking = false;
     st.err = "";
 }
@@ -83,6 +85,7 @@ function vs_lobby_dl_fail(_msg)
     var st = vs_lobby_dl_st();
     st.looking = false;
     st.ask = false;
+    st.wait = false;
     st.err = string(_msg);
     st.open = true;
     vs_lobby_dl_seed_popup("Download failed", st.err);
@@ -96,6 +99,7 @@ function vs_lobby_dl_cancel()
     st.looking = false;
     st.checking = false;
     st.ask = false;
+    st.wait = false;
     if (vs_dlmgr_is_busy() && string(global.vs_dlmgr_dl.chartId) == string(st.chartId))
     {
         vs_dlmgr_cancel();
@@ -136,7 +140,7 @@ function vs_lobby_dl_arm_check()
 {
     if (!vs_online_is_custom()) return;
     var st = vs_lobby_dl_st();
-    if (st.open) return;
+    if (st.open && !st.wait) return;
     st.need_upd = false;
     st.checking = false;
     st.serverId = "";
@@ -223,6 +227,7 @@ function vs_lobby_dl_show_ask(_cid)
     var st = vs_lobby_dl_st();
     st.open = true;
     st.ask = true;
+    st.wait = false;
     st.err = "";
     st.chartId = string(_cid);
 }
@@ -257,7 +262,7 @@ function vs_lobby_dl_prompt_ex(_ask)
     if (!vs_online_is_custom()) return false;
     var cid = vs_lobby_queued_chart_id();
     var st = vs_lobby_dl_st();
-    if (st.open && !st.ask && (cid == "" || string(st.chartId) == string(cid)))
+    if (st.open && !st.ask && !st.wait && (cid == "" || string(st.chartId) == string(cid)))
     {
         return true;
     }
@@ -283,6 +288,41 @@ function vs_lobby_dl_block_options()
     return vs_lobby_dl_prompt();
 }
 
+function vs_lobby_block_start()
+{
+    if (!vs_online_is_custom()) return false;
+    if (vs_lobby_dl_prompt()) return true;
+    if (!vs_lobby_anyone_need_dl()) return false;
+    vs_lobby_dl_show_wait();
+    vs_lobby_log("start blocked need_dl");
+    return true;
+}
+
+function vs_lobby_dl_show_wait()
+{
+    var st = vs_lobby_dl_st();
+    if (st.open && !st.ask && !st.wait) return;
+    st.open = true;
+    st.ask = false;
+    st.wait = true;
+    st.err = "";
+}
+
+function vs_lobby_dl_on_member_info()
+{
+    if (!vs_online_is_custom()) return;
+    if (!vs_lobby_anyone_need_dl()) return;
+    if (!instance_exists(obj_multiplayer_lobby)) return;
+    with (obj_multiplayer_lobby)
+    {
+        if (variable_instance_exists(self, "countdownTimer") && countdownTimer != undefined)
+        {
+            cancelCountdown();
+            vs_lobby_log("countdown cancel need_dl");
+        }
+    }
+}
+
 function vs_lobby_dl_begin(_cid)
 {
     var st = vs_lobby_dl_st();
@@ -291,6 +331,7 @@ function vs_lobby_dl_begin(_cid)
     st.err = "";
     st.open = true;
     st.ask = false;
+    st.wait = false;
     st.looking = false;
     if (st.chartId == "")
     {
@@ -407,6 +448,15 @@ function vs_lobby_dl_step()
         }
         return true;
     }
+    if (st.wait)
+    {
+        if (cancel || input_check_pressed(4) || keyboard_check_pressed(vk_enter))
+        {
+            play_se(sfx_songsel_select);
+            vs_lobby_dl_close();
+        }
+        return true;
+    }
     if (cancel)
     {
         play_se(sfx_songsel_select);
@@ -463,10 +513,41 @@ function vs_lobby_dl_draw_ask()
     draw_set_color(c_white);
 }
 
+function vs_lobby_dl_draw_wait()
+{
+    var cw = display_get_gui_width();
+    var ch = display_get_gui_height();
+    var pw = min(220, max(80, cw - 8));
+    var ph = min(78, max(48, ch - 8));
+    var px = (cw - pw) / 2;
+    var py = (ch - ph) / 2;
+    draw_set_alpha(0.55);
+    draw_set_color(c_black);
+    draw_rectangle(0, 0, cw, ch, false);
+    draw_set_alpha(1);
+    draw_set_color(c_black);
+    draw_rectangle(px - 2, py - 2, px + pw + 2, py + ph + 2, false);
+    draw_set_color(c_white);
+    draw_rectangle(px, py, px + pw, py + ph, true);
+    draw_set_font(fnt_monacovs);
+    draw_set_halign(fa_center);
+    draw_set_color(c_aqua);
+    draw_text(px + pw / 2, py + 8, vs_dlbr_clip_text("Can't start yet", pw - 12));
+    draw_set_font(global.default_font);
+    draw_set_color(c_white);
+    draw_text(px + pw / 2, py + 28, vs_dlbr_clip_text("Someone still needs this chart", pw - 12));
+    draw_set_color(c_yellow);
+    draw_text(px + pw / 2, py + 52, vs_dlbr_clip_text("ESCAPE", pw - 12));
+    draw_set_halign(fa_left);
+    draw_set_color(c_white);
+}
+
 function vs_lobby_dl_draw()
 {
     if (!vs_lobby_dl_open()) return;
-    if (vs_lobby_dl_st().ask) vs_lobby_dl_draw_ask();
+    var st = vs_lobby_dl_st();
+    if (st.wait) vs_lobby_dl_draw_wait();
+    else if (st.ask) vs_lobby_dl_draw_ask();
     else vs_dlbr_draw_dl_popup();
 }
 
@@ -485,7 +566,7 @@ function vs_lobby_dl_menu_find(_acts, _cb)
 function vs_lobby_dl_menu_apply(_acts)
 {
     if (_acts == undefined || !is_array(_acts)) return;
-    var want = vs_online_is_custom() && (vs_lobby_local_need_dl() || vs_lobby_dl_open());
+    var want = vs_online_is_custom() && (vs_lobby_local_need_dl() || (vs_lobby_dl_open() && !vs_lobby_dl_st().wait));
     var have = vs_lobby_dl_menu_find(_acts, "downloadchart");
     var lab = vs_lobby_local_missing() ? "Download" : "Update";
     if (want)

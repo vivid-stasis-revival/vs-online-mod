@@ -479,6 +479,31 @@ function vs_lobby_tag_need_dl(_m)
     return _m != undefined && variable_struct_exists(_m, "need_dl") && _m.need_dl;
 }
 
+function vs_lobby_member_needs_chart(_m)
+{
+    if (_m == undefined) return false;
+    if (variable_struct_exists(_m, "npc") && _m.npc) return false;
+    if (variable_struct_exists(_m, "id") && string(_m.id) == string(vs_online_player_id()))
+    {
+        return vs_lobby_local_need_dl();
+    }
+    return variable_struct_exists(_m, "need_dl") && _m.need_dl;
+}
+
+function vs_lobby_anyone_need_dl()
+{
+    if (!vs_online_is_custom()) return false;
+    if (vs_lobby_local_need_dl()) return true;
+    if (!instance_exists(o_st_handle) || !is_array(o_st_handle.lobbyMembers)) return false;
+    var i = 0;
+    repeat (array_length(o_st_handle.lobbyMembers))
+    {
+        if (vs_lobby_member_needs_chart(o_st_handle.lobbyMembers[i])) return true;
+        i++;
+    }
+    return false;
+}
+
 function vs_lobby_diff_short(_d)
 {
     if (_d == 0) return "OPN";
