@@ -415,7 +415,6 @@ function vs_online_bind_hooks()
 function vs_online_init()
 {
     vs_csm_force_gm_audio();
-    vs_font_init();
     vs_online_bind_hooks();
     vs_online_get_config();
     if (!instance_exists(oCoroutineManager))
@@ -785,15 +784,12 @@ function vs_online_error_draw()
     draw_set_valign(fa_top);
     draw_set_font(fnt_monacovs);
     draw_set_color(c_red);
-    var _ft = vs_font_begin(title);
     var ttl = vs_online_error_clip(title, maxw);
     draw_text(bx + bw / 2, by + 5, ttl);
-    vs_font_end(_ft);
 
     draw_set_font(global.default_font);
     draw_set_color(c_white);
     draw_set_halign(fa_left);
-    var _fm = vs_font_begin(message);
     var msg = vs_online_error_break(message, maxw);
     var msgTop = by + 22;
     var msgH = yb - msgTop - 4;
@@ -822,7 +818,6 @@ function vs_online_error_draw()
         shown += line;
     }
     draw_text_ext(bx + pad, msgTop, shown, sep, maxw);
-    vs_font_end(_fm);
 
     var btn_w = floor((bw - pad * 3) / 2);
     var bi = 0;

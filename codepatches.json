@@ -563,13 +563,13 @@
     {
         "Entry": "gml_Object_o_2023res_songwindow_Draw_0",
         "Find": "draw_text(draw_x_left, curr_y, truncate_string(member.name, 96));",
-        "Value": "vs_draw_text_max(draw_x_left, curr_y, member.name, 96);vs_lobby_draw_namecard_tags(member, draw_x_left, curr_y + 11, fa_left);",
+        "Value": "draw_text(draw_x_left, curr_y, truncate_string(member.name, 96));vs_lobby_draw_namecard_tags(member, draw_x_left, curr_y + 11, fa_left);",
         "Type": 0
     },
     {
         "Entry": "gml_Object_o_2023res_playerwindow_Draw_0",
         "Find": "draw_text_o(x + 156, y + 29, o_2023results.artist);",
-        "Value": "vs_draw_text_o(x + 156, y + 29, o_2023results.artist);if (global.multiplayerLobby) vs_lobby_draw_local_tags(x + 310, y + 29, fa_right);",
+        "Value": "draw_text_o(x + 156, y + 29, o_2023results.artist);if (global.multiplayerLobby) vs_lobby_draw_local_tags(x + 310, y + 29, fa_right);",
         "Type": 0
     },
     {
@@ -942,7 +942,7 @@
     {
         "Entry": "gml_Object_obj_multiplayer_lobby_Draw_64",
         "Find": "draw_text_o(bx + ox + 32, by + oy + 4 + (i * 35), truncate_string(member.name, 112));",
-        "Value": "vs_draw_text_o_max(bx + ox + 32, by + oy + 4 + (i * 35), member.name, 112);vs_lobby_draw_namecard_tags(member, bx + ox + 143, by + oy + 4 + (i * 35));",
+        "Value": "draw_text_o(bx + ox + 32, by + oy + 4 + (i * 35), truncate_string(member.name, 112));vs_lobby_draw_namecard_tags(member, bx + ox + 143, by + oy + 4 + (i * 35));",
         "Type": 0
     },
     {
@@ -1153,7 +1153,7 @@
     {
         "Entry": "gml_Object_o_songselect_Draw_0",
         "Find": "draw_text(316 - artist_width, 2 + top_y, name);",
-        "Value": "vs_draw_text(316 - artist_width, 2 + top_y, name); if (struct_exists(selected_song, \"is_custom\")) {draw_sprite(sp_custom, 0, 2, 7 + top_y);}",
+        "Value": "draw_text(316 - artist_width, 2 + top_y, name); if (struct_exists(selected_song, \"is_custom\")) {draw_sprite(sp_custom, 0, 2, 7 + top_y);}",
         "Type": 1
     },
     {

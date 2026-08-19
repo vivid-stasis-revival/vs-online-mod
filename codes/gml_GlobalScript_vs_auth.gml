@@ -317,9 +317,9 @@ function vs_auth_draw()
         var tw = bx + bw - tx - 8;
         draw_set_halign(fa_left);
         draw_set_color(make_color_rgb(80, 220, 230));
-        vs_draw_clip(tx, by + 22, ep, tw);
+        draw_text(tx, by + 22, vs_dlbr_clip_text(ep, tw));
         draw_set_color(c_white);
-        vs_draw_clip(tx, by + 34, nm, tw);
+        draw_text(tx, by + 34, vs_dlbr_clip_text(nm, tw));
         draw_set_color(make_color_rgb(180, 186, 196));
         draw_text(tx, by + 46, vs_dlbr_clip_text(em, tw));
         draw_text(tx, by + 56, vs_dlbr_clip_text(pid, tw));

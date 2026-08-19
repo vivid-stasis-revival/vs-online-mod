@@ -1075,8 +1075,9 @@ function vs_dlbr_draw()
         }
     }
 
+    var st = vs_dlbr_clip_text(string(status), bw - 12);
     draw_set_color(make_color_rgb(120, 210, 140));
-    vs_draw_clip(bx + 6, by + bh - 22, string(status), bw - 12);
+    draw_text(bx + 6, by + bh - 22, st);
     vs_dlbr_draw_hints(bx + 6, by + bh - 12, bw - 12);
 
     if (detail_open) vs_dlbr_draw_detail();
@@ -1124,13 +1125,13 @@ function vs_dlbr_draw_dl_popup()
     draw_set_font(fnt_monacovs);
     draw_set_halign(fa_center);
     draw_set_color(c_aqua);
-    vs_draw_clip(px + pw / 2, py + 4, title, pw - 12);
+    draw_text(px + pw / 2, py + 4, vs_dlbr_clip_text(title, pw - 12));
     draw_set_font(global.default_font);
     draw_set_halign(fa_left);
     draw_set_color(c_white);
     draw_text(px + 8, py + 20, vs_dlbr_clip_text(files, pw - 16));
     draw_set_color(c_gray);
-    vs_draw_clip(px + 8, py + 32, fname, pw - 16);
+    draw_text(px + 8, py + 32, vs_dlbr_clip_text(fname, pw - 16));
 
     var barx = px + 8;
     var bary = py + 46;
@@ -1235,7 +1236,7 @@ function vs_dlbr_draw_search()
     draw_text(px + 8, py + 3, "Search");
     draw_set_font(global.default_font);
     draw_set_color(c_lime);
-    vs_draw_clip(px + 8, py + 18, query + "_", pw - 16);
+    draw_text(px + 8, py + 18, vs_dlbr_clip_text(query + "_", pw - 16));
     draw_set_color(make_color_rgb(120, 126, 136));
     draw_text(px + 8, py + ph - 12, "Enter  Esc");
 }
@@ -1299,7 +1300,7 @@ function vs_dlbr_draw_bar(_x, _y, _w, _h, _idx)
     else if (web && r.chartCount > 0) line += " [" + string(r.chartCount) + "]";
     if (web && r.hasBackstage) line += " B";
     draw_set_color(isSel ? c_black : c_white);
-    vs_draw_clip(_x + 16, _y + 2, (isSel ? "> " : "") + line, _w - 20);
+    draw_text(_x + 16, _y + 2, vs_dlbr_clip_text((isSel ? "> " : "") + line, _w - 20));
 }
 
 function vs_dlbr_open_detail(_r, _local)
@@ -2196,16 +2197,16 @@ function vs_dlbr_draw_detail()
     draw_set_halign(fa_left);
     draw_set_font(fnt_monacovs);
     draw_set_color(vs_dlbr_detail_title_color(isPack));
-    if (py + 6 + 10 < contentBot) vs_draw_clip(tx, py + 6, name, textw);
+    if (py + 6 + 10 < contentBot) draw_text(tx, py + 6, vs_dlbr_clip_text(name, textw));
     draw_set_font(global.default_font);
     draw_set_color(make_color_rgb(180, 186, 196));
-    if (py + 18 + 10 < contentBot) vs_draw_clip(tx, py + 18, (artist != "") ? artist : " ", textw);
+    if (py + 18 + 10 < contentBot) draw_text(tx, py + 18, vs_dlbr_clip_text((artist != "") ? artist : " ", textw));
     draw_set_color(make_color_rgb(140, 146, 156));
     var meta = "";
     if (owner != "") meta = (meta == "") ? owner : (meta + "  " + owner);
     if (bpm != "") meta = (meta == "") ? ("BPM " + bpm) : (meta + "  BPM " + bpm);
     if (ver != "") meta = (meta == "") ? ("v" + ver) : (meta + "  v" + ver);
-    if (py + 28 + 10 < contentBot) vs_draw_clip(tx, py + 28, meta, textw);
+    if (py + 28 + 10 < contentBot) draw_text(tx, py + 28, vs_dlbr_clip_text(meta, textw));
 
     var dy = jy + js + 6;
     if (dy + 10 < contentBot)
@@ -2240,7 +2241,7 @@ function vs_dlbr_draw_detail()
                 var tcol = local ? c_white : make_color_rgb(150, 156, 166);
                 var mark = local ? "* " : "- ";
                 draw_set_color(tcol);
-                vs_draw_clip(px + 6, dy, mark + tname, right - px - 6);
+                draw_text(px + 6, dy, vs_dlbr_clip_text(mark + tname, right - px - 6));
                 dy += 10;
                 ti++;
             }
@@ -2270,7 +2271,7 @@ function vs_dlbr_draw_detail()
             if (extra != "" && dy + 10 < contentBot)
             {
                 draw_set_color(make_color_rgb(160, 166, 176));
-                vs_draw_clip(px + 6, dy, extra, right - px - 6);
+                draw_text(px + 6, dy, vs_dlbr_clip_text(extra, right - px - 6));
                 dy += 11;
             }
             var cx = px + 6;
