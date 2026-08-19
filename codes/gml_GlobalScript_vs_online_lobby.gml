@@ -440,9 +440,34 @@ function vs_lobby_rest_leave(_code)
     });
 }
 
-function vs_lobby_create_busy()
+// Do not name this global the same as a function — GM puts scripts in the
+// global namespace, so `global.vs_lobby_create_busy` was the function itself
+// (always truthy) and every Host click skipped the POST.
+function vs_lobby_is_create_pending()
 {
-    return variable_global_exists("vs_lobby_create_busy") && global.vs_lobby_create_busy;
+    return variable_global_exists("vs_lobby_create_pending") && global.vs_lobby_create_pending == true;
+}
+
+function vs_lobby_set_create_pending(_on)
+{
+    global.vs_lobby_create_pending = (_on == true);
+}
+
+function vs_lobby_norm_code(_code)
+{
+    var s = string_upper(string(_code));
+    var out = "";
+    var i = 1;
+    repeat (string_length(s))
+    {
+        var ch = string_char_at(s, i);
+        var ordv = ord(ch);
+        var ok = (ordv >= 48 && ordv <= 57) || (ordv >= 65 && ordv <= 90);
+        if (ok) out += ch;
+        i++;
+    }
+    if (string_length(out) > 6) out = string_copy(out, 1, 6);
+    return out;
 }
 
 function vs_lobby_flags()
@@ -461,6 +486,7 @@ function vs_lobby_flags()
         + " conn=" + string(vs_online_conn_state())
         + " ws=" + string(vs_ws_state().state)
         + " in=" + string(vs_lobby_in_lobby())
+        + " pend=" + string(vs_lobby_is_create_pending())
         + " code=" + code
         + " host=" + host
         + " members=" + string(n)
@@ -605,10 +631,10 @@ function vs_lobby_create(_public, _on_done)
         if (_on_done != undefined) { _on_done(true, undefined); }
         return;
     }
-    if (vs_lobby_create_busy())
+    if (vs_lobby_is_create_pending())
     {
-        vs_lobby_log("create skip busy " + vs_lobby_flags());
-        if (_on_done != undefined) { _on_done(true, undefined); }
+        vs_lobby_log("create skip pending " + vs_lobby_flags());
+        if (_on_done != undefined) { _on_done(false, undefined); }
         return;
     }
     if (!variable_global_exists("vs_lobby_cb"))
@@ -627,17 +653,17 @@ function vs_lobby_create(_public, _on_done)
             if (already != undefined) { already(true, undefined); }
             return;
         }
-        if (vs_lobby_create_busy())
+        if (vs_lobby_is_create_pending())
         {
-            vs_lobby_log("create POST skip busy");
+            vs_lobby_log("create POST skip pending");
             return;
         }
-        global.vs_lobby_create_busy = true;
+        vs_lobby_set_create_pending(true);
         vs_lobby_log("create POST /lobbies public=" + string(global.vs_lobby_cb.is_public));
         var body = "{\"public\":" + (global.vs_lobby_cb.is_public ? "true" : "false") + "}";
         vs_online_post_raw("/api/v1/lobbies", body, function(_ok, _data, _status)
         {
-            global.vs_lobby_create_busy = false;
+            vs_lobby_set_create_pending(false);
             vs_lobby_log("create result " + vs_lobby_http_why(_ok, _data, _status));
             var cb = global.vs_lobby_cb.on_done;
             global.vs_lobby_cb.on_done = undefined;
@@ -700,10 +726,11 @@ function vs_lobby_matchmake(_on_done)
 
 function vs_lobby_join(_code, _on_done)
 {
-    vs_lobby_log("join start code=" + string(_code) + " " + vs_lobby_flags());
-    if (_code == undefined || string(_code) == "")
+    var code = vs_lobby_norm_code(_code);
+    vs_lobby_log("join start code=" + code + " raw=" + string(_code) + " " + vs_lobby_flags());
+    if (code == undefined || string_length(code) != 6)
     {
-        vs_lobby_log("join empty code");
+        vs_lobby_log("join bad code raw=" + string(_code));
         if (_on_done != undefined) { _on_done(false, undefined); }
         return;
     }
@@ -717,7 +744,7 @@ function vs_lobby_join(_code, _on_done)
     {
         global.vs_lobby_cb = { is_public: true, code: "", on_done: undefined };
     }
-    global.vs_lobby_cb.code = _code;
+    global.vs_lobby_cb.code = code;
     global.vs_lobby_cb.on_done = _on_done;
     vs_online_with_conn(function()
     {
@@ -848,7 +875,7 @@ function vs_lobby_enter(_lobbyJson)
 function vs_lobby_reset()
 {
     vs_lobby_log("reset " + vs_lobby_flags());
-    global.vs_lobby_create_busy = false;
+    vs_lobby_set_create_pending(false);
     vs_lobby_send_q_clear();
     vs_ws_close();
     if (instance_exists(o_st_handle))
