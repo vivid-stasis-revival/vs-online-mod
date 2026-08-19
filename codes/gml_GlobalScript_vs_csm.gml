@@ -336,6 +336,16 @@ function vs_csm_first_chart_diff(_dir)
     return 0;
 }
 
+// Official MAX LEVEL "17" is index 22. 17+ (const 17.5) maps to 23 and was
+// dropped, which emptied All Custom Songs when the filter was Encore-only.
+function vs_csm_level_in_range(_chk, _lo, _hi)
+{
+    if (_chk == -1) return true;
+    if (_chk >= _lo && _chk <= _hi) return true;
+    if (_chk == 23 && _hi >= 22) return true;
+    return false;
+}
+
 // Song-select badges are sprite frames: 1..18 and 9+..16+. 17+ is frame 27,
 // which the official sheet does not have. Draw the display string instead.
 function vs_csm_draw_diff_badge(_sprite, _diff_value, _x, _y)

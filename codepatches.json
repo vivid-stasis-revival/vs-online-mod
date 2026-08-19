@@ -1037,6 +1037,18 @@
         "Type": 1
     },
     {
+        "Entry": "gml_Object_o_songselect_main_Create_0",
+        "Find": "level_range_end = global.last_freeplay_max_level;",
+        "Value": "level_range_end = global.last_freeplay_max_level; if (level_range_end == 22) { level_range_end = 23; global.last_freeplay_max_level = 23; }",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_GlobalScript_refresh_song_objects",
+        "Find": "            if ((chk >= arg0 && chk <= arg1) || chk == -1)",
+        "Value": "            if (vs_csm_level_in_range(chk, arg0, arg1))",
+        "Type": 0
+    },
+    {
         "Entry": "gml_GlobalScript_AddSongPacket",
         "Find": "return buffer;",
         "Value": "buffer_write(buffer, buffer_string, global.song_list[arg0.songId].chart_id);return buffer;",
