@@ -569,13 +569,13 @@
     {
         "Entry": "gml_Object_obj_multiplayer_lobby_Create_0",
         "Find": "var s = o_st_handle.songQueue[0];",
-        "Value": "var s = o_st_handle.songQueue[0];var song = struct_copy(global.song_list[s.songId]);if (variable_struct_exists(global.song_list[s.songId], \"enc_data\")) song.allowed_difficulties = (s.difficulty == 3) ? [3] : [0, 1, 2];",
+        "Value": "var s = o_st_handle.songQueue[0];var song = struct_copy(vs_online_song_from_id(s.songId) ?? vs_online_missing_song());",
         "Type": 0
     },
     {
         "Entry": "gml_Object_obj_multiplayer_lobby_Create_0",
         "Find": "select_difficulties: false",
-        "Value": "select_difficulties: !(variable_struct_exists(global.song_list[s.songId], \"enc_data\") && s.difficulty == 3)",
+        "Value": "select_difficulties: true",
         "Type": 0
     },
     {
@@ -806,6 +806,12 @@
         "Entry": "gml_Object_o_songselect_newconfirm_Create_0",
         "Find": "var max_d = has_encore ? 4 : 3;",
         "Value": "has_encore |= song.has_encore && global.multiplayerLobby;var max_d = has_encore ? 4 : 3;",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_Object_o_songselect_newconfirm_Create_0",
+        "Find": "allowed_difficulties = [];",
+        "Value": "if (variable_global_exists(\"multiplayerLobby\") && global.multiplayerLobby) array_push(options, { name: \"Autoplay\", type: 0, choices: [\"OFF\", \"ON\"], prop: [global, \"op_autoplay\"] });\nallowed_difficulties = [];",
         "Type": 0
     },
     {
