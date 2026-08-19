@@ -827,12 +827,6 @@
         "Type": 0
     },
     {
-        "Entry": "gml_Object_o_songselect_newconfirm_Create_0",
-        "Find": "allowed_difficulties = [];",
-        "Value": "if (variable_global_exists(\"multiplayerLobby\") && global.multiplayerLobby) array_push(options, { name: \"Autoplay\", type: 0, choices: [\"OFF\", \"ON\"], prop: [global, \"op_autoplay\"] });\nallowed_difficulties = [];",
-        "Type": 0
-    },
-    {
         "Entry": "gml_GlobalScript_StartCountdownPacket",
         "Find": "play_se(asset_get_index(@@string@@(\"sfx_count{0}\", arg0)));",
         "Value": "if (vs_online_is_custom()) vs_lobby_log(\"countdown n=\" + string(arg0)); play_se(vs_online_countdown_sound(arg0));",
