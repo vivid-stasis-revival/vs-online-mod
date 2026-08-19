@@ -160,19 +160,16 @@ function vs_http_headers_create(_spec)
 
 function vs_http_q_init()
 {
-    if (!variable_global_exists("vs_http_q"))
-    {
-        global.vs_http_q = [];
-        global.vs_http_busy = false;
-        global.vs_http_cur = undefined;
-        global.vs_http_gen = 0;
-        global.vs_http_to = [];
-    }
-    if (!variable_global_exists("vs_http_hold"))
-    {
-        global.vs_http_hold = false;
-        global.vs_http_held = undefined;
-    }
+    // Each slot is independent: oCoroutineManager's HTTP event can fire for
+    // official coroutines before any vs_http_request has run (new install /
+    // first boot). Reading vs_http_cur then crashes the whole manager.
+    if (!variable_global_exists("vs_http_q")) global.vs_http_q = [];
+    if (!variable_global_exists("vs_http_busy")) global.vs_http_busy = false;
+    if (!variable_global_exists("vs_http_cur")) global.vs_http_cur = undefined;
+    if (!variable_global_exists("vs_http_gen")) global.vs_http_gen = 0;
+    if (!variable_global_exists("vs_http_to")) global.vs_http_to = [];
+    if (!variable_global_exists("vs_http_hold")) global.vs_http_hold = false;
+    if (!variable_global_exists("vs_http_held")) global.vs_http_held = undefined;
 }
 
 function vs_http_default_timeout()
@@ -208,6 +205,7 @@ function vs_http_num(_v, _fallback)
 
 function vs_http_timeout_ms()
 {
+    vs_http_q_init();
     var job = global.vs_http_cur;
     if (job != undefined && variable_struct_exists(job, "failed") && job.failed)
     {
@@ -412,6 +410,7 @@ function vs_http_pump()
 
 function vs_http_start_current()
 {
+    vs_http_q_init();
     var job = global.vs_http_cur;
     if (job == undefined)
     {
@@ -452,6 +451,7 @@ function vs_http_on_timeout()
 // Coroutine timeout invokes this with async_load == -1.
 function vs_http_on_async()
 {
+    vs_http_q_init();
     // File downloads share this official HTTP event. Handle them here so a
     // missed codepatch line cannot leave http_get_file waiting forever.
     vs_songstore_on_http();
@@ -505,6 +505,7 @@ function vs_http_on_async()
 
 function vs_http_complete(_job, _ok, _text, _status)
 {
+    vs_http_q_init();
     if (_job == undefined) return;
     if (global.vs_http_cur != _job) return;
     if (_job.hdr != undefined)
