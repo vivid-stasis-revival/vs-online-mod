@@ -1,1 +1,2 @@
 downloadScoresFriends = vs_online_lb_bind_download_friends;
+downloadScoresAround = vs_online_lb_bind_download_around;

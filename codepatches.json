@@ -264,6 +264,18 @@
         "Type": 1
     },
     {
+        "Entry": "gml_Object_o_songselect_leaderboard_Step_0",
+        "Find": "    lb_type = (lb_type + 1) % 2;\n    switch (lb_type)\n    {\n        case 0:\n            lb_index = 0;\n            downloadScores();\n            break;\n        case 1:\n            lb_index = 0;\n            downloadScoresFriends();\n            break;\n    }",
+        "Value": "    lb_type = (lb_type + 1) % (vs_online_is_custom() ? 3 : 2);\n    switch (lb_type)\n    {\n        case 0:\n            lb_index = 0;\n            downloadScores();\n            break;\n        case 1:\n            lb_index = 0;\n            downloadScoresFriends();\n            break;\n        case 2:\n            lb_index = 0;\n            downloadScoresAround();\n            break;\n    }",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_Object_o_songselect_leaderboard_Draw_0",
+        "Find": "var labels = [\"Top 50\", \"Friends\"];",
+        "Value": "var labels = vs_online_is_custom() ? [\"Top 50\", \"Friends\", \"Around\"] : [\"Top 50\", \"Friends\"];",
+        "Type": 0
+    },
+    {
         "Entry": "gml_Object_obj_ratingWindow_Draw_64",
         "Find": "                    const = song.difficulty_constant_4;\n                    break;\n            }\n            draw_text_o(x + 185, y + 26 + (i * 9), string_format(const, 1, 1));\n            draw_set_color(c_white);\n            draw_text_o(x + 10, y + 26 + (i * 9), string((page * 10) + i + 1));",
         "Value": "                    const = song.difficulty_constant_4;\n                    break;\n                case 5:\n                    draw_set_color(#FFD21A);\n                    const = struct_get_fallback(song, \"difficulty_constant_1\", 0);\n                    break;\n            }\n            draw_text_o(x + 185, y + 26 + (i * 9), string_format(const, 1, 1));\n            draw_set_color(c_white);\n            draw_text_o(x + 10, y + 26 + (i * 9), string((page * 10) + i + 1));",

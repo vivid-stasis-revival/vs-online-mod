@@ -1335,6 +1335,31 @@ function vs_online_download_friends_scores(_chartId, _difficulty, _sha1, _on_don
     vs_online_get_json(url, true, vs_online_download_scores_done);
 }
 
+function vs_online_download_around_scores(_chartId, _difficulty, _sha1, _count, _on_done)
+{
+    if (!vs_online_is_account())
+    {
+        if (_on_done != undefined) { _on_done(undefined); }
+        return;
+    }
+    if (!variable_global_exists("vs_score_q"))
+    {
+        global.vs_score_q = [];
+    }
+    array_push(global.vs_score_q, _on_done);
+    var n = floor(vs_http_num(_count, 12));
+    if (n < 1) n = 12;
+    if (n > 50) n = 50;
+    var url = "/api/v1/charts/scores/around?chartId=" + vs_online_url_encode(_chartId)
+            + "&difficulty=" + vs_online_url_encode(vs_online_diff_api(_difficulty))
+            + "&count=" + string(n);
+    if (_sha1 != undefined && _sha1 != "")
+    {
+        url += "&sha1=" + vs_online_url_encode(_sha1);
+    }
+    vs_online_get_json(url, true, vs_online_download_scores_done);
+}
+
 function vs_online_lb_bind_download()
 {
     data = [];
@@ -1353,7 +1378,7 @@ function vs_online_lb_bind_download_friends()
     data = [];
     if (vs_online_is_custom())
     {
-        vs_online_lb_download(id, true);
+        vs_online_lb_download(id, 1);
         canExtend = false;
         return;
     }
@@ -1361,7 +1386,18 @@ function vs_online_lb_bind_download_friends()
     canExtend = false;
 }
 
-function vs_online_lb_download(_inst, _friends)
+function vs_online_lb_bind_download_around()
+{
+    data = [];
+    if (vs_online_is_custom())
+    {
+        vs_online_lb_download(id, 2);
+        canExtend = false;
+        return;
+    }
+}
+
+function vs_online_lb_download(_inst, _mode)
 {
     if (!instance_exists(_inst)) return;
     _inst.data = [];
@@ -1380,9 +1416,13 @@ function vs_online_lb_download(_inst, _friends)
         global.vs_lb_q = [];
     }
     array_push(global.vs_lb_q, _inst);
-    if (_friends)
+    if (_mode == 1)
     {
         vs_online_download_friends_scores(chartId, diffName, sha, vs_online_lb_apply);
+    }
+    else if (_mode == 2)
+    {
+        vs_online_download_around_scores(chartId, diffName, sha, 12, vs_online_lb_apply);
     }
     else
     {
@@ -1400,11 +1440,20 @@ function vs_online_lb_apply(_data)
     }
     if (inst == undefined || !instance_exists(inst)) return;
     inst.data = [];
-    if (_data == undefined || !variable_struct_exists(_data, "entries") || !is_array(_data.entries)) return;
-    var i = 0;
-    repeat (array_length(_data.entries))
+    var rows = undefined;
+    if (_data != undefined && variable_struct_exists(_data, "entries") && is_array(_data.entries))
     {
-        var e = _data.entries[i];
+        rows = _data.entries;
+    }
+    else if (_data != undefined && variable_struct_exists(_data, "around") && is_array(_data.around))
+    {
+        rows = _data.around;
+    }
+    if (rows == undefined) return;
+    var i = 0;
+    repeat (array_length(rows))
+    {
+        var e = rows[i];
         var nm = (variable_struct_exists(e, "name") && e.name != "") ? e.name : e.playerId;
         var row =
         {
