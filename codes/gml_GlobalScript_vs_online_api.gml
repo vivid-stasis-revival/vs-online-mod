@@ -1451,9 +1451,12 @@ function vs_online_rating_window_refresh()
 function vs_online_rating_card_done(_ok, _data, _status)
 {
     if (!_ok || _data == undefined) return;
-    if (variable_struct_exists(_data, "rating"))
+    if (variable_struct_exists(_data, "rating")
+        || variable_struct_exists(_data, "best30")
+        || variable_struct_exists(_data, "ex10")
+        || variable_struct_exists(_data, "completion"))
     {
-        global.rscore = _data.rating;
+        global.rscore = vs_online_rscore_from_card(_data);
         if (variable_global_exists("profile_file") && global.profile_file != undefined)
         {
             ini_open(global.profile_file);
@@ -1471,6 +1474,25 @@ function vs_online_rating_card_done(_ok, _data, _status)
         global.completion_bonus = _data.completionBonus / 1000;
     }
     vs_online_rating_fill_window(_data);
+}
+
+function vs_online_rscore_from_card(_data)
+{
+    // Official rscore = (B30 thousandths) + (EX10 thousandths) + completion.
+    // The card's `rating` used to be Round((best30+ex10+completion)*1000),
+    // which scaled completion a second time (~14.000 → ~71000).
+    var b30 = 0;
+    var e10 = 0;
+    var comp = 0;
+    if (variable_struct_exists(_data, "best30")) b30 = vs_http_num(_data.best30, 0);
+    if (variable_struct_exists(_data, "ex10")) e10 = vs_http_num(_data.ex10, 0);
+    if (variable_struct_exists(_data, "completion")) comp = vs_http_num(_data.completion, 0);
+    if (variable_struct_exists(_data, "best30") || variable_struct_exists(_data, "ex10") || variable_struct_exists(_data, "completion"))
+    {
+        return round(b30 * 1000 + e10 * 1000 + comp);
+    }
+    if (variable_struct_exists(_data, "rating")) return vs_http_num(_data.rating, 0);
+    return 0;
 }
 
 function vs_online_rating_diff_index(_name)
