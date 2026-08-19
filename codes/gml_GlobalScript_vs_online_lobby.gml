@@ -15,6 +15,62 @@ function vs_lobby_in_lobby()
     return vs_ws_is_open();
 }
 
+function vs_lobby_send_q_init()
+{
+    if (!variable_global_exists("vs_lobby_send_q"))
+    {
+        global.vs_lobby_send_q = [];
+    }
+}
+
+function vs_lobby_send_q_clear()
+{
+    vs_lobby_send_q_init();
+    var i = 0;
+    repeat (array_length(global.vs_lobby_send_q))
+    {
+        var item = global.vs_lobby_send_q[i];
+        if (item != undefined && variable_struct_exists(item, "buf") && item.buf != undefined)
+        {
+            buffer_delete(item.buf);
+        }
+        i++;
+    }
+    global.vs_lobby_send_q = [];
+}
+
+function vs_lobby_send_q_flush()
+{
+    vs_lobby_send_q_init();
+    if (!vs_ws_is_open()) return;
+    var n = array_length(global.vs_lobby_send_q);
+    if (n <= 0) return;
+    vs_lobby_log("flush queued n=" + string(n));
+    var i = 0;
+    repeat (n)
+    {
+        var item = global.vs_lobby_send_q[i];
+        if (item != undefined && variable_struct_exists(item, "buf") && item.buf != undefined)
+        {
+            if (!vs_lobby_pkt_quiet(item.type))
+            {
+                vs_lobby_log("flush " + vs_lobby_pkt_name(item.type) + " bytes=" + string(buffer_get_size(item.buf)));
+            }
+            vs_ws_send_binary(item.buf);
+            buffer_delete(item.buf);
+        }
+        i++;
+    }
+    global.vs_lobby_send_q = [];
+}
+
+function vs_lobby_has_code()
+{
+    return instance_exists(o_st_handle)
+        && o_st_handle.lobbyCode != undefined
+        && string(o_st_handle.lobbyCode) != "";
+}
+
 // --- steam_* shims (used via codepatches so the WP UI reads server state) ---
 
 function vs_lobby_lobby_id()
@@ -554,6 +610,7 @@ function vs_lobby_enter(_lobbyJson)
 function vs_lobby_reset()
 {
     vs_lobby_log("reset " + vs_lobby_flags());
+    vs_lobby_send_q_clear();
     vs_ws_close();
     if (instance_exists(o_st_handle))
     {
@@ -572,18 +629,37 @@ function vs_lobby_reset()
 function vs_lobby_send_packet(_type, _buffer)
 {
     var name = vs_lobby_pkt_name(_type);
-    if (vs_lobby_in_lobby())
+    if (vs_ws_is_open())
     {
         if (!vs_lobby_pkt_quiet(_type))
         {
             vs_lobby_log("send " + name + " bytes=" + string(buffer_get_size(_buffer)));
         }
         vs_ws_send_binary(_buffer);
+        return;
     }
-    else
+    var entering = (vs_ws_state().state == 1) || vs_lobby_has_code();
+    if (entering)
     {
-        vs_lobby_log("drop " + name + " (not in a lobby) " + vs_lobby_flags());
+        vs_lobby_send_q_init();
+        if (array_length(global.vs_lobby_send_q) >= 64)
+        {
+            vs_lobby_log("drop " + name + " (send queue full) " + vs_lobby_flags());
+            return;
+        }
+        var sz = buffer_get_size(_buffer);
+        var copy = buffer_create(max(sz, 1), buffer_fixed, 1);
+        if (sz > 0)
+        {
+            buffer_copy(_buffer, 0, sz, copy, 0);
+        }
+        array_push(global.vs_lobby_send_q, { type: _type, buf: copy });
+        vs_lobby_log("queue " + name + " bytes=" + string(sz)
+            + " n=" + string(array_length(global.vs_lobby_send_q))
+            + " " + vs_lobby_flags());
+        return;
     }
+    vs_lobby_log("drop " + name + " (not in a lobby) " + vs_lobby_flags());
 }
 
 // --- WS frame dispatch (called by vs_ws after parsing a frame) -------------

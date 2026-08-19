@@ -617,6 +617,33 @@ function vs_online_ensure_identity_pop(_ok, _data)
     if (cb != undefined) { cb(_ok, _data); }
 }
 
+function vs_http_status_transient(_status)
+{
+    if (_status == undefined) return true;
+    if (_status <= 0) return true;
+    if (_status == 408 || _status == 429) return true;
+    if (_status >= 500 && _status <= 599) return true;
+    return false;
+}
+
+function vs_http_status_auth_dead(_status, _data)
+{
+    if (_status == 401 || _status == 403) return true;
+    if (_status == 400)
+    {
+        if (_data != undefined && is_struct(_data) && variable_struct_exists(_data, "error"))
+        {
+            var e = string(_data.error);
+            if (e == "invalid_grant" || e == "invalid_token" || e == "invalid_client" || e == "unauthorized_client")
+            {
+                return true;
+            }
+        }
+        return true;
+    }
+    return false;
+}
+
 function vs_online_ensure_identity_step()
 {
     var cfg = vs_online_get_config();
@@ -641,10 +668,19 @@ function vs_online_ensure_identity_refreshed(_ok, _data, _status)
         vs_online_refresh_me(vs_online_ensure_identity_me_ok);
         return;
     }
+    if (vs_http_status_transient(_status) || !vs_http_status_auth_dead(_status, _data))
+    {
+        show_debug_message("VS Online: keep refresh_token (http=" + string(_status) + ")");
+        vs_online_ensure_identity_pop(false, _data);
+        return;
+    }
+    // invalid_grant / 401 / 403: refresh is dead. Account users re-run device
+    // flow — never mint a guest over a bound identity.
     var cfg2 = vs_online_get_config();
+    show_debug_message("VS Online: refresh rejected http=" + string(_status) + " — not reminting guest");
     cfg2.refresh_token = "";
     vs_online_save_config();
-    vs_online_ensure_identity_step();
+    vs_online_ensure_identity_pop(false, _data);
 }
 
 function vs_online_ensure_identity_me(_ok, _data, _status)
@@ -653,11 +689,29 @@ function vs_online_ensure_identity_me(_ok, _data, _status)
     {
         vs_online_apply_me(_data);
         vs_online_ensure_identity_pop(true, _data);
+        return;
     }
-    else
+    if (vs_http_status_transient(_status))
     {
-        vs_online_create_player(vs_online_ensure_identity_created);
+        show_debug_message("VS Online: /me transient http=" + string(_status) + " — keep token");
+        vs_online_ensure_identity_pop(false, _data);
+        return;
     }
+    if (vs_online_is_account() || _status == 403)
+    {
+        show_debug_message("VS Online: /me fail http=" + string(_status)
+            + " account=" + string(vs_online_is_account()) + " — not reminting");
+        vs_online_ensure_identity_pop(false, _data);
+        return;
+    }
+    if (_status == 401)
+    {
+        show_debug_message("VS Online: guest token 401 — mint new guest");
+        vs_online_create_player(vs_online_ensure_identity_created);
+        return;
+    }
+    show_debug_message("VS Online: /me fail http=" + string(_status) + " — not reminting");
+    vs_online_ensure_identity_pop(false, _data);
 }
 
 function vs_online_ensure_identity_me_ok(_ok, _data)
@@ -900,6 +954,48 @@ function vs_online_upload_score(_chartId, _difficulty, _sha1, _pts, _data)
     vs_online_post_raw("/api/v1/charts/scores", body, vs_online_upload_score_done, "");
 }
 
+function vs_online_shatter_index(_songId)
+{
+    if (!variable_global_exists("shatter_list")) return -1;
+    var n = array_length(global.shatter_list);
+    var i = 0;
+    repeat (n)
+    {
+        var sh = global.shatter_list[i];
+        if (sh != undefined && variable_struct_exists(sh, "song_id") && sh.song_id == _songId)
+        {
+            return i;
+        }
+        i++;
+    }
+    if (_songId >= 0 && _songId < n) return _songId;
+    return -1;
+}
+
+function vs_online_find_shatter(_songId)
+{
+    var idx = vs_online_shatter_index(_songId);
+    if (idx < 0) return undefined;
+    return global.shatter_list[idx];
+}
+
+function vs_online_find_shatter_by_chart(_chartId)
+{
+    if (_chartId == undefined || _chartId == "") return undefined;
+    if (!variable_global_exists("shatter_list")) return undefined;
+    var i = 0;
+    repeat (array_length(global.shatter_list))
+    {
+        var sh = global.shatter_list[i];
+        if (sh != undefined && variable_struct_exists(sh, "chart_id") && sh.chart_id == _chartId)
+        {
+            return sh;
+        }
+        i++;
+    }
+    return undefined;
+}
+
 function vs_online_upload_chart(_songIndex, _difficulty, _score)
 {
     if (!vs_online_is_custom())
@@ -912,40 +1008,78 @@ function vs_online_upload_chart(_songIndex, _difficulty, _score)
         vs_online_score_log("skip guest idx=" + string(_songIndex) + " " + vs_online_score_play_flags());
         return;
     }
-    if (!variable_global_exists("song_list"))
+    var shatter = variable_global_exists("song_shatter") && global.song_shatter;
+    var song = undefined;
+    if (shatter)
     {
-        vs_online_score_log("skip no song_list");
+        song = vs_online_find_shatter(_songIndex);
+        if (song == undefined && variable_global_exists("ch_load"))
+        {
+            song = vs_online_find_shatter_by_chart(global.ch_load);
+        }
+    }
+    else
+    {
+        if (!variable_global_exists("song_list"))
+        {
+            vs_online_score_log("skip no song_list");
+            return;
+        }
+        if (_songIndex < 0 || _songIndex >= array_length(global.song_list))
+        {
+            vs_online_score_log("skip bad idx=" + string(_songIndex));
+            return;
+        }
+        song = global.song_list[_songIndex];
+    }
+    var chartId = "";
+    if (song != undefined && variable_struct_exists(song, "chart_id"))
+    {
+        chartId = string(song.chart_id);
+    }
+    if (chartId == "" && shatter && variable_global_exists("ch_load"))
+    {
+        chartId = string(global.ch_load);
+    }
+    if (chartId == "")
+    {
+        vs_online_score_log("skip no chart_id idx=" + string(_songIndex) + " shatter=" + string(shatter));
         return;
     }
-    if (_songIndex < 0 || _songIndex >= array_length(global.song_list))
+    var diff = _difficulty;
+    if ((diff == undefined || diff == "") && shatter && variable_global_exists("df_load"))
     {
-        vs_online_score_log("skip bad idx=" + string(_songIndex));
-        return;
+        diff = global.df_load;
     }
-    var song = global.song_list[_songIndex];
-    if (song == undefined || !variable_struct_exists(song, "chart_id") || song.chart_id == "")
-    {
-        vs_online_score_log("skip no chart_id idx=" + string(_songIndex));
-        return;
-    }
-    var sname = variable_struct_exists(song, "name") ? string(song.name) : "";
+    var sname = (song != undefined && variable_struct_exists(song, "name")) ? string(song.name) : "";
     vs_online_score_log("resolve idx=" + string(_songIndex)
+        + " shatter=" + string(shatter)
         + " name=" + sname
-        + " chart=" + string(song.chart_id)
-        + " diff=" + string(_difficulty)
+        + " chart=" + chartId
+        + " diff=" + string(diff)
         + " pts=" + string(_score)
         + " " + vs_online_score_play_flags());
     if (variable_global_exists("failed") && global.failed)
     {
         vs_online_score_log("failed/gauge-death still uploads (same as official Steam)");
     }
-    var sha = vs_online_chart_sha1(song.chart_id, _difficulty);
+    var sha = vs_online_chart_sha1(chartId, diff);
+    if (sha == "" && shatter && song != undefined && variable_struct_exists(song, "difficulty_name")
+        && string(song.difficulty_name) != "" && string(song.difficulty_name) != string(diff))
+    {
+        sha = vs_online_chart_sha1(chartId, song.difficulty_name);
+        if (sha != "")
+        {
+            vs_online_score_log("sha1 via shatter difficulty_name=" + string(song.difficulty_name));
+            diff = song.difficulty_name;
+        }
+    }
     if (sha == "")
     {
-        vs_online_score_log("skip no sha1 chart=" + string(song.chart_id) + " diff=" + string(_difficulty) + " " + vs_online_score_play_flags());
+        vs_online_score_log("skip no sha1 chart=" + chartId + " diff=" + string(diff) + " " + vs_online_score_play_flags());
         return;
     }
-    vs_online_upload_score(song.chart_id, _difficulty, sha, round(_score), "");
+    vs_online_upload_score(chartId, diff, sha, round(_score), "");
 }
 
 function vs_online_download_scores(_chartId, _difficulty, _sha1, _start, _end, _on_done)

@@ -18,9 +18,9 @@
 //
 // Config file: <game save dir>/vsonline   (JSON, no extension)
 // {
-//   "server": "https://online.vividstasis.cn", // REST / API base URL
-//   "frontend": "https://online.vividstasis.cn", // device-flow / account website
-//   "ws": "wss://online.vividstasis.cn",       // optional lobby WS (derived from server if omitted)
+//   "server": "https://online-api.vividstasis.cn", // REST / API base URL
+//   "frontend": "https://online.vividstasis.cn",   // device-flow / account website
+//   "ws": "wss://online-api.vividstasis.cn",       // optional lobby WS (derived from server if omitted)
 //   "playerId": "...",                        // filled in by M2 (identity)
 //   "token": "...",                           // bearer token
 //   "refresh_token": "...",                   // device-flow refresh token
@@ -38,7 +38,7 @@ function vs_online_config_path()
 
 function vs_online_default_server()
 {
-    return "https://online.vividstasis.cn";
+    return "https://online-api.vividstasis.cn";
 }
 
 function vs_online_default_frontend()
@@ -105,8 +105,38 @@ function vs_online_get_config()
     }
     cfg.server = vs_online_trim_url(cfg.server);
     cfg.frontend = vs_online_trim_url(cfg.frontend);
+    var migrated = false;
+    if (vs_online_host_is_site(cfg.server))
+    {
+        cfg.server = vs_online_default_server();
+        migrated = true;
+    }
+    if (variable_struct_exists(cfg, "ws") && cfg.ws != "" && vs_online_host_is_site(cfg.ws))
+    {
+        cfg.ws = "";
+        migrated = true;
+    }
     global.vs_online_config = cfg;
+    if (migrated)
+    {
+        var fw2 = file_text_open_write(path);
+        file_text_write_string(fw2, json_stringify(cfg));
+        file_text_close(fw2);
+    }
     return cfg;
+}
+
+// online.vividstasis.cn is the account site, not the API. Old defaults
+// pointed server/ws there; remap those to online-api.
+function vs_online_host_is_site(_url)
+{
+    var s = string_lower(vs_online_trim_url(_url));
+    var cut = string_pos("://", s);
+    if (cut > 0)
+    {
+        s = string_copy(s, cut + 3, string_length(s));
+    }
+    return (s == "online.vividstasis.cn");
 }
 
 function vs_online_server_url()
@@ -648,13 +678,21 @@ function vs_online_score_reset_song()
         quit_r = global.room_after_song.quit;
     }
     audio_stop_all();
-    start_song(idx, di,
+    var opts =
     {
         decrypt_style: dec,
         clear_room: clear_r,
         fail_room: fail_r,
         quit_room: quit_r
-    });
+    };
+    if (variable_global_exists("song_shatter") && global.song_shatter)
+    {
+        var shIdx = vs_online_shatter_index(idx);
+        if (shIdx < 0) shIdx = idx;
+        start_song_shatter(shIdx, opts);
+        return;
+    }
+    start_song(idx, di, opts);
 }
 
 function vs_online_error_break(_text, _maxw)

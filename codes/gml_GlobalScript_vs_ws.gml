@@ -169,6 +169,7 @@ function vs_ws_connect(_path, _token)
     {
         vs_ws_log("connect start failed " + vs_ws_url_redact(url) + " :" + string(ws.port) + " rc=" + string(rc));
         ws.lastError = "connect_start";
+        vs_lobby_send_q_clear();
         vs_ws_reset();
         return;
     }
@@ -225,11 +226,13 @@ function vs_ws_handle_net_event()
         {
             ws.state = 3;
             vs_ws_log("open " + vs_ws_url_redact(ws.url));
+            vs_lobby_send_q_flush();
         }
         else
         {
             vs_ws_log("connect failed " + vs_ws_url_redact(ws.url));
             ws.lastError = "connect_failed";
+            vs_lobby_send_q_clear();
             vs_ws_reset();
         }
     }
@@ -237,6 +240,7 @@ function vs_ws_handle_net_event()
     {
         ws.state = 3;
         vs_ws_log("open (sync) " + vs_ws_url_redact(ws.url));
+        vs_lobby_send_q_flush();
     }
     else if (type == network_type_data)
     {
@@ -250,6 +254,7 @@ function vs_ws_handle_net_event()
     else if (type == network_type_disconnect)
     {
         vs_ws_log("disconnected url=" + vs_ws_url_redact(ws.url));
+        vs_lobby_send_q_clear();
         vs_ws_reset();
     }
     else

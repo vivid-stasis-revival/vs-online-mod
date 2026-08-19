@@ -11,6 +11,15 @@ function vs_auth_flow_started(_ok, _data)
         device_code = _data.device_code;
         user_code = _data.user_code;
         verification_uri = vs_online_device_page_url("");
+        if (variable_struct_exists(_data, "verification_uri") && string(_data.verification_uri) != "")
+        {
+            verification_uri = string(_data.verification_uri);
+        }
+        verification_uri_complete = "";
+        if (variable_struct_exists(_data, "verification_uri_complete") && string(_data.verification_uri_complete) != "")
+        {
+            verification_uri_complete = string(_data.verification_uri_complete);
+        }
         expires_at = current_time / 1000 + (variable_struct_exists(_data, "expires_in") ? _data.expires_in : 600);
         interval = variable_struct_exists(_data, "interval") ? max(_data.interval, 5) : 5;
         poll_at = current_time + interval * 1000;
@@ -27,8 +36,15 @@ function vs_auth_flow_started(_ok, _data)
 
 function vs_auth_on_me(_ok2, _data2)
 {
-    play_se(sfx_songsel_select);
-    instance_destroy();
+    if (_ok2)
+    {
+        play_se(sfx_songsel_select);
+        instance_destroy();
+        return;
+    }
+    signed_in = true;
+    cfg = vs_online_get_config();
+    message = "Signed in, but profile refresh failed.";
 }
 
 function vs_auth_flow_polled(_ok, _data, _status)
@@ -87,8 +103,24 @@ function vs_auth_pressed_close()
 
 function vs_auth_open_device_page()
 {
-    var page = vs_online_device_page_url(user_code);
-    verification_uri = vs_online_device_page_url("");
+    var page = "";
+    if (verification_uri_complete != "")
+    {
+        page = verification_uri_complete;
+    }
+    else if (verification_uri != "")
+    {
+        page = verification_uri;
+        if (user_code != "" && string_pos("user_code=", page) <= 0)
+        {
+            page += (string_pos("?", page) > 0 ? "&" : "?") + "user_code=" + vs_online_url_encode(user_code);
+        }
+    }
+    else
+    {
+        page = vs_online_device_page_url(user_code);
+        verification_uri = vs_online_device_page_url("");
+    }
     if (page != "")
     {
         url_open(page);
@@ -143,6 +175,7 @@ function vs_auth_setup()
     device_code = "";
     user_code = "";
     verification_uri = "";
+    verification_uri_complete = "";
     expires_at = 0;
     poll_at = 0;
     interval = 5;

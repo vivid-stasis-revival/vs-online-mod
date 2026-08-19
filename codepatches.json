@@ -203,6 +203,12 @@
         "Value": "        if (vs_online_is_custom()) vs_lobby_log(\"ShowScore recv room=\" + string(room) + \" members=\" + string(array_length(members)));\n        if (room == scene_multiplayer_waiting_room)",
         "Type": 1
     },
+    {
+        "Entry": "gml_GlobalScript_ShowScorePacket",
+        "Find": "                if (arg1.score > arg0.score)",
+        "Value": "                if (vs_member_get_score(arg1) > vs_member_get_score(arg0))",
+        "Type": 1
+    },
 
     {
         "Entry": "gml_Object_o_st_handle_Create_0",
