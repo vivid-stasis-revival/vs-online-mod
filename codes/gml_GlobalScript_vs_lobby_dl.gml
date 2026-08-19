@@ -6,7 +6,7 @@ function vs_lobby_dl_st()
 {
     if (!variable_global_exists("vs_lobby_dl"))
     {
-        global.vs_lobby_dl = { open: false, looking: false, checking: false, need_upd: false, chartId: "", serverId: "", seq: 0, err: "" };
+        global.vs_lobby_dl = { open: false, ask: false, looking: false, checking: false, need_upd: false, chartId: "", serverId: "", seq: 0, err: "" };
     }
     return global.vs_lobby_dl;
 }
@@ -36,6 +36,7 @@ function vs_lobby_dl_close()
 {
     var st = vs_lobby_dl_st();
     st.open = false;
+    st.ask = false;
     st.looking = false;
     st.err = "";
 }
@@ -44,6 +45,7 @@ function vs_lobby_dl_fail(_msg)
 {
     var st = vs_lobby_dl_st();
     st.looking = false;
+    st.ask = false;
     st.err = string(_msg);
     st.open = true;
     vs_lobby_dl_seed_popup("Download failed", st.err);
@@ -56,6 +58,7 @@ function vs_lobby_dl_cancel()
     st.seq += 1;
     st.looking = false;
     st.checking = false;
+    st.ask = false;
     if (vs_dlmgr_is_busy() && string(global.vs_dlmgr_dl.chartId) == string(st.chartId))
     {
         vs_dlmgr_cancel();
@@ -147,6 +150,11 @@ function vs_lobby_dl_on_check_detail(_seq, _ok, _data)
     send_packet(SendPlayerInfoPacket);
     if (st.need_upd) vs_lobby_dl_unready();
     if (!st.open) return;
+    if (st.ask)
+    {
+        if (!st.need_upd) vs_lobby_dl_close();
+        return;
+    }
     if (st.need_upd) vs_lobby_dl_begin(st.chartId);
     else vs_lobby_dl_close();
 }
@@ -173,23 +181,63 @@ function vs_lobby_dl_catalog_id(_ok, _data, _cid)
     return "";
 }
 
-function vs_lobby_dl_prompt()
+function vs_lobby_dl_show_ask(_cid)
 {
-    if (!vs_online_is_custom()) return false;
-    var cid = vs_lobby_queued_chart_id();
     var st = vs_lobby_dl_st();
+    st.open = true;
+    st.ask = true;
+    st.err = "";
+    st.chartId = string(_cid);
+}
+
+function vs_lobby_dl_accept()
+{
+    var st = vs_lobby_dl_st();
+    st.ask = false;
+    var cid = vs_lobby_queued_chart_id();
+    if (cid == "") cid = st.chartId;
     if (st.checking && string(st.chartId) == string(cid))
     {
         st.open = true;
         vs_lobby_dl_seed_popup("Checking", cid);
-        return true;
+        return;
     }
-    if (!vs_lobby_local_need_dl()) return false;
-    if (st.open && (cid == "" || string(st.chartId) == string(cid)))
+    vs_lobby_dl_begin(cid);
+}
+
+function vs_lobby_dl_prompt()
+{
+    return vs_lobby_dl_prompt_ex(true);
+}
+
+function vs_lobby_dl_go()
+{
+    vs_lobby_dl_prompt_ex(false);
+}
+
+function vs_lobby_dl_prompt_ex(_ask)
+{
+    if (!vs_online_is_custom()) return false;
+    var cid = vs_lobby_queued_chart_id();
+    var st = vs_lobby_dl_st();
+    if (st.open && !st.ask && (cid == "" || string(st.chartId) == string(cid)))
     {
         return true;
     }
-    vs_lobby_dl_begin(cid);
+    if (st.checking && string(st.chartId) == string(cid))
+    {
+        if (_ask) vs_lobby_dl_show_ask(cid);
+        else vs_lobby_dl_accept();
+        return true;
+    }
+    if (!vs_lobby_local_need_dl()) return false;
+    if (st.open && st.ask && (cid == "" || string(st.chartId) == string(cid)))
+    {
+        if (!_ask) vs_lobby_dl_accept();
+        return true;
+    }
+    if (_ask) vs_lobby_dl_show_ask(cid);
+    else vs_lobby_dl_begin(cid);
     return true;
 }
 
@@ -205,6 +253,7 @@ function vs_lobby_dl_begin(_cid)
     st.chartId = string(_cid);
     st.err = "";
     st.open = true;
+    st.ask = false;
     st.looking = false;
     if (st.chartId == "")
     {
@@ -307,9 +356,25 @@ function vs_lobby_dl_on_done(_ok)
 function vs_lobby_dl_step()
 {
     if (!vs_lobby_dl_open()) return false;
+    var st = vs_lobby_dl_st();
     var cancel = keyboard_check_pressed(vk_escape);
     if (variable_global_exists("menu_cancel") && keyboard_check_pressed(global.menu_cancel)) cancel = true;
     if (input_check_pressed(5)) cancel = true;
+    if (st.ask)
+    {
+        var ok = input_check_pressed(4) || keyboard_check_pressed(vk_enter);
+        if (ok)
+        {
+            play_se(sfx_songsel_select);
+            vs_lobby_dl_accept();
+        }
+        else if (cancel)
+        {
+            play_se(sfx_songsel_select);
+            vs_lobby_dl_close();
+        }
+        return true;
+    }
     if (cancel)
     {
         play_se(sfx_songsel_select);
@@ -318,10 +383,61 @@ function vs_lobby_dl_step()
     return true;
 }
 
+function vs_lobby_dl_ask_name()
+{
+    if (vs_lobby_has_queued_song())
+    {
+        var q = o_st_handle.songQueue[0];
+        var song = (q != undefined && variable_struct_exists(q, "songId")) ? vs_online_song_from_id(q.songId) : undefined;
+        if (song != undefined)
+        {
+            var d = variable_struct_exists(q, "difficulty") ? q.difficulty : 0;
+            var nm = song_get_info(song, "name", d);
+            if (nm != undefined && string(nm) != "") return string(nm);
+            if (variable_struct_exists(song, "name")) return string(song.name);
+        }
+    }
+    var cid = vs_lobby_queued_chart_id();
+    if (cid != "") return cid;
+    return "this chart";
+}
+
+function vs_lobby_dl_draw_ask()
+{
+    var cw = display_get_gui_width();
+    var ch = display_get_gui_height();
+    var pw = min(220, max(80, cw - 8));
+    var ph = min(78, max(48, ch - 8));
+    var px = (cw - pw) / 2;
+    var py = (ch - ph) / 2;
+    draw_set_alpha(0.55);
+    draw_set_color(c_black);
+    draw_rectangle(0, 0, cw, ch, false);
+    draw_set_alpha(1);
+    draw_set_color(c_black);
+    draw_rectangle(px - 2, py - 2, px + pw + 2, py + ph + 2, false);
+    draw_set_color(c_white);
+    draw_rectangle(px, py, px + pw, py + ph, true);
+    var title = vs_lobby_local_missing() ? "Download this chart?" : "Update this chart?";
+    var name = vs_lobby_dl_ask_name();
+    draw_set_font(fnt_monacovs);
+    draw_set_halign(fa_center);
+    draw_set_color(c_aqua);
+    draw_text(px + pw / 2, py + 8, vs_dlbr_clip_text(title, pw - 12));
+    draw_set_font(global.default_font);
+    draw_set_color(c_white);
+    draw_text(px + pw / 2, py + 28, vs_dlbr_clip_text(name, pw - 12));
+    draw_set_color(c_yellow);
+    draw_text(px + pw / 2, py + 52, vs_dlbr_clip_text("CONFIRM / ESCAPE", pw - 12));
+    draw_set_halign(fa_left);
+    draw_set_color(c_white);
+}
+
 function vs_lobby_dl_draw()
 {
     if (!vs_lobby_dl_open()) return;
-    vs_dlbr_draw_dl_popup();
+    if (vs_lobby_dl_st().ask) vs_lobby_dl_draw_ask();
+    else vs_dlbr_draw_dl_popup();
 }
 
 function vs_lobby_dl_menu_find(_acts, _cb)

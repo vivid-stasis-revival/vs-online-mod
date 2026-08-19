@@ -119,7 +119,7 @@
     {
         "Entry": "gml_Object_obj_multiplayer_lobby_Create_0",
         "Find": "case \"hostlobby\":",
-        "Value": "case \"kick\": vs_lobby_ops_begin(\"kick\"); break;\n        case \"downloadchart\": vs_lobby_dl_prompt(); break;\n        case \"hostlobby\":",
+        "Value": "case \"kick\": vs_lobby_ops_begin(\"kick\"); break;\n        case \"downloadchart\": vs_lobby_dl_go(); break;\n        case \"hostlobby\":",
         "Type": 0
     },
     {
