@@ -415,7 +415,7 @@ function vs_lobby_fmt(_data)
     if (is_string(_data)) return "msg=" + _data;
     if (!is_struct(_data)) return "data=" + string(_data);
     var code = variable_struct_exists(_data, "code") ? string(_data.code) : "?";
-    var id = variable_struct_exists(_data, "lobbyId") ? string(_data.lobbyId) : "?";
+    var lid = variable_struct_exists(_data, "lobbyId") ? string(_data.lobbyId) : "?";
     var host = variable_struct_exists(_data, "hostId") ? string(_data.hostId) : "?";
     var n = 0;
     if (variable_struct_exists(_data, "members") && is_array(_data.members)) n = array_length(_data.members);
@@ -425,7 +425,7 @@ function vs_lobby_fmt(_data)
     if (variable_struct_exists(_data, "message")) why += " err=" + string(_data.message);
     if (variable_struct_exists(_data, "error")) why += " error=" + string(_data.error);
     if (variable_struct_exists(_data, "created")) why += " created=" + string(_data.created);
-    return "id=" + id + " code=" + code + " host=" + host + " members=" + string(n) + why;
+    return "lobbyId=" + lid + " code=" + code + " host=" + host + " members=" + string(n) + why;
 }
 
 function vs_lobby_pkt_name(_type)
