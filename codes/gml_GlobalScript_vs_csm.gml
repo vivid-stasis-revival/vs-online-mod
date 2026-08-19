@@ -779,29 +779,14 @@ function CustomSongReader()
     }
 
     // Subscribed online packs stay as loose Custom Songs/<chart_id>/ folders.
-    // Build real song-select packs from vsonline.packs.json so Play lands on
-    // the pack tab instead of All Custom Songs.
-    var owned = vs_packmgr_csm_append();
-    var allList = [];
-    var a = 0;
-    repeat (array_length(customSongList))
-    {
-        var sid = customSongList[a];
-        var keep = true;
-        if (is_real(sid) && sid >= 0 && sid < array_length(global.song_list))
-        {
-            var cs = global.song_list[sid];
-            var ck = string_lower(string(struct_get_fallback(cs, "chart_id", "")));
-            if (ck != "" && variable_struct_exists(owned, ck)) keep = false;
-        }
-        if (keep) array_push(allList, sid);
-        a++;
-    }
+    // Build a real song-select pack from vsonline.packs.json; members also
+    // stay in All Custom Songs, same as a CSM folder pack.
+    vs_packmgr_csm_append();
 
     array_push(global.custom_song_packs,
     {
         name: "All Custom Songs",
-        songs: allList,
+        songs: customSongList,
         color1: 16777215,
         color2: 16777215,
         description: "Custom Songs."

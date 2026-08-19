@@ -140,13 +140,11 @@ function vs_packmgr_chart_pack_name(_chartId)
 }
 
 // Push subscribed online packs into global.custom_song_packs (before All
-// Custom Songs). Returns { chartIdLower: true } for members that landed in a
-// pack so the catch-all list can skip them.
+// Custom Songs). Members stay in the catch-all list too, like a CSM folder pack.
 function vs_packmgr_csm_append()
 {
-    var owned = {};
     if (!variable_global_exists("custom_song_packs") || !variable_global_exists("song_list"))
-        return owned;
+        return;
     var list = vs_packmgr_load();
     var i = 0;
     repeat (array_length(list))
@@ -162,15 +160,8 @@ function vs_packmgr_csm_append()
                 var kind = (m != undefined && variable_struct_exists(m, "kind")) ? m.kind : 0;
                 if (m != undefined && kind != 2 && variable_struct_exists(m, "chartId"))
                 {
-                    var cid = string(m.chartId);
-                    var sid = vs_csm_song_index(cid);
-                    if (sid >= 0)
-                    {
-                        array_push(songs, sid);
-                        variable_struct_set(owned, string_lower(cid), true);
-                        var scid = string_lower(string(struct_get_fallback(global.song_list[sid], "chart_id", "")));
-                        if (scid != "") variable_struct_set(owned, scid, true);
-                    }
+                    var sid = vs_csm_song_index(string(m.chartId));
+                    if (sid >= 0) array_push(songs, sid);
                 }
                 j++;
             }
@@ -191,7 +182,6 @@ function vs_packmgr_csm_append()
         }
         i++;
     }
-    return owned;
 }
 
 function vs_packmgr_chart_refs(_chartId)
