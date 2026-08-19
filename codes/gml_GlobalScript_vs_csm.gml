@@ -303,16 +303,6 @@ function vs_csm_chart_file_exists(_dir, _name)
         || file_exists(_dir + string_lower(n) + ".vsc") || file_exists(_dir + string_lower(n) + ".vsb");
 }
 
-function vs_csm_diff_has_file(_song, _d)
-{
-    if (_song == undefined) return true;
-    var dir = struct_get_fallback(_song, "chart_load_dir", struct_get_fallback(_song, "chart_path", ""));
-    if (dir == "") return true;
-    var names = ["OPENING", "MIDDLE", "FINALE", "ENCORE"];
-    if (_d < 0 || _d > 3) return true;
-    return vs_csm_chart_file_exists(dir, names[_d]);
-}
-
 function vs_csm_json_has_encore(_v)
 {
     if (_v == true || _v == 1) return true;
