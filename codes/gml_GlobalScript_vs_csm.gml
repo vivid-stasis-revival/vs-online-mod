@@ -208,19 +208,33 @@ function vs_csm_read_json_file(_path)
 function vs_csm_add_stream(_dir, _name)
 {
     var p = _dir + _name;
-    if (file_exists(p)) return audio_create_stream(p);
-    return undefined;
+    if (!file_exists(p)) return undefined;
+    var a = audio_create_stream(p);
+    if (!vs_csm_asset_ok_audio(a))
+    {
+        vs_csm_play_log("stream fail " + string(p) + " -> " + string(a));
+        return undefined;
+    }
+    return a;
 }
 
 function vs_csm_add_jacket(_dir, _src)
 {
     if (_src != undefined && _src != "" && file_exists(_dir + _src))
-        return sprite_add(_dir + _src, 1, false, false, 0, 0);
+    {
+        var spr0 = sprite_add(_dir + _src, 1, false, false, 0, 0);
+        if (vs_csm_asset_ok_sprite(spr0)) return spr0;
+        vs_csm_play_log("jacket fail " + _dir + string(_src) + " -> " + string(spr0));
+    }
     var jacketNames = ["jacket.gif", "jacket.jpeg", "jacket.jpg", "jacket.png"];
     for (var i = 0; i < array_length(jacketNames); i++)
     {
         if (file_exists(_dir + jacketNames[i]))
-            return sprite_add(_dir + jacketNames[i], 1, false, false, 0, 0);
+        {
+            var spr1 = sprite_add(_dir + jacketNames[i], 1, false, false, 0, 0);
+            if (vs_csm_asset_ok_sprite(spr1)) return spr1;
+            vs_csm_play_log("jacket fail " + _dir + jacketNames[i] + " -> " + string(spr1));
+        }
     }
     return undefined;
 }
@@ -276,6 +290,112 @@ function vs_csm_first_chart_diff(_dir)
             return i;
     }
     return 0;
+}
+
+function vs_csm_play_log(_msg)
+{
+    var line = "VS PLAY: " + string(_msg);
+    show_debug_message(line);
+    vs_songstore_log("PLAY " + string(_msg));
+}
+
+function vs_csm_safe_real(_v, _fallback)
+{
+    if (_v == undefined) return _fallback;
+    if (is_real(_v))
+    {
+        if (_v != _v) return _fallback;
+        return _v;
+    }
+    var s = string(_v);
+    var out = "";
+    var n = string_length(s);
+    for (var i = 1; i <= n; i++)
+    {
+        var ch = string_char_at(s, i);
+        if (ch == "-" && out == "")
+        {
+            out = "-";
+            continue;
+        }
+        if (ch == "." && string_pos(".", out) == 0)
+        {
+            out += ".";
+            continue;
+        }
+        if (ord(ch) >= 48 && ord(ch) <= 57)
+        {
+            out += ch;
+            continue;
+        }
+        if (out != "" && out != "-") break;
+        if (out == "-") out = "";
+    }
+    if (out == "" || out == "-" || out == ".") return _fallback;
+    var r = _fallback;
+    try { r = real(out); } catch (_e) { r = _fallback; }
+    return r;
+}
+
+function vs_csm_bpm_real(_v)
+{
+    var r = vs_csm_safe_real(_v, 120);
+    if (r <= 0) return 120;
+    return r;
+}
+
+function vs_csm_empty_chart()
+{
+    return { notes: [], mods: undefined };
+}
+
+function vs_csm_pick_diff_file(_dir, _want)
+{
+    if (_dir == undefined) _dir = "";
+    _dir = vs_csm_norm_dir(_dir);
+    var want = string(_want);
+    if (file_exists(_dir + want + ".vsc")) return { path: _dir + want + ".vsc", diff: want };
+    var names = ["OPENING", "MIDDLE", "FINALE", "ENCORE", "PRELUDE"];
+    for (var i = 0; i < 5; i++)
+    {
+        if (file_exists(_dir + names[i] + ".vsc"))
+            return { path: _dir + names[i] + ".vsc", diff: names[i] };
+    }
+    return undefined;
+}
+
+function vs_csm_asset_ok_audio(_a)
+{
+    return (_a != undefined && _a != -1 && audio_exists(_a));
+}
+
+function vs_csm_asset_ok_sprite(_s)
+{
+    return (_s != undefined && _s != -1 && sprite_exists(_s));
+}
+
+function vs_csm_start_song_guard(_song, _diffIdx)
+{
+    if (_song == undefined) return;
+    var loadDir = struct_get_fallback(_song, "chart_load_dir", struct_get_fallback(_song, "chart_path", ""));
+    var names = ["OPENING", "MIDDLE", "FINALE", "ENCORE", "PRELUDE"];
+    var want = (is_real(_diffIdx) && _diffIdx >= 0 && _diffIdx < 5) ? names[_diffIdx] : string(_diffIdx);
+    var aud = song_get_info(_song, "audio_id", _diffIdx);
+    var jk = song_get_info(_song, "jacket", _diffIdx);
+    vs_csm_play_log("start chart=" + string(struct_get_fallback(_song, "chart_id", "?"))
+        + " idx=" + string(_diffIdx)
+        + " want=" + want
+        + " dir=" + string(loadDir)
+        + " vsc=" + string(file_exists(loadDir + want + ".vsc"))
+        + " audio=" + string(aud) + " ok=" + string(vs_csm_asset_ok_audio(aud))
+        + " jacket=" + string(jk) + " ok=" + string(vs_csm_asset_ok_sprite(jk))
+        + " bpm=" + string(struct_get_fallback(_song, "bpm_display", ""))
+        + " encore=" + string(struct_get_fallback(_song, "has_encore", false)));
+    if (!vs_csm_asset_ok_audio(global.loadaudio))
+    {
+        vs_csm_play_log("loadaudio invalid, fallback generic");
+        global.loadaudio = music_chart_desparola;
+    }
 }
 
 function readCustomSongPackInfo(dir)

@@ -3,11 +3,17 @@ function parseSongDataFromText(arg0, arg1, arg2 = false, arg3 = false, arg4)
     //WriteInLogFree(arg0 + "," + arg4);
     var chartPath = get_chart_path_from_chart(arg0);
     var chart = load_text_chart(chartPath, arg4);
+    if (!is_struct(chart) || !variable_struct_exists(chart, "notes") || !is_array(chart.notes))
+        chart = vs_csm_empty_chart();
     var songEntry = getSongEntry(arg1);
-    var songLength = audio_sound_length(songEntry.audio_id);
+    var songAud = (songEntry != undefined) ? songEntry.audio_id : undefined;
+    var songLength = vs_csm_asset_ok_audio(songAud) ? audio_sound_length(songAud) : 120;
     
-    if (arg3)
-        songLength = audio_sound_length(song_get_info(songEntry, "audio_id", 3));
+    if (arg3 && songEntry != undefined)
+    {
+        var encAud = song_get_info(songEntry, "audio_id", 3);
+        if (vs_csm_asset_ok_audio(encAud)) songLength = audio_sound_length(encAud);
+    }
     
     debug(songLength);
     var data = new SongData();
@@ -27,13 +33,13 @@ function parseSongDataFromText(arg0, arg1, arg2 = false, arg3 = false, arg4)
         }
     }
     
-    var averageBpm = songEntry.bpm_display;
+    var averageBpm = (songEntry != undefined) ? songEntry.bpm_display : 120;
     
     if (averageBpm == "")
         averageBpm = 120;
     
     if (!is_real(averageBpm))
-        averageBpm = real(averageBpm ?? "120");
+        averageBpm = vs_csm_bpm_real(averageBpm);
     
     data.SetBucketLength(averageBpm, songLength);
     data.hasMods = chart.mods != undefined;

@@ -599,6 +599,12 @@
         "Type": 1
     },
     {
+        "Entry": "gml_GlobalScript_LoadSong",
+        "Find": "var bpm = real(global.song_shatter ? global.shatter_list[global.song_id_last].bpm_display : global.song_list[global.song_id_last].bpm_display) * 2;",
+        "Value": "var bpm = vs_csm_bpm_real(global.song_shatter ? global.shatter_list[global.song_id_last].bpm_display : global.song_list[global.song_id_last].bpm_display) * 2;",
+        "Type": 1
+    },
+    {
         "Entry": "gml_GlobalScript_upload_score",
         "Find": "var song = global.song_list[arg0];",
         "Value": "var song = global.song_list[arg0];if (struct_exists(song, \"is_custom\") && !vs_online_is_custom()) return;",
@@ -801,5 +807,11 @@
         "Find": "var song = global.song_list[arg0];",
         "Value": "var song = global.song_list[arg0];global.currentSongInfo=song;",
         "Type": 0
+    },
+    {
+        "Entry": "gml_GlobalScript_start_song",
+        "Find": "global.loadaudio = song_get_info(song, \"audio_id\", arg1);",
+        "Value": "global.loadaudio = song_get_info(song, \"audio_id\", arg1);vs_csm_start_song_guard(song, arg1);",
+        "Type": 1
     }
 ]
