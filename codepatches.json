@@ -107,19 +107,19 @@
     {
         "Entry": "gml_Object_obj_multiplayer_lobby_Step_0",
         "Find": "if (confirmMenu != undefined)\n{\n    exit;\n}",
-        "Value": "if (confirmMenu != undefined)\n{\n    exit;\n}\nif (vs_lobby_ops_step())\n{\n    exit;\n}",
+        "Value": "if (confirmMenu != undefined)\n{\n    exit;\n}\nif (vs_lobby_dl_step())\n{\n    exit;\n}\nif (vs_lobby_ops_step())\n{\n    exit;\n}",
         "Type": 0
     },
     {
         "Entry": "gml_Object_obj_multiplayer_lobby_Step_0",
         "Find": "if (!isReady)",
-        "Value": "if (instance_exists(vs_online_error)) exit; if (!isReady)",
+        "Value": "if (instance_exists(vs_online_error)) exit; vs_lobby_dl_menu_sync(); if (!isReady)",
         "Type": 1
     },
     {
         "Entry": "gml_Object_obj_multiplayer_lobby_Create_0",
         "Find": "case \"hostlobby\":",
-        "Value": "case \"kick\": vs_lobby_ops_begin(\"kick\"); break;\n        case \"hostlobby\":",
+        "Value": "case \"kick\": vs_lobby_ops_begin(\"kick\"); break;\n        case \"downloadchart\": vs_lobby_dl_prompt(); break;\n        case \"hostlobby\":",
         "Type": 0
     },
 
@@ -194,7 +194,7 @@
     {
         "Entry": "gml_GlobalScript_SendQueuePacket",
         "Find": "        o_st_handle.songQueue = arg0;",
-        "Value": "        o_st_handle.songQueue = arg0; send_packet(SendPlayerInfoPacket); if (vs_online_is_custom()) vs_lobby_log(\"queue recv n=\" + string(array_length(arg0)));",
+        "Value": "        o_st_handle.songQueue = arg0; vs_lobby_dl_on_queue(); send_packet(SendPlayerInfoPacket); if (vs_online_is_custom()) vs_lobby_log(\"queue recv n=\" + string(array_length(arg0)));",
         "Type": 1
     },
     {
@@ -786,8 +786,20 @@
     },
     {
         "Entry": "gml_Object_obj_multiplayer_lobby_Create_0",
+        "Find": "            else if (array_length(o_st_handle.songQueue) > 0)\n            {\n                confirmReadyMenu();\n            }",
+        "Value": "            else if (array_length(o_st_handle.songQueue) > 0)\n            {\n                if (vs_lobby_dl_prompt()) break;\n                confirmReadyMenu();\n            }",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_Object_obj_multiplayer_lobby_Create_0",
         "Find": "case \"choosesong\":",
         "Value": "case \"choosesong\":send_packet(SendReadyPacket, false);",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_Object_obj_multiplayer_lobby_Create_0",
+        "Find": "        case \"playoptions\":\n            if (array_length(o_st_handle.songQueue) > 0)\n            {\n                isReady = false;",
+        "Value": "        case \"playoptions\":\n            if (array_length(o_st_handle.songQueue) > 0)\n            {\n                if (vs_lobby_dl_block_options()) break;\n                isReady = false;",
         "Type": 0
     },
     {
@@ -799,7 +811,7 @@
     {
         "Entry": "gml_GlobalScript_AddSongPacket",
         "Find": "o_st_handle.songQueue = [arg0];",
-        "Value": "o_st_handle.songQueue = [arg0];global.songselect_difficulty = arg0.difficulty; send_packet(SendPlayerInfoPacket); if (vs_online_is_custom()) vs_lobby_log(\"AddSong songId=\" + string(arg0.songId) + \" diff=\" + string(arg0.difficulty));",
+        "Value": "o_st_handle.songQueue = [arg0];global.songselect_difficulty = arg0.difficulty; vs_lobby_dl_on_queue(); send_packet(SendPlayerInfoPacket); if (vs_online_is_custom()) vs_lobby_log(\"AddSong songId=\" + string(arg0.songId) + \" diff=\" + string(arg0.difficulty) + \" chart=\" + vs_online_queue_chart_id(arg0));",
         "Type": 0
     },
     {
@@ -1201,13 +1213,13 @@
     {
         "Entry": "gml_GlobalScript_AddSongPacket",
         "Find": "return buffer;",
-        "Value": "buffer_write(buffer, buffer_string, vs_online_chart_id_of_song(arg0.songId));return buffer;",
+        "Value": "buffer_write(buffer, buffer_string, vs_online_queue_chart_id(arg0));return buffer;",
         "Type": 1
     },
     {
         "Entry": "gml_GlobalScript_AddSongPacket",
         "Find": "buffer_delete(arg0);",
-        "Value": "try{obj.songId = vs_online_song_id_from_chart(buffer_read(arg0, buffer_string));}catch (ex){}buffer_delete(arg0);",
+        "Value": "try{obj.chart_id = buffer_read(arg0, buffer_string); obj.songId = vs_online_song_id_from_chart(obj.chart_id);}catch (ex){}buffer_delete(arg0);",
         "Type": 1
     },
     {
@@ -1219,13 +1231,13 @@
     {
         "Entry": "gml_GlobalScript_ShadowSongPacket",
         "Find": "return buffer;",
-        "Value": "buffer_write(buffer, buffer_string, vs_online_chart_id_of_song(arg0.songId));return buffer;",
+        "Value": "buffer_write(buffer, buffer_string, vs_online_queue_chart_id(arg0));return buffer;",
         "Type": 1
     },
     {
         "Entry": "gml_GlobalScript_ShadowSongPacket",
         "Find": "buffer_delete(arg0);",
-        "Value": "try{obj.songId = vs_online_song_id_from_chart(buffer_read(arg0, buffer_string));}catch (ex){}buffer_delete(arg0);",
+        "Value": "try{obj.chart_id = buffer_read(arg0, buffer_string); obj.songId = vs_online_song_id_from_chart(obj.chart_id);}catch (ex){}buffer_delete(arg0);",
         "Type": 1
     },
     {

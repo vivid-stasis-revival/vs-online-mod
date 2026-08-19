@@ -49,3 +49,4 @@ if (vs_lobby_lobby_id() > 0 && vs_lobby_is_owner())
         draw_text(160, 110, "CONFIRM:ACCEPT / ESCAPE:IGNORE");
     }
 }
+vs_lobby_dl_draw();

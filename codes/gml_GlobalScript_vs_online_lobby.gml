@@ -113,6 +113,49 @@ function vs_online_chart_id_of_song(_songId)
     return string(s.chart_id);
 }
 
+function vs_online_queue_chart_id(_s)
+{
+    if (_s == undefined) return "";
+    if (variable_struct_exists(_s, "chart_id") && string(_s.chart_id) != "")
+    {
+        return string(_s.chart_id);
+    }
+    if (variable_struct_exists(_s, "songId")) return vs_online_chart_id_of_song(_s.songId);
+    return "";
+}
+
+function vs_lobby_queued_chart_id()
+{
+    if (!vs_lobby_has_queued_song()) return "";
+    return vs_online_queue_chart_id(o_st_handle.songQueue[0]);
+}
+
+function vs_lobby_resolve_queued_songs()
+{
+    if (!instance_exists(o_st_handle)) return;
+    var i = 0;
+    if (is_array(o_st_handle.songQueue))
+    {
+        repeat (array_length(o_st_handle.songQueue))
+        {
+            vs_lobby_resolve_song_ref(o_st_handle.songQueue[i]);
+            i++;
+        }
+    }
+    vs_lobby_resolve_song_ref(o_st_handle.previousSong);
+    vs_lobby_resolve_song_ref(o_st_handle.shadowSong);
+}
+
+function vs_lobby_resolve_song_ref(_s)
+{
+    if (_s == undefined) return;
+    var cid = vs_online_queue_chart_id(_s);
+    if (cid == "") return;
+    _s.chart_id = cid;
+    var sid = vs_online_song_id_from_chart(cid);
+    if (sid >= 0) _s.songId = sid;
+}
+
 // --- steam_* shims (used via codepatches so the WP UI reads server state) ---
 
 function vs_lobby_lobby_id()
@@ -1456,6 +1499,7 @@ function vs_lobby_reset()
         global.vs_lobby_cb.match_busy = false;
     }
     vs_lobby_ops_end();
+    vs_lobby_dl_cancel();
     vs_lobby_send_q_clear();
     vs_ws_close();
     if (instance_exists(o_st_handle))

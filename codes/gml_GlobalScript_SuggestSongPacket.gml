@@ -12,7 +12,8 @@ function SuggestSongPacket(arg0) : BasePacket(arg0, false, 3, 1) constructor
     {
         var obj = {};
         obj.difficulty = buffer_read(arg0, buffer_s8);
-        obj.songId = vs_online_song_id_from_chart(buffer_read(arg0, buffer_string));
+        obj.chart_id = buffer_read(arg0, buffer_string);
+        obj.songId = vs_online_song_id_from_chart(obj.chart_id);
         buffer_delete(arg0);
         return obj;
     };
@@ -23,7 +24,8 @@ function SuggestSongPacket(arg0) : BasePacket(arg0, false, 3, 1) constructor
         {
             if (arg0.songId < 0)
             {
-                vs_lobby_log("suggest recv missing chart from=" + string(arg1));
+                vs_lobby_log("suggest recv missing chart from=" + string(arg1)
+                    + " chart=" + string(variable_struct_exists(arg0, "chart_id") ? arg0.chart_id : ""));
                 return;
             }
             vs_lobby_log("suggest recv songId=" + string(arg0.songId)

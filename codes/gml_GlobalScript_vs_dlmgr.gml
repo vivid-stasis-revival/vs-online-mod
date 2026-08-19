@@ -432,6 +432,12 @@ function vs_dlmgr_dl_step()
     vs_songstore_download_file(f.url, f.localPath, vs_dlmgr_dl_file_done);
 }
 
+function vs_dlmgr_is_busy()
+{
+    if (!variable_global_exists("vs_dlmgr_dl")) return false;
+    return global.vs_dlmgr_dl.on_done != undefined;
+}
+
 function vs_dlmgr_prog_frac()
 {
     if (!variable_global_exists("vs_dlmgr_dl")) return 0;
