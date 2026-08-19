@@ -180,6 +180,14 @@ function vs_http_default_timeout()
     return 10000;
 }
 
+// Callers often pass "" for unused trailing args. Comparing that with > 0
+// tries to coerce "" to int64 and crashes.
+function vs_http_resolve_timeout(_timeout)
+{
+    if (is_real(_timeout) && _timeout > 0) return _timeout;
+    return vs_http_default_timeout();
+}
+
 function vs_http_timeout_ms()
 {
     var job = global.vs_http_cur;
@@ -187,9 +195,9 @@ function vs_http_timeout_ms()
     {
         return 0;
     }
-    if (job != undefined && variable_struct_exists(job, "timeout") && job.timeout > 0)
+    if (job != undefined && variable_struct_exists(job, "timeout"))
     {
-        return job.timeout;
+        return vs_http_resolve_timeout(job.timeout);
     }
     return vs_http_default_timeout();
 }
@@ -204,11 +212,7 @@ function vs_http_request(_url, _method, _headers, _body, _on_done)
 function vs_http_request_ex(_url, _method, _headers, _body, _on_done, _json, _after, _email, _timeout)
 {
     vs_http_q_init();
-    var to = vs_http_default_timeout();
-    if (_timeout != undefined && _timeout > 0)
-    {
-        to = _timeout;
-    }
+    var to = vs_http_resolve_timeout(_timeout);
     array_push(global.vs_http_q,
     {
         url: _url,
@@ -233,11 +237,7 @@ function vs_http_request_ex(_url, _method, _headers, _body, _on_done, _json, _af
 function vs_http_request_path(_path, _authed, _method, _headers, _body, _on_done, _json, _after, _timeout)
 {
     vs_http_q_init();
-    var to = vs_http_default_timeout();
-    if (_timeout != undefined && _timeout > 0)
-    {
-        to = _timeout;
-    }
+    var to = vs_http_resolve_timeout(_timeout);
     array_push(global.vs_http_q,
     {
         url: "",
