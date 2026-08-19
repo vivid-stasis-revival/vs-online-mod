@@ -369,7 +369,10 @@ function vs_localcharts_jump_shatter(_chart_id)
     var sid = vs_localcharts_shatter_id_in_list(_chart_id);
     if (sid < 0) return false;
 
+    // Shatter select ignores force_song_select (that is for Rhythm Play packs)
+    // and instead restores last_boundaryshatter_song. Set both.
     global.force_song_select = sid;
+    global.last_boundaryshatter_song = sid;
 
     if (instance_exists(vs_downloader_browser))
     {

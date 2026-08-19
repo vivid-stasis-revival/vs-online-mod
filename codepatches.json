@@ -923,6 +923,24 @@
         "Type": 1
     },
     {
+        "Entry": "gml_Object_o_songselect_shatter_Create_0",
+        "Find": "create_shatter_list();\nif (variable_global_exists(\"last_boundaryshatter_song\"))\n{\n    for (var i = 0; i < array_length(songs); i++)\n    {\n        if (song_list[songs[i][0]].song_id == global.last_boundaryshatter_song)\n        {\n            cursor_pos = i;\n            break;\n        }\n    }\n    selected_song = song_list[songs[cursor_pos][0]];\n    play_preview(selected_song.preview_id);\n}",
+        "ExternalFile": "csm/shatter_focus.gml",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_Object_o_songselect_shatterold_Create_0",
+        "Find": "global.current_pack = [0, 1, 2];\nfirst_song_refresh = true;\nrefresh_song_objects(0, true);\ntemporary_rs = 0;\ncursor_song_id = global.shatter_list[global.current_pack[0]];",
+        "Value": "global.current_pack = (variable_global_exists(\"shatter_order\") && array_length(global.shatter_order) > 0) ? global.shatter_order : [0, 1, 2];\nfirst_song_refresh = true;\nrefresh_song_objects(0, true);\ntemporary_rs = 0;\ncursor_pos = 0;\nif (variable_global_exists(\"force_song_select\") && global.force_song_select >= 0)\n{\n    for (var i = 0; i < array_length(global.current_pack); i++)\n    {\n        if (global.current_pack[i] == global.force_song_select)\n        {\n            cursor_pos = i;\n            break;\n        }\n    }\n    global.force_song_select = -1;\n}\ncursor_song_id = global.shatter_list[global.current_pack[cursor_pos]];",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_GlobalScript_refresh_song_objects",
+        "Find": "        if (global.force_song_select == songs[i])",
+        "Value": "        if (global.force_song_select == songs[i] || (is_array(songs[i]) && global.force_song_select == songs[i][0]))",
+        "Type": 0
+    },
+    {
         "Entry": "gml_Object_o_profile_select_2023boot_Step_0",
         "Find": "global.last_freeplay_song = ini_read_real(\"profile\", \"last_freeplay_song\", 0);",
         "ExternalFile": "csm/songid_overflow_crash_fix.gml",
