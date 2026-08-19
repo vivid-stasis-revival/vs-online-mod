@@ -126,6 +126,7 @@ function vs_csm_list_subdirs(_root)
 {
     var out = [];
     if (_root == undefined || _root == "") return out;
+    if (!directory_exists(_root)) return out;
     var n = file_find_first(_root + "*", 16);
     if (n == "")
     {

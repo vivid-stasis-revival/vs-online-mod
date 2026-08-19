@@ -160,6 +160,7 @@ function vs_packmgr_write_info(_packId, _data)
     vs_songstore_ensure_dir(dir);
     var raw = vs_packmgr_info_json(_data);
     var fw = file_text_open_write(dir + "songpack_info.json");
+    if (fw < 0) return "";
     file_text_write_string(fw, raw);
     file_text_close(fw);
     return vs_packmgr_info_sha1(pid);
