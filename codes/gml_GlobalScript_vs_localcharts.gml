@@ -432,7 +432,10 @@ function vs_localcharts_auto_check()
             var sha = vs_online_chart_sha1(c.chart_id, diffs[d]);
             if (sha != "")
             {
-                array_push(charts, { chartId: c.chart_id, difficulty: vs_online_diff_api(diffs[d]), sha1: sha });
+                var item = { chartId: c.chart_id, difficulty: vs_online_diff_api(diffs[d]), sha1: sha };
+                var vsm = vs_online_chart_vsm_sha1(c.chart_id, diffs[d]);
+                if (vsm != "") item.vsmSha1 = vsm;
+                array_push(charts, item);
             }
             d++;
         }

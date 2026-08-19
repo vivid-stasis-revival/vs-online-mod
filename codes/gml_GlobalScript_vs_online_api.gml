@@ -55,32 +55,47 @@ function vs_online_diff_api(_diff)
     return string(_diff);
 }
 
-function vs_online_chart_sha1(_chartId, _diff)
+function vs_online_chart_file_diff(_diff)
+{
+    var low = string_lower(string(_diff));
+    if (low == "opening") return "OPENING";
+    if (low == "middle") return "MIDDLE";
+    if (low == "finale") return "FINALE";
+    if (low == "encore") return "ENCORE";
+    if (low == "prelude") return "PRELUDE";
+    return string(_diff);
+}
+
+function vs_online_chart_file(_chartId, _diff, _ext)
 {
     if (_chartId == undefined || _chartId == "" || _diff == undefined || _diff == "") return "";
-    var fileDiff = _diff;
-    var low = string_lower(string(_diff));
-    if (low == "opening") fileDiff = "OPENING";
-    else if (low == "middle") fileDiff = "MIDDLE";
-    else if (low == "finale") fileDiff = "FINALE";
-    else if (low == "encore") fileDiff = "ENCORE";
-    else if (low == "prelude") fileDiff = "PRELUDE";
+    var fileDiff = vs_online_chart_file_diff(_diff);
     var loadDir = vs_csm_load_dir_from_id(_chartId);
     var p = "";
     if (loadDir != "")
     {
-        p = loadDir + fileDiff + ".vsc";
-        if (!file_exists(p)) p = loadDir + fileDiff + ".vsb";
+        p = loadDir + fileDiff + _ext;
+        if (file_exists(p)) return p;
     }
-    if (p == "" || !file_exists(p))
-    {
-        var dir = "Custom Songs/" + _chartId + "/";
-        p = dir + fileDiff + ".vsc";
-        if (!file_exists(p)) p = dir + fileDiff + ".vsb";
-    }
-    if (!file_exists(p)) p = working_directory + "Charts/" + _chartId + "/" + fileDiff + ".vsb";
-    if (!file_exists(p)) p = working_directory + "Charts/" + _chartId + "/" + fileDiff + ".vsc";
-    if (!file_exists(p)) return "";
+    p = "Custom Songs/" + _chartId + "/" + fileDiff + _ext;
+    if (file_exists(p)) return p;
+    p = working_directory + "Charts/" + _chartId + "/" + fileDiff + _ext;
+    if (file_exists(p)) return p;
+    return "";
+}
+
+function vs_online_chart_sha1(_chartId, _diff)
+{
+    var p = vs_online_chart_file(_chartId, _diff, ".vsc");
+    if (p == "") p = vs_online_chart_file(_chartId, _diff, ".vsb");
+    if (p == "") return "";
+    return sha1_file(p);
+}
+
+function vs_online_chart_vsm_sha1(_chartId, _diff)
+{
+    var p = vs_online_chart_file(_chartId, _diff, ".vsm");
+    if (p == "") return "";
     return sha1_file(p);
 }
 
@@ -764,15 +779,64 @@ function vs_online_upload_score_done(_ok, _data, _status)
 {
     if (_ok)
     {
-        vs_online_score_log("POST result ok=1 http=" + string(_status));
+        var extra = "";
+        if (is_struct(_data))
+        {
+            if (variable_struct_exists(_data, "rank")) extra += " rank=" + string(_data.rank);
+            if (variable_struct_exists(_data, "updated")) extra += " updated=" + string(_data.updated);
+        }
+        vs_online_score_log("POST result ok=1 http=" + string(_status) + extra);
         return;
     }
     var why = vs_online_upload_score_why(_data, _status);
     vs_online_score_log("POST result ok=0 " + why);
+    var job = variable_global_exists("vs_score_up") ? global.vs_score_up : undefined;
+    if (job != undefined && !job.legacy && _status == 400)
+    {
+        job.legacy = true;
+        var body = vs_online_score_body_json(job.chartId, job.difficulty, job.sha1, job.pts, false);
+        vs_online_score_log("POST retry legacy body=" + body);
+        vs_online_post_raw("/api/v1/charts/scores", body, vs_online_upload_score_done, "");
+        return;
+    }
     vs_online_show_score_error(why);
 }
 
-function vs_online_score_body_json(_chartId, _difficulty, _sha1, _pts)
+function vs_online_score_clear_type()
+{
+    if (variable_global_exists("failed") && global.failed) return 0;
+    if (!variable_global_exists("count_miss") || global.count_miss != 0) return 0;
+    if (global.count_great == 0 && global.count_good == 0) return 2;
+    return 1;
+}
+
+function vs_online_score_note_count()
+{
+    if (variable_global_exists("ch_load") && variable_global_exists("df_load"))
+    {
+        var n = LoadSongDataNoteCount(global.ch_load, global.df_load);
+        if (n > 0) return floor(real(n));
+    }
+    if (variable_global_exists("notecount") && global.notecount > 0)
+    {
+        return floor(real(global.notecount));
+    }
+    return 0;
+}
+
+function vs_online_score_mods_json()
+{
+    var gauge = "";
+    if (variable_global_exists("decrypt_mode") && is_struct(global.decrypt_mode))
+    {
+        gauge = string(struct_get_fallback(global.decrypt_mode, "name", ""));
+    }
+    var ap = (variable_global_exists("op_autoplay") && global.op_autoplay) ? "1" : "0";
+    var fl = (variable_global_exists("failed") && global.failed) ? "1" : "0";
+    return "{\"gauge\":\"" + vs_online_json_esc(gauge) + "\",\"autoplay\":" + ap + ",\"failed\":" + fl + "}";
+}
+
+function vs_online_score_body_json(_chartId, _difficulty, _sha1, _pts, _verified)
 {
     // Never put the identifier `score` in a struct / json_stringify: it is a
     // GameMaker builtin global, and vsml drops or corrupts that key. The API
@@ -780,10 +844,34 @@ function vs_online_score_body_json(_chartId, _difficulty, _sha1, _pts)
     var sha = string_lower(string_replace_all(string(_sha1), " ", ""));
     var pts = floor(real(_pts));
     if (pts < 0) pts = 0;
-    return "{\"chartId\":\"" + vs_online_json_esc(_chartId)
+    var out = "{\"chartId\":\"" + vs_online_json_esc(_chartId)
         + "\",\"difficulty\":\"" + vs_online_json_esc(vs_online_diff_api(_difficulty))
         + "\",\"sha1\":\"" + vs_online_json_esc(sha)
-        + "\",\"score\":" + string(pts) + "}";
+        + "\",\"score\":" + string(pts);
+    if (_verified && variable_global_exists("count_acrit"))
+    {
+        var nc = vs_online_score_note_count();
+        if (nc > 0)
+        {
+            var ac = floor(real(global.count_acrit));
+            var cr = floor(real(global.count_crit));
+            var gr = floor(real(global.count_great));
+            var gd = floor(real(global.count_good));
+            var ms = floor(real(global.count_miss));
+            var mc = variable_global_exists("maxcombo") ? floor(real(global.maxcombo)) : 0;
+            var ct = vs_online_score_clear_type();
+            out += ",\"acrit\":" + string(ac)
+                + ",\"crit\":" + string(cr)
+                + ",\"great\":" + string(gr)
+                + ",\"good\":" + string(gd)
+                + ",\"miss\":" + string(ms)
+                + ",\"maxCombo\":" + string(mc)
+                + ",\"noteCount\":" + string(nc)
+                + ",\"clearType\":" + string(ct)
+                + ",\"mods\":\"" + vs_online_json_esc(vs_online_score_mods_json()) + "\"";
+        }
+    }
+    return out + "}";
 }
 
 function vs_online_upload_score(_chartId, _difficulty, _sha1, _pts, _data)
@@ -793,11 +881,22 @@ function vs_online_upload_score(_chartId, _difficulty, _sha1, _pts, _data)
         vs_online_score_log("skip no account chart=" + string(_chartId) + " diff=" + string(_difficulty) + " " + vs_online_score_play_flags());
         return;
     }
-    var body = vs_online_score_body_json(_chartId, _difficulty, _sha1, _pts);
+    var sha = string_lower(string_replace_all(string(_sha1), " ", ""));
+    var pts = floor(real(_pts));
+    if (pts < 0) pts = 0;
+    global.vs_score_up =
+    {
+        chartId: _chartId,
+        difficulty: vs_online_diff_api(_difficulty),
+        sha1: sha,
+        pts: pts,
+        legacy: false
+    };
+    var body = vs_online_score_body_json(_chartId, _difficulty, sha, pts, true);
     vs_online_score_log("POST /charts/scores chart=" + string(_chartId)
         + " diff=" + string(vs_online_diff_api(_difficulty))
-        + " sha=" + string_copy(string(_sha1), 1, 8)
-        + " pts=" + string(floor(real(_pts)))
+        + " sha=" + string_copy(sha, 1, 8)
+        + " pts=" + string(pts)
         + " body=" + body
         + " " + vs_online_score_play_flags());
     vs_online_post_raw("/api/v1/charts/scores", body, vs_online_upload_score_done, "");
