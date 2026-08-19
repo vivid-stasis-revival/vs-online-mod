@@ -25,8 +25,12 @@ addMember = function(arg0)
 
         remove_sticker: function()
         {
-            TweenFire(o_st_handle.getMember(userId), EaseOutBack, 0, true, 0, 0.5, "sticker_scale", 0, 1);
-            TweenFire(o_st_handle.getMember(userId), EaseOutExpo, 0, true, 0, 0.5, "sticker_alpha", 0, 1);
+            var _m = o_st_handle.getMember(self.id);
+            if (_m != undefined)
+            {
+                TweenFire(_m, EaseOutBack, 0, true, 0, 0.5, "sticker_scale", 0, 1);
+                TweenFire(_m, EaseOutExpo, 0, true, 0, 0.5, "sticker_alpha", 0, 1);
+            }
         }
     };
     vs_member_set_score(member, 0);

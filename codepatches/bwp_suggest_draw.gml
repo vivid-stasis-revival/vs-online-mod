@@ -4,7 +4,13 @@ if (vs_lobby_lobby_id() > 0 && vs_lobby_is_owner())
     if (array_length(_sq) > 0)
     {
         suggestSong = _sq[0];
-        var song = global.song_list[suggestSong.songId];
+        var song = vs_online_song_from_id(suggestSong.songId);
+        if (song == undefined)
+        {
+            var cid = "";
+            if (variable_struct_exists(suggestSong, "chart_id")) cid = string(suggestSong.chart_id);
+            song = vs_online_missing_song(cid);
+        }
         var member = o_st_handle.getMember(suggestSong.member);
         var member_name = (member != undefined) ? member.name : "N/A";
         var grad1, grad2;

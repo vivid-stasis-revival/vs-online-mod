@@ -36,6 +36,13 @@ function vs_lobby_dl_pop_seq()
     return seq;
 }
 
+function vs_lobby_dl_bump()
+{
+    var st = vs_lobby_dl_st();
+    st.seq += 1;
+    st.checking = false;
+}
+
 function vs_lobby_dl_check_lookup_http(_ok, _data, _status)
 {
     vs_lobby_dl_on_check_lookup(vs_lobby_dl_pop_seq(), _ok, _data);
@@ -79,6 +86,7 @@ function vs_lobby_dl_close()
     st.ask = false;
     st.wait = false;
     st.looking = false;
+    st.checking = false;
     st.err = "";
 }
 
@@ -97,9 +105,8 @@ function vs_lobby_dl_fail(_msg)
 function vs_lobby_dl_cancel()
 {
     var st = vs_lobby_dl_st();
-    st.seq += 1;
+    vs_lobby_dl_bump();
     st.looking = false;
-    st.checking = false;
     st.ask = false;
     st.wait = false;
     if (vs_dlmgr_is_busy() && string(global.vs_dlmgr_dl.chartId) == string(st.chartId))
@@ -169,9 +176,8 @@ function vs_lobby_dl_arm_check()
     if (st.checking && string(st.chartId) == string(cid)) return;
     if (string(st.checkedId) == string(cid)) return;
     st.need_upd = false;
-    st.checking = false;
     st.serverId = "";
-    st.seq += 1;
+    vs_lobby_dl_bump();
     st.chartId = cid;
     st.checking = true;
     vs_lobby_log("dl check chart=" + cid);
@@ -353,7 +359,7 @@ function vs_lobby_dl_on_member_info()
 function vs_lobby_dl_begin(_cid)
 {
     var st = vs_lobby_dl_st();
-    st.seq += 1;
+    vs_lobby_dl_bump();
     st.chartId = string(_cid);
     st.err = "";
     st.open = true;
@@ -608,6 +614,16 @@ function vs_lobby_dl_draw()
     else if (st.ask) vs_lobby_dl_draw_ask();
     else if (st.checking && !vs_dlmgr_is_busy()) vs_lobby_dl_draw_checking();
     else vs_dlbr_draw_dl_popup();
+}
+
+function vs_lobby_menu_insert(_acts, _index, _txt, _cb)
+{
+    if (_acts == undefined || !is_array(_acts)) return;
+    if (vs_lobby_dl_menu_find(_acts, _cb) >= 0) return;
+    var at = _index;
+    if (at < 0) at = 0;
+    if (at > array_length(_acts)) at = array_length(_acts);
+    array_insert(_acts, at, { txt: _txt, callback: _cb });
 }
 
 function vs_lobby_dl_menu_find(_acts, _cb)

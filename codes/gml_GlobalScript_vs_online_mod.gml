@@ -486,7 +486,11 @@ function vs_online_probe(_on_done)
         global.vs_probe_inflight = false;
         global.vs_probe_gen = 0;
         global.vs_probe_to = [];
-        global.vs_online_probe = { done: false, gen: 0 };
+        global.vs_probe_st = { done: false, gen: 0 };
+    }
+    if (!variable_global_exists("vs_probe_st") || !is_struct(global.vs_probe_st))
+    {
+        global.vs_probe_st = { done: false, gen: 0 };
     }
     array_push(global.vs_probe_q, _on_done);
     if (global.vs_probe_inflight)
@@ -495,8 +499,8 @@ function vs_online_probe(_on_done)
     }
     global.vs_probe_inflight = true;
     global.vs_probe_gen += 1;
-    global.vs_online_probe.done = false;
-    global.vs_online_probe.gen = global.vs_probe_gen;
+    global.vs_probe_st.done = false;
+    global.vs_probe_st.gen = global.vs_probe_gen;
     array_push(global.vs_probe_to, global.vs_probe_gen);
     vs_online_get_json("/healthz", false, vs_online_probe_http, 2000);
     call_later(60, time_source_units_frames, vs_online_probe_timeout);
@@ -504,10 +508,10 @@ function vs_online_probe(_on_done)
 
 function vs_online_probe_settle(_good, _gen)
 {
-    if (!variable_global_exists("vs_online_probe")) return;
-    if (global.vs_online_probe.done) return;
-    if (_gen != undefined && _gen != global.vs_online_probe.gen) return;
-    global.vs_online_probe.done = true;
+    if (!variable_global_exists("vs_probe_st") || !is_struct(global.vs_probe_st)) return;
+    if (global.vs_probe_st.done) return;
+    if (_gen != undefined && _gen != global.vs_probe_st.gen) return;
+    global.vs_probe_st.done = true;
     global.vs_probe_inflight = false;
     global.vs_online_conn = _good ? 1 : -1;
     var q = global.vs_probe_q;
@@ -523,7 +527,7 @@ function vs_online_probe_settle(_good, _gen)
 function vs_online_probe_http(_ok, _data, _status)
 {
     var good = _ok && _data != undefined && variable_struct_exists(_data, "ok") && _data.ok;
-    vs_online_probe_settle(good, global.vs_online_probe.gen);
+    vs_online_probe_settle(good, global.vs_probe_st.gen);
 }
 
 function vs_online_probe_timeout()

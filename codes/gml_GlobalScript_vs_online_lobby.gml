@@ -1250,7 +1250,7 @@ function vs_lobby_remove_member(_id)
     var i = 0;
     repeat (array_length(o_st_handle.lobbyMembers))
     {
-        if (o_st_handle.lobbyMembers[i].id == _id)
+        if (o_st_handle.lobbyMembers[i].id != undefined && string(o_st_handle.lobbyMembers[i].id) == string(_id))
         {
             array_delete(o_st_handle.lobbyMembers, i, 1);
             break;
@@ -1532,6 +1532,9 @@ function vs_lobby_create(_public, _on_done)
         if (vs_lobby_is_create_pending())
         {
             vs_lobby_log("create POST skip pending");
+            var skipped = global.vs_lobby_cb.on_done;
+            global.vs_lobby_cb.on_done = undefined;
+            if (skipped != undefined) { skipped(false, undefined); }
             return;
         }
         vs_lobby_set_create_pending(true);
@@ -1593,6 +1596,7 @@ function vs_lobby_matchmake(_on_done)
     if (variable_struct_exists(global.vs_lobby_cb, "match_busy") && global.vs_lobby_cb.match_busy == true)
     {
         vs_lobby_log("matchmake skip busy");
+        if (_on_done != undefined) { _on_done(false, undefined); }
         return;
     }
     global.vs_lobby_cb.on_done = _on_done;
@@ -1609,6 +1613,9 @@ function vs_lobby_matchmake(_on_done)
         if (variable_struct_exists(global.vs_lobby_cb, "match_busy") && global.vs_lobby_cb.match_busy == true)
         {
             vs_lobby_log("matchmake skip busy after conn");
+            var cbBusy = global.vs_lobby_cb.on_done;
+            global.vs_lobby_cb.on_done = undefined;
+            if (cbBusy != undefined) { cbBusy(false, undefined); }
             return;
         }
         global.vs_lobby_cb.match_busy = true;
@@ -1646,13 +1653,29 @@ function vs_lobby_join(_code, _on_done)
     {
         global.vs_lobby_cb = { is_public: true, code: "", on_done: undefined };
     }
+    if (variable_struct_exists(global.vs_lobby_cb, "join_busy") && global.vs_lobby_cb.join_busy == true)
+    {
+        vs_lobby_log("join skip busy");
+        if (_on_done != undefined) { _on_done(false, undefined); }
+        return;
+    }
     global.vs_lobby_cb.code = code;
     global.vs_lobby_cb.on_done = _on_done;
     vs_online_with_conn(function()
     {
+        if (variable_struct_exists(global.vs_lobby_cb, "join_busy") && global.vs_lobby_cb.join_busy == true)
+        {
+            vs_lobby_log("join skip busy after conn");
+            var cbBusy = global.vs_lobby_cb.on_done;
+            global.vs_lobby_cb.on_done = undefined;
+            if (cbBusy != undefined) { cbBusy(false, undefined); }
+            return;
+        }
+        global.vs_lobby_cb.join_busy = true;
         vs_lobby_log("join POST /lobbies/join code=" + string(global.vs_lobby_cb.code));
         vs_online_post_json("/api/v1/lobbies/join", { code: global.vs_lobby_cb.code }, function(_ok, _data, _status)
         {
+            global.vs_lobby_cb.join_busy = false;
             vs_lobby_log("join result " + vs_lobby_http_why(_ok, _data, _status));
             var cb = global.vs_lobby_cb.on_done;
             global.vs_lobby_cb.on_done = undefined;
@@ -1820,6 +1843,35 @@ function vs_lobby_enter(_lobbyJson)
     vs_ws_connect("/api/v1/lobbies/" + string(_lobbyJson.code) + "/ws", vs_online_token());
 }
 
+function vs_lobby_ws_ensure()
+{
+    if (!vs_online_is_custom() || !vs_lobby_has_code()) return;
+    var ws = vs_ws_state();
+    if (ws.state == 3 || ws.state == 1) return;
+    var code = string(o_st_handle.lobbyCode);
+    vs_lobby_log("ws ensure reconnect code=" + code);
+    vs_ws_connect("/api/v1/lobbies/" + code + "/ws", vs_online_token());
+}
+
+function vs_lobby_ws_retry()
+{
+    var ws = vs_ws_state();
+    ws.retryWait = false;
+    vs_lobby_ws_ensure();
+}
+
+function vs_lobby_ws_on_drop(_why)
+{
+    vs_lobby_log("ws drop " + string(_why) + " " + vs_lobby_flags());
+    vs_lobby_send_q_clear();
+    vs_ws_reset();
+    if (!vs_lobby_has_code()) return;
+    var ws = vs_ws_state();
+    if (variable_struct_exists(ws, "retryWait") && ws.retryWait) return;
+    ws.retryWait = true;
+    call_later(120, time_source_units_frames, vs_lobby_ws_retry);
+}
+
 function vs_lobby_reset()
 {
     vs_lobby_log("reset " + vs_lobby_flags());
@@ -1827,6 +1879,7 @@ function vs_lobby_reset()
     if (variable_global_exists("vs_lobby_cb") && is_struct(global.vs_lobby_cb))
     {
         global.vs_lobby_cb.match_busy = false;
+        global.vs_lobby_cb.join_busy = false;
     }
     vs_lobby_ops_end();
     vs_lobby_dl_cancel();

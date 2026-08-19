@@ -31,7 +31,8 @@ function vs_ws_state()
             path: "",
             url: "",
             token: "",
-            lastError: ""
+            lastError: "",
+            retryWait: false
         };
     }
     return variable_global_get("vs_ws");
@@ -170,8 +171,7 @@ function vs_ws_connect(_path, _token)
     {
         vs_ws_log("connect start failed " + vs_ws_url_redact(url) + " :" + string(ws.port) + " rc=" + string(rc));
         ws.lastError = "connect_start";
-        vs_lobby_send_q_clear();
-        vs_ws_reset();
+        vs_lobby_ws_on_drop("connect_start");
         return;
     }
     vs_ws_log("connecting " + vs_ws_url_redact(url) + " :" + string(ws.port) + " path=" + string(_path));
@@ -282,8 +282,7 @@ function vs_ws_handle_net_event()
         {
             vs_ws_log("connect failed " + vs_ws_url_redact(ws.url) + " ok=" + string(succeeded));
             ws.lastError = "connect_failed";
-            vs_lobby_send_q_clear();
-            vs_ws_reset();
+            vs_lobby_ws_on_drop("connect_failed");
         }
     }
     else if (type == network_type_connect)
@@ -303,8 +302,7 @@ function vs_ws_handle_net_event()
     else if (type == network_type_disconnect)
     {
         vs_ws_log("disconnected url=" + vs_ws_url_redact(ws.url));
-        vs_lobby_send_q_clear();
-        vs_ws_reset();
+        vs_lobby_ws_on_drop("disconnect");
     }
     else
     {

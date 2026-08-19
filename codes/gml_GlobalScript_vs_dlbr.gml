@@ -26,8 +26,9 @@ function vs_dlbr_open_from_menu()
 
 function vs_dlbr_restore_menu()
 {
-    if (!variable_global_exists("vs_dlbr_restore_menu") || !global.vs_dlbr_restore_menu) return;
-    global.vs_dlbr_restore_menu = false;
+    // Flag must not share the function name — GM puts scripts in `global`.
+    if (!variable_global_exists("vs_dlbr_need_menu") || !global.vs_dlbr_need_menu) return;
+    global.vs_dlbr_need_menu = false;
     if (instance_exists(vs_downloader_browser)) return;
     if (instance_exists(o_newmenu_main)) o_newmenu_main.is_active = true;
 }
@@ -1155,7 +1156,7 @@ function vs_dlbr_draw_dl_popup()
 function vs_dlbr_on_close()
 {
     vs_media_stop_preview();
-    global.vs_dlbr_restore_menu = true;
+    global.vs_dlbr_need_menu = true;
     call_later(1, time_source_units_frames, vs_dlbr_restore_menu);
 }
 
@@ -2340,7 +2341,7 @@ function vs_dlbr_draw_detail()
                 }
                 if (detail_me != undefined && variable_struct_exists(detail_me, "found") && detail_me.found)
                 {
-                    var me = "ME " + vs_dlbr_fmt_score(variable_struct_exists(detail_me, "score") ? detail_me.score : -1);
+                    var me = "ME " + vs_dlbr_fmt_score(variable_struct_exists(detail_me, "score") ? variable_struct_get(detail_me, "score") : -1);
                     if (variable_struct_exists(detail_me, "rank")) me += " #" + string(floor(vs_http_num(detail_me.rank, 0)));
                     bits = (bits == "") ? me : (bits + "  " + me);
                 }
