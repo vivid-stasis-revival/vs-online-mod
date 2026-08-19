@@ -656,9 +656,9 @@ function vs_lobby_host_sync(_why)
     }
 }
 
-// Matchmake into an existing room does not emit member_joined. A packet from
-// an unknown sender gets a stub so official receive() does not crash; GET
-// /members then fills name/avatar/host from the server roster.
+// Matchmake into an existing room now emits member_joined (same as join).
+// A packet from an unknown sender still gets a stub so official receive()
+// does not crash; GET /members then fills name/avatar/host from the server roster.
 function vs_lobby_ensure_sender(_senderId)
 {
     if (!instance_exists(o_st_handle)) return false;
@@ -698,6 +698,7 @@ function vs_lobby_fetch_members_done(_ok, _data, _status)
     {
         vs_lobby_refresh_host_flags(hid);
     }
+    vs_lobby_refresh_ui();
 }
 
 function vs_lobby_http_why(_ok, _data, _status)
@@ -1091,6 +1092,7 @@ function vs_online_on_ws_frame(_op, _payload)
             && senderId != vs_online_player_id())
         {
             vs_lobby_host_sync("recv SendPlayerInfo from=" + senderId);
+            vs_lobby_refresh_ui();
         }
     }
     else if (_op == 1) // text = JSON control message
@@ -1159,18 +1161,22 @@ function vs_lobby_handle_control(_j)
             {
                 var mid = variable_struct_exists(_j.member, "playerId") ? string(_j.member.playerId) : "?";
                 var mname = variable_struct_exists(_j.member, "name") ? string(_j.member.name) : "";
-                array_push(o_st_handle.lobbyMembers, vs_lobby_build_member(_j.member));
-                var i = 0;
-                repeat (array_length(o_st_handle.lobbyMembers))
+                if (mid != "?" && o_st_handle.getMember(mid) == undefined)
                 {
-                    o_st_handle.lobbyMembers[i].order = i;
-                    i++;
+                    array_push(o_st_handle.lobbyMembers, vs_lobby_build_member(_j.member));
+                    var i = 0;
+                    repeat (array_length(o_st_handle.lobbyMembers))
+                    {
+                        o_st_handle.lobbyMembers[i].order = i;
+                        i++;
+                    }
                 }
                 vs_lobby_log("member_joined id=" + mid + " name=" + mname
                     + " n=" + string(array_length(o_st_handle.lobbyMembers))
                     + " connected=" + string(variable_struct_exists(_j.member, "connected") ? _j.member.connected : "?")
                     + " owner=" + string(vs_lobby_is_owner()));
                 vs_lobby_host_sync("member_joined");
+                vs_lobby_refresh_ui();
             }
             else
             {
@@ -1188,6 +1194,7 @@ function vs_lobby_handle_control(_j)
             vs_lobby_log("member_left id=" + leftId
                 + " host=" + (variable_struct_exists(_j, "hostId") ? string(_j.hostId) : "")
                 + " " + vs_lobby_flags());
+            vs_lobby_refresh_ui();
             break;
         case "host_changed":
             if (instance_exists(o_st_handle))
