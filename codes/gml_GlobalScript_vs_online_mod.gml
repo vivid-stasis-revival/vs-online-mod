@@ -557,6 +557,7 @@ function vs_online_with_conn(_fn)
     if (!vs_online_is_account())
     {
         vs_online_show_account_required();
+        vs_online_with_conn_abort();
         return;
     }
     var st = vs_online_conn_state();
@@ -568,6 +569,7 @@ function vs_online_with_conn(_fn)
     if (st == -1)
     {
         vs_online_show_error(_fn);
+        vs_online_with_conn_abort();
         return;
     }
     if (!variable_global_exists("vs_with_conn_q"))
@@ -596,6 +598,25 @@ function vs_online_with_conn_probed(_ok)
         if (_ok) { q[i](); }
         else { vs_online_show_error(q[i]); }
         i++;
+    }
+    if (!_ok) vs_online_with_conn_abort();
+}
+
+function vs_online_with_conn_abort()
+{
+    if (variable_global_exists("vs_dlmgr_cb") && global.vs_dlmgr_cb != undefined
+        && variable_struct_exists(global.vs_dlmgr_cb, "on_done") && global.vs_dlmgr_cb.on_done != undefined)
+    {
+        var cb = global.vs_dlmgr_cb.on_done;
+        global.vs_dlmgr_cb.on_done = undefined;
+        cb(false, undefined);
+    }
+    if (variable_global_exists("vs_lobby_cb") && global.vs_lobby_cb != undefined
+        && variable_struct_exists(global.vs_lobby_cb, "on_done") && global.vs_lobby_cb.on_done != undefined)
+    {
+        var lb = global.vs_lobby_cb.on_done;
+        global.vs_lobby_cb.on_done = undefined;
+        lb(false, undefined);
     }
 }
 

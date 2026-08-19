@@ -172,6 +172,8 @@ function vs_http_q_init()
     if (!variable_global_exists("vs_http_to")) global.vs_http_to = [];
     if (!variable_global_exists("vs_http_hold")) global.vs_http_hold = false;
     if (!variable_global_exists("vs_http_held")) global.vs_http_held = undefined;
+    if (!variable_global_exists("vs_token_refresh_busy")) global.vs_token_refresh_busy = false;
+    if (!variable_global_exists("vs_token_refresh_backoff")) global.vs_token_refresh_backoff = 0;
 }
 
 function vs_http_default_timeout()
@@ -346,13 +348,38 @@ function vs_http_make_refresh_job()
     };
 }
 
+function vs_http_job_is_refresh(_job)
+{
+    if (_job == undefined) return false;
+    if (variable_struct_exists(_job, "is_refresh") && _job.is_refresh) return true;
+    if (variable_struct_exists(_job, "after") && _job.after == "oauth_refresh_inline") return true;
+    return false;
+}
+
+function vs_http_refresh_pending()
+{
+    vs_http_q_init();
+    if (global.vs_token_refresh_busy) return true;
+    if (vs_http_job_is_refresh(global.vs_http_cur)) return true;
+    var i = 0;
+    repeat (array_length(global.vs_http_q))
+    {
+        if (vs_http_job_is_refresh(global.vs_http_q[i])) return true;
+        i++;
+    }
+    return false;
+}
+
 function vs_http_should_refresh_first(_job)
 {
     if (_job == undefined) return false;
-    if (variable_struct_exists(_job, "is_refresh") && _job.is_refresh) return false;
-    if (_job.after == "oauth_refresh_inline") return false;
-    if (!vs_online_token_stale()) return false;
-    return (_job.authed == true);
+    if (vs_http_job_is_refresh(_job)) return false;
+    if (_job.authed != true) return false;
+    if (vs_http_refresh_pending()) return false;
+    if (current_time < global.vs_token_refresh_backoff) return false;
+    var cfg = vs_online_get_config();
+    if (!variable_struct_exists(cfg, "refresh_token") || cfg.refresh_token == "") return false;
+    return vs_online_token_stale();
 }
 
 function vs_http_retry_ms(_text)
@@ -408,6 +435,7 @@ function vs_http_pump()
     if (vs_http_should_refresh_first(global.vs_http_q[0]))
     {
         show_debug_message("VS Online: refresh access token before next request");
+        global.vs_token_refresh_busy = true;
         array_insert(global.vs_http_q, 0, vs_http_make_refresh_job());
     }
     global.vs_http_busy = true;
@@ -441,6 +469,21 @@ function vs_http_start_current()
     {
         global.vs_http_busy = false;
         return;
+    }
+    if (vs_http_job_is_refresh(job))
+    {
+        var cfgR = vs_online_get_config();
+        if (!variable_struct_exists(cfgR, "refresh_token") || cfgR.refresh_token == "")
+        {
+            job.failed = true;
+            show_debug_message("VS Online: refresh skipped, no refresh_token");
+            return;
+        }
+        job.body = "grant_type=refresh_token&refresh_token=" + vs_online_url_encode(cfgR.refresh_token) + "&client_id=game";
+        job.url = vs_online_server_url() + "/oauth2/token";
+        job.path = "";
+        job.authed = false;
+        global.vs_token_refresh_busy = true;
     }
     var hdr = vs_http_headers_create(job.headers);
     job.hdr = hdr;
@@ -514,16 +557,31 @@ function vs_http_on_async()
         {
             return false;
         }
-        if ((text == undefined || text == "") && httpStatus < 200)
+        // Progress packets often omit http_status. Wait for status=0 unless
+        // we already have a real HTTP code and a body (or an error code).
+        if (httpStatus < 200)
+        {
+            return false;
+        }
+        if ((text == undefined || text == "") && httpStatus < 400)
         {
             return false;
         }
     }
-    if (httpStatus < 0)
+    var ok = false;
+    if (httpStatus >= 200 && httpStatus < 300)
     {
-        httpStatus = (gmStatus < 0) ? gmStatus : 200;
+        ok = (gmStatus >= 0);
     }
-    var ok = (gmStatus >= 0 && httpStatus >= 200 && httpStatus < 300);
+    else if (httpStatus < 0)
+    {
+        if (gmStatus < 0) httpStatus = gmStatus;
+        else if (gmStatus == 0 && text != undefined && text != "")
+        {
+            httpStatus = 200;
+            ok = true;
+        }
+    }
     show_debug_message("VS Online: HTTP done " + string(job.method) + " " + string(job.url) + " http=" + string(httpStatus) + " ok=" + string(ok));
     vs_http_complete(job, ok, text, httpStatus);
     return true;
@@ -553,7 +611,7 @@ function vs_http_complete(_job, _ok, _text, _status)
         call_later(frames, time_source_units_frames, vs_http_on_held);
         return;
     }
-    if (!_ok && st == 401 && _job.authed && _job.retries < 1 && !_job.is_refresh)
+    if (!_ok && st == 401 && _job.authed && _job.retries < 1 && !vs_http_job_is_refresh(_job))
     {
         var cfg = vs_online_get_config();
         if (variable_struct_exists(cfg, "refresh_token") && cfg.refresh_token != "")
@@ -563,7 +621,11 @@ function vs_http_complete(_job, _ok, _text, _status)
             global.vs_http_busy = false;
             global.vs_http_cur = undefined;
             array_insert(global.vs_http_q, 0, _job);
-            array_insert(global.vs_http_q, 0, vs_http_make_refresh_job());
+            if (!vs_http_refresh_pending())
+            {
+                global.vs_token_refresh_busy = true;
+                array_insert(global.vs_http_q, 0, vs_http_make_refresh_job());
+            }
             vs_http_pump();
             return;
         }
@@ -589,20 +651,27 @@ function vs_http_finish(_job, _ok, _text, _status)
     var cb = _job.on_done;
     if (after == "oauth_refresh_inline")
     {
+        global.vs_token_refresh_busy = false;
         if (_ok && data != undefined && variable_struct_exists(data, "access_token"))
         {
             vs_online_apply_oauth_tokens(data);
+            global.vs_token_refresh_backoff = 0;
         }
         else if (vs_http_status_auth_dead(_status, data))
         {
             var cfgR = vs_online_get_config();
             show_debug_message("VS Online: inline refresh rejected http=" + string(_status));
             cfgR.refresh_token = "";
+            cfgR.token_expires = 0;
             vs_online_save_config();
+            global.vs_token_refresh_backoff = current_time + 30000;
         }
         else
         {
-            show_debug_message("VS Online: inline refresh fail http=" + string(_status));
+            // Transient fail: do not immediately re-insert a refresh or the
+            // whole HTTP queue (catalog, lobby, identity) stays on "loading".
+            show_debug_message("VS Online: inline refresh fail http=" + string(_status) + " — backoff");
+            global.vs_token_refresh_backoff = current_time + 15000;
         }
         return;
     }
@@ -783,6 +852,11 @@ function vs_online_oauth_refresh(_refreshToken, _on_done)
         global.vs_oauth_refresh_q = [];
     }
     array_push(global.vs_oauth_refresh_q, _on_done);
+    if (array_length(global.vs_oauth_refresh_q) > 1)
+    {
+        return;
+    }
+    global.vs_token_refresh_busy = true;
     vs_online_oauth_post("/oauth2/token",
         "grant_type=refresh_token&refresh_token=" + vs_online_url_encode(_refreshToken) + "&client_id=game",
         vs_online_oauth_refresh_done);
@@ -790,20 +864,26 @@ function vs_online_oauth_refresh(_refreshToken, _on_done)
 
 function vs_online_oauth_refresh_done(_ok, _data, _status)
 {
-    var cb = undefined;
-    if (variable_global_exists("vs_oauth_refresh_q") && array_length(global.vs_oauth_refresh_q) > 0)
+    global.vs_token_refresh_busy = false;
+    var q = [];
+    if (variable_global_exists("vs_oauth_refresh_q"))
     {
-        cb = global.vs_oauth_refresh_q[0];
-        array_delete(global.vs_oauth_refresh_q, 0, 1);
+        q = global.vs_oauth_refresh_q;
+        global.vs_oauth_refresh_q = [];
     }
-    if (cb != undefined) { cb(_ok, _data, _status); }
+    var i = 0;
+    repeat (array_length(q))
+    {
+        if (q[i] != undefined) { q[i](_ok, _data, _status); }
+        i++;
+    }
 }
 
 function vs_online_apply_oauth_tokens(_data)
 {
     var cfg = vs_online_get_config();
     cfg.token = _data.access_token;
-    if (variable_struct_exists(_data, "refresh_token"))
+    if (variable_struct_exists(_data, "refresh_token") && string(_data.refresh_token) != "")
     {
         cfg.refresh_token = _data.refresh_token;
     }
@@ -813,14 +893,22 @@ function vs_online_apply_oauth_tokens(_data)
         exp = vs_http_num(_data.expires_in, 86400);
     }
     if (exp < 120) exp = 120;
-    global.vs_token_expires_at = current_time + (exp - 120) * 1000;
+    var skew = 120;
+    global.vs_token_expires_at = current_time + (exp - skew) * 1000;
+    cfg.token_expires = date_current_datetime() + ((exp - skew) / 86400);
     vs_online_save_config();
+    global.vs_token_refresh_backoff = 0;
 }
 
 function vs_online_token_stale()
 {
     var cfg = vs_online_get_config();
     if (!variable_struct_exists(cfg, "refresh_token") || cfg.refresh_token == "") return false;
+    if (!variable_struct_exists(cfg, "token") || cfg.token == "") return true;
+    if (variable_struct_exists(cfg, "token_expires") && is_real(cfg.token_expires) && cfg.token_expires > 0)
+    {
+        return date_current_datetime() >= cfg.token_expires;
+    }
     if (!variable_global_exists("vs_token_expires_at")) return true;
     return current_time >= global.vs_token_expires_at;
 }
@@ -835,20 +923,34 @@ function vs_online_ensure_identity(_on_done)
     if (!variable_global_exists("vs_identity_q"))
     {
         global.vs_identity_q = [];
+        global.vs_identity_busy = false;
     }
     array_push(global.vs_identity_q, _on_done);
+    if (global.vs_identity_busy) return;
+    global.vs_identity_busy = true;
     vs_online_ensure_identity_step();
 }
 
 function vs_online_ensure_identity_pop(_ok, _data)
 {
-    var cb = undefined;
-    if (variable_global_exists("vs_identity_q") && array_length(global.vs_identity_q) > 0)
+    global.vs_identity_busy = false;
+    var q = [];
+    if (variable_global_exists("vs_identity_q"))
     {
-        cb = global.vs_identity_q[0];
-        array_delete(global.vs_identity_q, 0, 1);
+        q = global.vs_identity_q;
+        global.vs_identity_q = [];
     }
-    if (cb != undefined) { cb(_ok, _data); }
+    var i = 0;
+    repeat (array_length(q))
+    {
+        if (q[i] != undefined) { q[i](_ok, _data); }
+        i++;
+    }
+    if (variable_global_exists("vs_identity_q") && array_length(global.vs_identity_q) > 0 && !global.vs_identity_busy)
+    {
+        global.vs_identity_busy = true;
+        vs_online_ensure_identity_step();
+    }
 }
 
 function vs_http_status_transient(_status)
@@ -874,7 +976,7 @@ function vs_http_status_auth_dead(_status, _data)
                 return true;
             }
         }
-        return true;
+        return false;
     }
     return false;
 }
@@ -884,6 +986,11 @@ function vs_online_ensure_identity_step()
     var cfg = vs_online_get_config();
     if (variable_struct_exists(cfg, "refresh_token") && cfg.refresh_token != "")
     {
+        if (!vs_online_token_stale() && variable_struct_exists(cfg, "token") && cfg.token != "")
+        {
+            vs_online_get_json("/api/v1/players/me", true, vs_online_ensure_identity_me);
+            return;
+        }
         vs_online_oauth_refresh(cfg.refresh_token, vs_online_ensure_identity_refreshed);
         return;
     }
@@ -906,6 +1013,7 @@ function vs_online_ensure_identity_refreshed(_ok, _data, _status)
     if (vs_http_status_transient(_status) || !vs_http_status_auth_dead(_status, _data))
     {
         show_debug_message("VS Online: keep refresh_token (http=" + string(_status) + ")");
+        global.vs_token_refresh_backoff = current_time + 15000;
         vs_online_ensure_identity_pop(false, _data);
         return;
     }
@@ -914,6 +1022,7 @@ function vs_online_ensure_identity_refreshed(_ok, _data, _status)
     var cfg2 = vs_online_get_config();
     show_debug_message("VS Online: refresh rejected http=" + string(_status) + " — not reminting guest");
     cfg2.refresh_token = "";
+    cfg2.token_expires = 0;
     vs_online_save_config();
     vs_online_ensure_identity_pop(false, _data);
 }
@@ -966,6 +1075,9 @@ function vs_online_drop_identity()
     cfg.token = "";
     cfg.email = "";
     cfg.refresh_token = "";
+    cfg.token_expires = 0;
+    if (variable_global_exists("vs_token_expires_at")) global.vs_token_expires_at = 0;
+    global.vs_token_refresh_backoff = 0;
     vs_online_save_config();
 }
 
