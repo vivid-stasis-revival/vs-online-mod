@@ -1,15 +1,16 @@
 // ============================================================================
-// Runtime CJK / symbol font — pixel TTF via font_add.
+// Runtime CJK / symbol font (GMS font_add).
 //
-// IDE fonts are baked atlases; missing codepoints draw as U+9647 ▯.
-// Official GMS path for Asian glyphs is font_add() of a TTF. Pixel look needs:
-//   - font_add_enable_aa(false)
-//   - size = the font's native pixel size (do not scale)
-//   - gpu_set_tex_filter(false) while drawing
+// IDE fonts (fnt_monacovs, global.default_font) are baked glyph atlases.
+// Missing codepoints draw as U+9647 ▯. Dynamic strings (chart names, artists,
+// player names, search) are not in that atlas.
 //
-// Bundled: raw/vs_cjk.ttf (Fusion Pixel 12px proportional, OFL-1.1).
-// vsml copies it next to the exe; we font_add at 12px. Override by dropping
-// vs_cjk.ttf / vs_cjk8.ttf / vs_cjk10.ttf in the game or save folder.
+// Official path: font_add() a TTF/OTF (or a Windows CJK system font). first/last
+// are ignored for file fonts; glyphs are cached into a dynamic texture page.
+// ASCII UI chrome keeps the original pixel fonts. Only strings with codepoints
+// > 127 switch to this font for measure + draw, then restore.
+//
+// Optional override: drop vs_cjk.ttf next to the exe or in working_directory.
 // ============================================================================
 
 function vs_font_needs_dyn(_s)
@@ -28,22 +29,15 @@ function vs_font_needs_dyn(_s)
 function vs_font_stack_ensure()
 {
     if (!variable_global_exists("vs_font_stack")) global.vs_font_stack = [];
-    if (!variable_global_exists("vs_font_filter_stack")) global.vs_font_filter_stack = [];
 }
 
 function vs_font_push(_f)
 {
     if (_f == -1 || !font_exists(_f)) return false;
     var cur = draw_get_font();
-    if (cur == _f)
-    {
-        gpu_set_tex_filter(false);
-        return false;
-    }
+    if (cur == _f) return false;
     vs_font_stack_ensure();
     array_push(global.vs_font_stack, cur);
-    array_push(global.vs_font_filter_stack, gpu_get_tex_filter());
-    gpu_set_tex_filter(false);
     draw_set_font(_f);
     return true;
 }
@@ -55,12 +49,6 @@ function vs_font_pop()
     if (n <= 0) return;
     var prev = global.vs_font_stack[n - 1];
     array_pop(global.vs_font_stack);
-    var nf = array_length(global.vs_font_filter_stack);
-    if (nf > 0)
-    {
-        gpu_set_tex_filter(global.vs_font_filter_stack[nf - 1]);
-        array_pop(global.vs_font_filter_stack);
-    }
     if (prev != -1 && font_exists(prev)) draw_set_font(prev);
 }
 
@@ -99,10 +87,10 @@ function vs_font_try_add(_name, _size)
     return -1;
 }
 
-function vs_font_copy_into_workdir(_src, _dest_name)
+function vs_font_copy_into_workdir(_src)
 {
     if (_src == "" || !file_exists(_src)) return "";
-    var dest = working_directory + _dest_name;
+    var dest = working_directory + "vs_cjk.ttf";
     if (_src == dest) return dest;
     try
     {
@@ -116,39 +104,54 @@ function vs_font_copy_into_workdir(_src, _dest_name)
     return _src;
 }
 
-function vs_font_push_file(_out, _path, _size)
-{
-    if (_path == "" || !file_exists(_path)) return;
-    array_push(_out, { name: _path, size: _size, pixel: true });
-}
-
-function vs_font_push_name(_out, _name, _size)
-{
-    array_push(_out, { name: _name, size: _size, pixel: false });
-}
-
-function vs_font_collect_files(_out, _fname, _size)
-{
-    vs_font_push_file(_out, working_directory + _fname, _size);
-    var bundled = program_directory + _fname;
-    if (file_exists(bundled))
-    {
-        var copied = vs_font_copy_into_workdir(bundled, _fname);
-        vs_font_push_file(_out, copied, _size);
-        vs_font_push_name(_out, _fname, _size);
-        vs_font_push_file(_out, bundled, _size);
-    }
-}
-
 function vs_font_candidates()
 {
     var out = [];
-    vs_font_collect_files(out, "vs_cjk.ttf", 12);
-    vs_font_collect_files(out, "vs_cjk.otf", 12);
-    vs_font_collect_files(out, "vs_cjk10.ttf", 10);
-    vs_font_collect_files(out, "vs_cjk8.ttf", 8);
-    vs_font_push_name(out, "vs_cjk.ttf", 12);
+    var local = working_directory + "vs_cjk.ttf";
+    if (file_exists(local)) array_push(out, local);
+    var otf = working_directory + "vs_cjk.otf";
+    if (file_exists(otf)) array_push(out, otf);
+    var bundled = program_directory + "vs_cjk.ttf";
+    if (file_exists(bundled))
+    {
+        var copied = vs_font_copy_into_workdir(bundled);
+        if (copied != "") array_push(out, copied);
+        array_push(out, "vs_cjk.ttf");
+        array_push(out, bundled);
+    }
+    array_push(out, "vs_cjk.ttf");
+    array_push(out, "C:/Windows/Fonts/msyh.ttf");
+    array_push(out, "C:/Windows/Fonts/msyhbd.ttf");
+    array_push(out, "C:/Windows/Fonts/simhei.ttf");
+    array_push(out, "C:/Windows/Fonts/simsun.ttf");
+    array_push(out, "C:/Windows/Fonts/msgothic.ttf");
+    array_push(out, "C:/Windows/Fonts/YuGothR.ttf");
+    array_push(out, "C:/Windows/Fonts/meiryo.ttf");
+    array_push(out, "Microsoft YaHei UI");
+    array_push(out, "Microsoft YaHei");
+    array_push(out, "微软雅黑");
+    array_push(out, "Yu Gothic UI");
+    array_push(out, "Yu Gothic");
+    array_push(out, "Meiryo UI");
+    array_push(out, "Meiryo");
+    array_push(out, "MS Gothic");
+    array_push(out, "Malgun Gothic");
+    array_push(out, "Noto Sans CJK SC");
+    array_push(out, "Source Han Sans SC");
+    array_push(out, "SimHei");
+    array_push(out, "SimSun");
+    array_push(out, "Microsoft JhengHei");
     return out;
+}
+
+function vs_font_px(_font, _fallback)
+{
+    if (_font != -1 && font_exists(_font))
+    {
+        var sz = font_get_size(_font);
+        if (sz > 0) return sz;
+    }
+    return _fallback;
 }
 
 function vs_font_ensure()
@@ -159,26 +162,39 @@ function vs_font_ensure()
     global.vs_font_title = -1;
     global.vs_font_src = "";
 
-    font_add_enable_aa(false);
+    var body_sz = 12;
+    var title_sz = 14;
+    if (variable_global_exists("default_font")) body_sz = vs_font_px(global.default_font, body_sz);
+    title_sz = vs_font_px(fnt_monacovs, body_sz + 2);
+
+    font_add_enable_aa(true);
     font_texture_page_size = 2048;
 
     var names = vs_font_candidates();
     var i = 0;
     repeat (array_length(names))
     {
-        var c = names[i];
-        var body = vs_font_try_add(c.name, c.size);
+        var src = names[i];
+        var body = vs_font_try_add(src, body_sz);
         if (body != -1)
         {
             global.vs_font_body = body;
-            global.vs_font_title = body;
-            global.vs_font_src = c.name;
-            show_debug_message("VS Online: pixel font " + c.name + " @" + string(c.size) + "px");
+            global.vs_font_src = src;
+            if (title_sz == body_sz)
+            {
+                global.vs_font_title = body;
+            }
+            else
+            {
+                var title = vs_font_try_add(src, title_sz);
+                global.vs_font_title = (title != -1) ? title : body;
+            }
+            show_debug_message("VS Online: dyn font " + src + " body=" + string(body_sz) + " title=" + string(title_sz));
             return;
         }
         i++;
     }
-    show_debug_message("VS Online: pixel font failed (CJK will still tofu)");
+    show_debug_message("VS Online: dyn font failed (CJK will still tofu)");
 }
 
 function vs_font_init()
