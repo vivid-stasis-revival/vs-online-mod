@@ -226,23 +226,26 @@ function vs_chartmeta_http(_ok, _data, _status)
 {
     var st = vs_chartmeta_slot();
     var cid = st.pending;
-    vs_chartmeta_ingest_list(_data, "songs");
+    if (_ok) vs_chartmeta_ingest_list(_data, "songs");
     if (cid != "" && vs_chartmeta_get(cid) == "")
     {
         vs_online_get_json("/api/v1/shatters?chart_id=" + vs_online_url_encode(cid) + "&size=1", false, vs_chartmeta_shatter_http);
         return;
     }
-    vs_chartmeta_finish();
+    vs_chartmeta_finish(_ok);
 }
 
 function vs_chartmeta_shatter_http(_ok, _data, _status)
 {
-    vs_chartmeta_ingest_list(_data, "shatters");
-    vs_chartmeta_ingest_list(_data, "songs");
-    vs_chartmeta_finish();
+    if (_ok)
+    {
+        vs_chartmeta_ingest_list(_data, "shatters");
+        vs_chartmeta_ingest_list(_data, "songs");
+    }
+    vs_chartmeta_finish(_ok);
 }
 
-function vs_chartmeta_finish()
+function vs_chartmeta_finish(_ok)
 {
     var st = vs_chartmeta_slot();
     var cid = st.pending;
@@ -251,7 +254,7 @@ function vs_chartmeta_finish()
     {
         vs_lobby_log("chart name " + cid + " -> " + vs_chartmeta_get(cid));
     }
-    else if (cid != "" && !variable_struct_exists(st.names, cid))
+    else if (_ok && cid != "" && !variable_struct_exists(st.names, cid))
     {
         variable_struct_set(st.names, cid, { name: "", artist: "", serverId: "" });
     }
@@ -707,7 +710,7 @@ function vs_lobby_ops_kick_slot()
     var i = 0;
     repeat (array_length(acts))
     {
-        if (acts[i].callback == "kick") return i;
+        if (acts[i] != undefined && variable_struct_exists(acts[i], "callback") && acts[i].callback == "kick") return i;
         i++;
     }
     return -1;

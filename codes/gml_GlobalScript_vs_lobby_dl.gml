@@ -6,7 +6,7 @@ function vs_lobby_dl_st()
 {
     if (!variable_global_exists("vs_lobby_dl"))
     {
-        global.vs_lobby_dl = { open: false, ask: false, wait: false, looking: false, checking: false, need_upd: false, chartId: "", serverId: "", seq: 0, err: "", qseq: [], checkedId: "" };
+        global.vs_lobby_dl = { open: false, ask: false, wait: false, looking: false, checking: false, need_upd: false, chartId: "", serverId: "", seq: 0, err: "", qseq: [], checkedId: "", retryWait: false };
     }
     if (!variable_struct_exists(global.vs_lobby_dl, "qseq") || !is_array(global.vs_lobby_dl.qseq))
     {
@@ -14,6 +14,7 @@ function vs_lobby_dl_st()
     }
     if (!variable_struct_exists(global.vs_lobby_dl, "wait")) global.vs_lobby_dl.wait = false;
     if (!variable_struct_exists(global.vs_lobby_dl, "checkedId")) global.vs_lobby_dl.checkedId = "";
+    if (!variable_struct_exists(global.vs_lobby_dl, "retryWait")) global.vs_lobby_dl.retryWait = false;
     return global.vs_lobby_dl;
 }
 
@@ -141,6 +142,22 @@ function vs_lobby_dl_unready()
     }
 }
 
+function vs_lobby_dl_check_retry()
+{
+    vs_lobby_dl_st().retryWait = false;
+    vs_lobby_dl_arm_check();
+}
+
+function vs_lobby_dl_check_fail(_why)
+{
+    var st = vs_lobby_dl_st();
+    st.checking = false;
+    vs_lobby_log("dl check fail " + string(_why) + " chart=" + string(st.chartId));
+    if (st.retryWait) return;
+    st.retryWait = true;
+    call_later(180, time_source_units_frames, vs_lobby_dl_check_retry);
+}
+
 function vs_lobby_dl_arm_check()
 {
     if (!vs_online_is_custom()) return;
@@ -166,6 +183,11 @@ function vs_lobby_dl_on_check_lookup(_seq, _ok, _data)
 {
     var st = vs_lobby_dl_st();
     if (_seq != st.seq) return;
+    if (!_ok)
+    {
+        vs_lobby_dl_check_fail("lookup http");
+        return;
+    }
     var sid = vs_lobby_dl_catalog_id(_ok, _data, st.chartId);
     if (sid == "")
     {
@@ -183,10 +205,15 @@ function vs_lobby_dl_on_check_detail(_seq, _ok, _data)
 {
     var st = vs_lobby_dl_st();
     if (_seq != st.seq) return;
+    if (!_ok || _data == undefined)
+    {
+        vs_lobby_dl_check_fail("detail http");
+        return;
+    }
     st.checking = false;
     vs_chartmeta_remember(_data);
     var n = 0;
-    if (_ok && _data != undefined && variable_struct_exists(_data, "files"))
+    if (variable_struct_exists(_data, "files"))
     {
         n = array_length(vs_songstore_diff(_data.files, st.chartId));
     }
@@ -222,11 +249,6 @@ function vs_lobby_dl_catalog_id(_ok, _data, _cid)
             return variable_struct_exists(it, "id") ? string(it.id) : "";
         }
         i++;
-    }
-    if (array_length(items) > 0 && items[0] != undefined && variable_struct_exists(items[0], "id"))
-    {
-        vs_chartmeta_remember(items[0]);
-        return string(items[0].id);
     }
     return "";
 }
