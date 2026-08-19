@@ -310,6 +310,24 @@ function vs_lobby_draw_local_tags(_rx, _ry, _halign)
         _rx, _ry, _halign);
 }
 
+function vs_lobby_member_is_host(_m)
+{
+    if (_m == undefined) return false;
+    var hid = vs_lobby_owner_id();
+    if (hid != "" && variable_struct_exists(_m, "id") && string(_m.id) == string(hid)) return true;
+    return variable_struct_exists(_m, "host") && _m.host;
+}
+
+function vs_lobby_draw_host_mark(_m, _x, _y)
+{
+    if (!vs_lobby_member_is_host(_m)) return;
+    draw_set_font(fnt_monacovs);
+    draw_set_halign(fa_left);
+    draw_set_color(c_yellow);
+    draw_text_o(_x, _y, "M");
+    draw_set_color(c_white);
+}
+
 function vs_lobby_keep_play_tags(_dst, _src)
 {
     if (_dst == undefined || _src == undefined) return;

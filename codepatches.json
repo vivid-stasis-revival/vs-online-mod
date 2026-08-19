@@ -939,6 +939,12 @@
         "Value": "draw_text_o(bx + ox + 32, by + oy + 22 + (i * 35), @@string@@(\"{0}\", member.rate));if (!vs_online_is_custom() && variable_struct_exists(member, \"has_bwp\") && member.has_bwp){draw_set_halign(fa_right);draw_set_color(c_lime);draw_text_o(bx + ox + 143, by + oy + 13 + (i * 35), \"Better WP\");}",
         "Type": 0
     },
+    {
+        "Entry": "gml_Object_obj_multiplayer_lobby_Draw_64",
+        "Find": "draw_sprite_stretched(member.avatar, 0, bx + ox + 5, by + oy + 5 + (i * 35), 23, 23);",
+        "Value": "draw_sprite_stretched(member.avatar, 0, bx + ox + 5, by + oy + 5 + (i * 35), 23, 23);vs_lobby_draw_host_mark(member, bx + ox + 5, by + oy + 4 + (i * 35));",
+        "Type": 0
+    },
 
     {
         "Entry": "gml_GlobalScript_load_song_information",
