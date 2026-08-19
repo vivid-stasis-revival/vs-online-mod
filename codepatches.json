@@ -192,6 +192,24 @@
         "Type": 0
     },
     {
+        "Entry": "gml_GlobalScript_SendQueuePacket",
+        "Find": "            buffer_write(buffer, buffer_u8, member.ready);",
+        "Value": "            buffer_write(buffer, buffer_u8, member.ready);\n            if (vs_online_is_custom()) { buffer_write(buffer, buffer_f32, vs_member_get_score(member)); buffer_write(buffer, buffer_u8, member.scoreFlag); }",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_GlobalScript_SendQueuePacket",
+        "Find": "            var status = buffer_read(arg0, buffer_u8);",
+        "Value": "            var status = buffer_read(arg0, buffer_u8);\n            var _sc = 0;\n            var _fl = 1;\n            if (vs_online_is_custom()) { _sc = buffer_read(arg0, buffer_f32); _fl = buffer_read(arg0, buffer_u8); }",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_GlobalScript_SendQueuePacket",
+        "Find": "            member.ready = status;",
+        "Value": "            member.ready = status;\n            if (vs_online_is_custom()) { vs_member_set_score(member, _sc); member.scoreFlag = _fl; }",
+        "Type": 0
+    },
+    {
         "Entry": "gml_GlobalScript_ReportScorePacket",
         "Find": "        member.reportedScore = true;",
         "Value": "        member.reportedScore = true; if (vs_online_is_custom()) vs_lobby_log(\"recv ReportScore from=\" + string(arg1) + \" pts=\" + string(arg0.score) + \" flag=\" + string(arg0.flag));",

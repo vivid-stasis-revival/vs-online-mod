@@ -421,11 +421,35 @@ function vs_lobby_build_member(_mv)
 function vs_lobby_apply_roster(_members)
 {
     if (!instance_exists(o_st_handle)) return;
+    var prevById = {};
+    var pi = 0;
+    repeat (array_length(o_st_handle.lobbyMembers))
+    {
+        var pm = o_st_handle.lobbyMembers[pi];
+        if (pm != undefined)
+        {
+            variable_struct_set(prevById, string(pm.id), pm);
+        }
+        pi++;
+    }
     var arr = [];
     var i = 0;
     repeat (array_length(_members))
     {
-        arr[i] = vs_lobby_build_member(_members[i]);
+        var src = _members[i];
+        var m = vs_lobby_build_member(src);
+        var pid = string(m.id);
+        if (variable_struct_exists(prevById, pid) && vs_member_get_score(m) == 0)
+        {
+            var old = variable_struct_get(prevById, pid);
+            var oldSc = vs_member_get_score(old);
+            if (oldSc != 0)
+            {
+                vs_member_set_score(m, oldSc);
+                if (variable_struct_exists(old, "scoreFlag")) m.scoreFlag = old.scoreFlag;
+            }
+        }
+        arr[i] = m;
         i++;
     }
     o_st_handle.lobbyMembers = arr;
