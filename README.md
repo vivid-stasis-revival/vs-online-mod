@@ -1,5 +1,7 @@
 # vs-online-mod
 
+**当前分支 `test`：默认连测试服**（`https://test-api.vividstasis.cn` / `https://online-test.vividstasis.cn`）。生产默认在 `main`。
+
 让 **vivid/stasis** 脱离 Steam、接入自定义服务器（[vs-server-go](https://github.com/vivid-stasis-revival/vs-server-go)）的联网 mod，按 [vsml](https://github.com/vivid-stasis-revival/vsml) 格式编写。
 
 ## 设计要点
@@ -15,16 +17,16 @@
 
 ```json
 {
-  "server": "https://online-api.vividstasis.cn",
-  "frontend": "https://online.vividstasis.cn"
+  "server": "https://test-api.vividstasis.cn",
+  "frontend": "https://online-test.vividstasis.cn"
 }
 ```
 
 字段：
 | 字段 | 说明 |
 |---|---|
-| `server` | REST / API base URL（必填；默认 `https://online-api.vividstasis.cn`） |
-| `frontend` | 账号站 / 设备流页面（默认 `https://online.vividstasis.cn`） |
+| `server` | REST / API base URL（必填；默认 `https://test-api.vividstasis.cn`） |
+| `frontend` | 账号站 / 设备流页面（默认 `https://online-test.vividstasis.cn`） |
 | `ws` | 大厅 WebSocket 地址（可选；不写则 `https://主机` → `wss://主机`，`http://` → `ws://`） |
 | `playerId` / `token` | 服务器身份（mod 自动写入） |
 | `refresh_token` | OAuth2 设备流刷新令牌（30 天，启动时自动旋转刷新） |
