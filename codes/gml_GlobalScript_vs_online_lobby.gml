@@ -75,11 +75,12 @@ function vs_online_song_id_from_chart(_chart)
 {
     if (_chart == undefined || _chart == "") return -1;
     if (!variable_global_exists("song_list")) return -1;
+    var want = string(_chart);
     var i = 0;
     repeat (array_length(global.song_list))
     {
         var s = global.song_list[i];
-        if (s != undefined && variable_struct_exists(s, "chart_id") && s.chart_id == _chart)
+        if (s != undefined && variable_struct_exists(s, "chart_id") && string(s.chart_id) == want)
         {
             return i;
         }
@@ -98,9 +99,166 @@ function vs_online_song_from_id(_songId)
     return global.song_list[_songId];
 }
 
-function vs_online_missing_song()
+function vs_online_missing_song(_cid)
 {
-    return { name: "Missing chart", chart_id: "", is_missing: true };
+    var cid = (_cid == undefined) ? "" : string(_cid);
+    if (cid == "") cid = vs_lobby_queued_chart_id();
+    var nm = vs_chartmeta_get(cid);
+    if (nm == "")
+    {
+        var meta = vs_chartmeta_slot();
+        nm = (meta.pending == cid) ? "Looking up..." : "Missing chart";
+    }
+    var artist = vs_chartmeta_artist(cid);
+    return { name: nm, formatted_name: nm, artist: artist, chart_id: cid, is_missing: true };
+}
+
+function vs_chartmeta_slot()
+{
+    if (!variable_global_exists("vs_chartmeta"))
+    {
+        global.vs_chartmeta = { names: {}, pending: "", next: "" };
+    }
+    return global.vs_chartmeta;
+}
+
+function vs_chartmeta_get(_cid)
+{
+    var cid = string(_cid);
+    if (cid == "") return "";
+    var sid = vs_online_song_id_from_chart(cid);
+    var song = vs_online_song_from_id(sid);
+    if (song != undefined)
+    {
+        if (variable_struct_exists(song, "formatted_name") && string(song.formatted_name) != "")
+        {
+            return string_replace_all(string(song.formatted_name), "#", " ");
+        }
+        if (variable_struct_exists(song, "name") && string(song.name) != "") return string(song.name);
+    }
+    var st = vs_chartmeta_slot();
+    if (variable_struct_exists(st.names, cid))
+    {
+        var e = variable_struct_get(st.names, cid);
+        if (e != undefined && variable_struct_exists(e, "name") && string(e.name) != "") return string(e.name);
+    }
+    return "";
+}
+
+function vs_chartmeta_artist(_cid)
+{
+    var cid = string(_cid);
+    if (cid == "") return "";
+    var st = vs_chartmeta_slot();
+    if (variable_struct_exists(st.names, cid))
+    {
+        var e = variable_struct_get(st.names, cid);
+        if (e != undefined && variable_struct_exists(e, "artist")) return string(e.artist);
+    }
+    return "";
+}
+
+function vs_chartmeta_label(_cid)
+{
+    var n = vs_chartmeta_get(_cid);
+    if (n != "") return n;
+    return "this chart";
+}
+
+function vs_chartmeta_remember(_it)
+{
+    if (_it == undefined) return;
+    var cid = "";
+    if (variable_struct_exists(_it, "chartId")) cid = string(_it.chartId);
+    else if (variable_struct_exists(_it, "chart_id")) cid = string(_it.chart_id);
+    if (cid == "") return;
+    var nm = "";
+    if (variable_struct_exists(_it, "formattedName") && string(_it.formattedName) != "")
+    {
+        nm = string_replace_all(string(_it.formattedName), "#", " ");
+    }
+    else if (variable_struct_exists(_it, "formatted_name") && string(_it.formatted_name) != "")
+    {
+        nm = string_replace_all(string(_it.formatted_name), "#", " ");
+    }
+    else if (variable_struct_exists(_it, "name")) nm = string(_it.name);
+    if (nm == "") return;
+    var artist = "";
+    if (variable_struct_exists(_it, "artist")) artist = string(_it.artist);
+    var sid = "";
+    if (variable_struct_exists(_it, "id")) sid = string(_it.id);
+    var st = vs_chartmeta_slot();
+    variable_struct_set(st.names, cid, { name: nm, artist: artist, serverId: sid });
+}
+
+function vs_chartmeta_ingest_list(_data, _key)
+{
+    if (_data == undefined) return;
+    vs_chartmeta_remember(_data);
+    if (!variable_struct_exists(_data, _key) || !is_array(variable_struct_get(_data, _key))) return;
+    var items = variable_struct_get(_data, _key);
+    var i = 0;
+    repeat (array_length(items))
+    {
+        vs_chartmeta_remember(items[i]);
+        i++;
+    }
+}
+
+function vs_chartmeta_want(_cid)
+{
+    var cid = string(_cid);
+    if (cid == "") return;
+    if (vs_chartmeta_get(cid) != "") return;
+    var st = vs_chartmeta_slot();
+    if (variable_struct_exists(st.names, cid)) return;
+    if (st.pending == cid) return;
+    if (st.pending != "")
+    {
+        st.next = cid;
+        return;
+    }
+    st.pending = cid;
+    vs_online_get_json("/api/v1/songs?chartId=" + vs_online_url_encode(cid) + "&size=1", false, vs_chartmeta_http);
+}
+
+function vs_chartmeta_http(_ok, _data, _status)
+{
+    var st = vs_chartmeta_slot();
+    var cid = st.pending;
+    vs_chartmeta_ingest_list(_data, "songs");
+    if (cid != "" && vs_chartmeta_get(cid) == "")
+    {
+        vs_online_get_json("/api/v1/shatters?chart_id=" + vs_online_url_encode(cid) + "&size=1", false, vs_chartmeta_shatter_http);
+        return;
+    }
+    vs_chartmeta_finish();
+}
+
+function vs_chartmeta_shatter_http(_ok, _data, _status)
+{
+    vs_chartmeta_ingest_list(_data, "shatters");
+    vs_chartmeta_ingest_list(_data, "songs");
+    vs_chartmeta_finish();
+}
+
+function vs_chartmeta_finish()
+{
+    var st = vs_chartmeta_slot();
+    var cid = st.pending;
+    st.pending = "";
+    if (cid != "" && vs_chartmeta_get(cid) != "")
+    {
+        vs_lobby_log("chart name " + cid + " -> " + vs_chartmeta_get(cid));
+    }
+    else if (cid != "" && !variable_struct_exists(st.names, cid))
+    {
+        variable_struct_set(st.names, cid, { name: "", artist: "", serverId: "" });
+    }
+    vs_lobby_refresh_ui();
+    var n = st.next;
+    st.next = "";
+    if (n != "") vs_chartmeta_want(n);
 }
 
 function vs_online_chart_id_of_song(_songId)
@@ -154,6 +312,7 @@ function vs_lobby_resolve_song_ref(_s)
     _s.chart_id = cid;
     var sid = vs_online_song_id_from_chart(cid);
     if (sid >= 0) _s.songId = sid;
+    else vs_chartmeta_want(cid);
 }
 
 // --- steam_* shims (used via codepatches so the WP UI reads server state) ---

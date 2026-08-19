@@ -107,7 +107,9 @@ function vs_lobby_dl_cancel()
 function vs_lobby_dl_on_queue()
 {
     var st = vs_lobby_dl_st();
+    vs_lobby_resolve_queued_songs();
     var cid = vs_lobby_queued_chart_id();
+    if (cid != "") vs_chartmeta_want(cid);
     if (st.open && (cid == "" || string(st.chartId) != string(cid)))
     {
         vs_lobby_dl_cancel();
@@ -170,6 +172,7 @@ function vs_lobby_dl_on_check_detail(_seq, _ok, _data)
     var st = vs_lobby_dl_st();
     if (_seq != st.seq) return;
     st.checking = false;
+    vs_chartmeta_remember(_data);
     var n = 0;
     if (_ok && _data != undefined && variable_struct_exists(_data, "files"))
     {
@@ -192,6 +195,8 @@ function vs_lobby_dl_on_check_detail(_seq, _ok, _data)
 function vs_lobby_dl_catalog_id(_ok, _data, _cid)
 {
     if (!_ok || _data == undefined) return "";
+    vs_chartmeta_ingest_list(_data, "songs");
+    vs_chartmeta_ingest_list(_data, "shatters");
     if (!variable_struct_exists(_data, "songs") || !is_array(_data.songs)) return "";
     var items = _data.songs;
     var i = 0;
@@ -200,12 +205,14 @@ function vs_lobby_dl_catalog_id(_ok, _data, _cid)
         var it = items[i];
         if (it != undefined && variable_struct_exists(it, "chartId") && string(it.chartId) == string(_cid))
         {
+            vs_chartmeta_remember(it);
             return variable_struct_exists(it, "id") ? string(it.id) : "";
         }
         i++;
     }
     if (array_length(items) > 0 && items[0] != undefined && variable_struct_exists(items[0], "id"))
     {
+        vs_chartmeta_remember(items[0]);
         return string(items[0].id);
     }
     return "";
@@ -229,7 +236,7 @@ function vs_lobby_dl_accept()
     if (st.checking && string(st.chartId) == string(cid))
     {
         st.open = true;
-        vs_lobby_dl_seed_popup("Checking", cid);
+        vs_lobby_dl_seed_popup("Checking", vs_chartmeta_label(cid));
         return;
     }
     vs_lobby_dl_begin(cid);
@@ -311,7 +318,7 @@ function vs_lobby_dl_begin(_cid)
         return;
     }
     st.looking = true;
-    vs_lobby_dl_seed_popup("Looking up", st.chartId);
+    vs_lobby_dl_seed_popup(vs_chartmeta_label(st.chartId), "");
     vs_lobby_log("dl lookup chart=" + st.chartId);
     vs_lobby_dl_push_seq();
     vs_online_get_json("/api/v1/songs?chartId=" + vs_online_url_encode(st.chartId) + "&size=1", false, vs_lobby_dl_lookup_http);
@@ -345,6 +352,8 @@ function vs_lobby_dl_on_lookup(_seq, _ok, _data)
         return;
     }
     vs_lobby_log("dl start chart=" + st.chartId + " song=" + sid);
+    var lab = vs_chartmeta_get(st.chartId);
+    if (lab != "" && variable_global_exists("vs_dlmgr_dl")) global.vs_dlmgr_dl.name = lab;
     vs_dlmgr_download(sid, st.chartId, 0, vs_lobby_dl_on_done);
 }
 
@@ -420,9 +429,7 @@ function vs_lobby_dl_ask_name()
             if (variable_struct_exists(song, "name")) return string(song.name);
         }
     }
-    var cid = vs_lobby_queued_chart_id();
-    if (cid != "") return cid;
-    return "this chart";
+    return vs_chartmeta_label(vs_lobby_queued_chart_id());
 }
 
 function vs_lobby_dl_draw_ask()

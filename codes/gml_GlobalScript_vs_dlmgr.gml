@@ -95,15 +95,16 @@ function vs_dlmgr_check(_songId, _chartId, _kind, _on_done)
 // Human text for a display row's sync state.
 function vs_dlmgr_row_status(_r)
 {
-    if (!_r.downloaded) return _r.chartId + "  -  not downloaded";
+    var lab = (variable_struct_exists(_r, "name") && string(_r.name) != "") ? string(_r.name) : vs_chartmeta_label(_r.chartId);
+    if (!_r.downloaded) return lab + "  -  not downloaded";
     if (!_r.tracked)
     {
-        if (_r.checked && _r.need > 0) return _r.chartId + "  -  incomplete, Get to finish";
-        return _r.chartId + "  -  local (Get to replace from server)";
+        if (_r.checked && _r.need > 0) return lab + "  -  incomplete, Get to finish";
+        return lab + "  -  local (Get to replace from server)";
     }
-    if (_r.checked && _r.need > 0) return _r.chartId + "  -  UPDATE (" + string(_r.need) + " file" + (_r.need > 1 ? "s" : "") + ")";
-    if (_r.checked) return _r.chartId + "  -  up to date";
-    return _r.chartId + "  -  downloaded";
+    if (_r.checked && _r.need > 0) return lab + "  -  UPDATE (" + string(_r.need) + " file" + (_r.need > 1 ? "s" : "") + ")";
+    if (_r.checked) return lab + "  -  up to date";
+    return lab + "  -  downloaded";
 }
 
 // --- download provenance / history ------------------------------------------
@@ -319,7 +320,8 @@ function vs_dlmgr_download(_songId, _chartId, _kind, _on_done)
             if (cb != undefined) { cb(false); }
             return;
         }
-        st.name = variable_struct_exists(_detail, "name") ? _detail.name : st.chartId;
+        st.name = variable_struct_exists(_detail, "name") ? _detail.name : vs_chartmeta_label(st.chartId);
+        vs_chartmeta_remember(_detail);
         st.need = vs_songstore_diff(_detail.files, st.chartId);
         st.idx = 0;
         if (array_length(st.need) == 0)

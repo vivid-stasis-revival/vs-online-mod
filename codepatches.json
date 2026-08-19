@@ -266,19 +266,19 @@
     {
         "Entry": "gml_Object_obj_multiplayer_lobby_Draw_64",
         "Find": "        var song = global.song_list[nextSong.songId];",
-        "Value": "        var song = vs_online_song_from_id(nextSong.songId);\n        if (song == undefined) song = vs_online_missing_song();",
+        "Value": "        var song = vs_online_song_from_id(nextSong.songId);\n        if (song == undefined) song = vs_online_missing_song(vs_online_queue_chart_id(nextSong));",
         "Type": 1
     },
     {
         "Entry": "gml_Object_obj_multiplayer_lobby_Draw_64",
         "Find": "        var song = global.song_list[lastSong.songId];",
-        "Value": "        var song = vs_online_song_from_id(lastSong.songId);\n        if (song == undefined) song = vs_online_missing_song();",
+        "Value": "        var song = vs_online_song_from_id(lastSong.songId);\n        if (song == undefined) song = vs_online_missing_song(vs_online_queue_chart_id(lastSong));",
         "Type": 1
     },
     {
         "Entry": "gml_Object_obj_multiplayer_lobby_Create_0",
         "Find": "        song: global.song_list[s.songId],",
-        "Value": "        song: vs_online_song_from_id(s.songId) ?? vs_online_missing_song(),",
+        "Value": "        song: vs_online_song_from_id(s.songId) ?? vs_online_missing_song(vs_online_queue_chart_id(s)),",
         "Type": 1
     },
     {
@@ -575,7 +575,7 @@
     {
         "Entry": "gml_Object_obj_multiplayer_lobby_Create_0",
         "Find": "var s = o_st_handle.songQueue[0];",
-        "Value": "var s = o_st_handle.songQueue[0];var song = struct_copy(vs_online_song_from_id(s.songId) ?? vs_online_missing_song());",
+        "Value": "var s = o_st_handle.songQueue[0];var song = struct_copy(vs_online_song_from_id(s.songId) ?? vs_online_missing_song(vs_online_queue_chart_id(s)));",
         "Type": 0
     },
     {

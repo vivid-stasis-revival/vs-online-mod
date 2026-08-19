@@ -63,6 +63,14 @@ function vs_dlbr_build_row(_song)
     };
 }
 
+function vs_dlbr_row_label(_r)
+{
+    if (_r == undefined) return "";
+    if (variable_struct_exists(_r, "name") && string(_r.name) != "") return string(_r.name);
+    if (variable_struct_exists(_r, "chartId") && string(_r.chartId) != "") return vs_chartmeta_label(_r.chartId);
+    return "";
+}
+
 function vs_dlbr_is_pack(_r)
 {
     return _r != undefined && variable_struct_exists(_r, "kind") && _r.kind == 3;
@@ -189,7 +197,7 @@ function vs_dlbr_selected_refresh()
     }
     var r = rows[sel];
     if (checking && check_chart == r.chartId)
-        vs_dlbr_set_status("Checking " + r.chartId + " ...");
+        vs_dlbr_set_status("Checking " + vs_dlbr_row_label(r) + " ...");
     else if (vs_dlbr_is_pack(r))
         vs_dlbr_set_status(vs_packmgr_row_status(r));
     else
@@ -359,7 +367,7 @@ function vs_dlbr_check_row_index(_ai)
     r.checked = true;
     checking = true;
     check_chart = r.chartId;
-    vs_dlbr_set_status("Checking " + r.chartId + " ...");
+    vs_dlbr_set_status("Checking " + vs_dlbr_row_label(r) + " ...");
     if (vs_dlbr_is_pack(r))
     {
         vs_packmgr_check(r.id, method(self, vs_dlbr_on_pack_check));
@@ -431,12 +439,12 @@ function vs_dlbr_on_check(_ok, _need)
                 vs_dlmgr_write_meta(rr.chartId, rr.id, rr.name);
                 rr.tracked = true;
                 rr.need = 0;
-                vs_dlbr_set_status(rr.chartId + " matches server.");
+                vs_dlbr_set_status(vs_dlbr_row_label(rr) + " matches server.");
             }
             else
             {
                 rr.need = _ok ? cnt : 0;
-                vs_dlbr_set_status(rr.chartId + " incomplete - Get to finish.");
+                vs_dlbr_set_status(vs_dlbr_row_label(rr) + " incomplete - Get to finish.");
             }
             break;
         }
@@ -464,7 +472,7 @@ function vs_dlbr_on_check(_ok, _need)
             }
             if (after.tracked && after.need == 0)
             {
-                vs_dlbr_set_status(after.chartId + " is up to date.");
+                vs_dlbr_set_status(vs_dlbr_row_label(after) + " is up to date.");
             }
         }
     }
@@ -511,7 +519,7 @@ function vs_dlbr_start_download(_r)
     if (updating) return;
     updating = true;
     cur_id = _r.id;
-    cur_chart = vs_dlbr_is_pack(_r) ? _r.name : _r.chartId;
+    cur_chart = vs_dlbr_row_label(_r);
     note = "";
     vs_dlbr_set_status((vs_dlbr_is_pack(_r) ? "Installing " : "Downloading ") + _r.name + " ...");
     if (vs_dlbr_is_pack(_r))
@@ -1403,6 +1411,7 @@ function vs_dlbr_on_detail(_ok, _data)
             return;
         }
         detail = _data;
+        vs_chartmeta_remember(_data);
         var ju = variable_struct_exists(_data, "jacketUrl") ? _data.jacketUrl : "";
         var pu = variable_struct_exists(_data, "previewUrl") ? _data.previewUrl : "";
         var mu = variable_struct_exists(_data, "musicUrl") ? _data.musicUrl : "";
@@ -1789,11 +1798,13 @@ function vs_dlbr_do_unsub()
 function vs_dlbr_do_delete()
 {
     var chartId = detail_chart;
+    var lab = vs_dlbr_row_label(vs_dlbr_detail_row());
+    if (lab == "") lab = vs_chartmeta_label(chartId);
     vs_songstore_remove_chart(chartId);
     vs_dlbr_close_detail();
     vs_localcharts_refresh();
     vs_dlbr_fetch_page();
-    vs_dlbr_set_status("Deleted " + chartId);
+    vs_dlbr_set_status("Deleted " + lab);
 }
 
 function vs_dlbr_detail_act(_id)
@@ -2191,7 +2202,7 @@ function vs_dlbr_draw_detail()
     draw_set_color(make_color_rgb(180, 186, 196));
     if (py + 18 + 10 < contentBot) draw_text(tx, py + 18, vs_dlbr_clip_text((artist != "") ? artist : " ", textw));
     draw_set_color(make_color_rgb(140, 146, 156));
-    var meta = isPack ? "" : detail_chart;
+    var meta = "";
     if (owner != "") meta = (meta == "") ? owner : (meta + "  " + owner);
     if (bpm != "") meta = (meta == "") ? ("BPM " + bpm) : (meta + "  BPM " + bpm);
     if (ver != "") meta = (meta == "") ? ("v" + ver) : (meta + "  v" + ver);
