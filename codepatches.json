@@ -385,6 +385,12 @@
         "Type": 0
     },
     {
+        "Entry": "gml_GlobalScript_get_rating_class_info",
+        "Find": "retval.next_class = class_ranges[current_class + 1][0];",
+        "Value": "retval.next_class = class_ranges[min(current_class + 1, array_length(class_ranges) - 1)][0];",
+        "Type": 0
+    },
+    {
         "Entry": "gml_GlobalScript_rating_functions",
         "Find": "        unlock_achievement(\"rating_13000\");\n    }\n}",
         "Value": "        unlock_achievement(\"rating_13000\");\n    }\n    if (vs_online_is_custom()) vs_online_rating_refresh();\n}",

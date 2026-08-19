@@ -1476,22 +1476,28 @@ function vs_online_rating_card_done(_ok, _data, _status)
     vs_online_rating_fill_window(_data);
 }
 
+function vs_online_rscore_ok(_v)
+{
+    return is_real(_v) && _v == _v && _v >= 0 && _v < 30000;
+}
+
 function vs_online_rscore_from_card(_data)
 {
-    // Official rscore = (B30 thousandths) + (EX10 thousandths) + completion.
-    // The card's `rating` used to be Round((best30+ex10+completion)*1000),
-    // which scaled completion a second time (~14.000 → ~71000).
+    // Official rscore is thousandths (display / 1000). The old card field did
+    // Round((best30+ex10+completion)*1000), which scaled completion twice:
+    // 1 chart on the 3-song test library → ~71.000; 2 charts → ~148.000,
+    // and get_rating_class_info then reads class_ranges[last+1] and crashes.
+    var fromRating = 0;
+    if (variable_struct_exists(_data, "rating")) fromRating = vs_http_num(_data.rating, 0);
     var b30 = 0;
     var e10 = 0;
     var comp = 0;
     if (variable_struct_exists(_data, "best30")) b30 = vs_http_num(_data.best30, 0);
     if (variable_struct_exists(_data, "ex10")) e10 = vs_http_num(_data.ex10, 0);
     if (variable_struct_exists(_data, "completion")) comp = vs_http_num(_data.completion, 0);
-    if (variable_struct_exists(_data, "best30") || variable_struct_exists(_data, "ex10") || variable_struct_exists(_data, "completion"))
-    {
-        return round(b30 * 1000 + e10 * 1000 + comp);
-    }
-    if (variable_struct_exists(_data, "rating")) return vs_http_num(_data.rating, 0);
+    var fromParts = round(b30 * 1000 + e10 * 1000 + comp);
+    if (vs_online_rscore_ok(fromRating)) return fromRating;
+    if (vs_online_rscore_ok(fromParts)) return fromParts;
     return 0;
 }
 
