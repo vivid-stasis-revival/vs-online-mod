@@ -277,9 +277,18 @@ function vs_ws_dispatch_payload()
     var msgType = 0;
     if (ds_map_exists(async_load, "message_type"))
     {
-        msgType = ds_map_find_value(async_load, "message_type");
+        msgType = vs_http_num(ds_map_find_value(async_load, "message_type"), 0);
     }
     var opcode = (msgType == 1) ? 1 : 2;
+    if (opcode != 1 && dataSize > 0)
+    {
+        var first = buffer_peek(dataBuf, 0, buffer_u8);
+        // GM often omits message_type; control JSON starts with { or [
+        if (first == 123 || first == 91)
+        {
+            opcode = 1;
+        }
+    }
 
     var payload = buffer_create(max(dataSize, 1), buffer_fixed, 1);
     if (dataSize > 0)

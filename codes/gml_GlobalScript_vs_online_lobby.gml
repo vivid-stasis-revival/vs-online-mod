@@ -109,7 +109,8 @@ function vs_lobby_lobby_id()
 {
     if (vs_online_is_custom())
     {
-        return (instance_exists(o_st_handle) && o_st_handle.lobbyId != undefined) ? o_st_handle.lobbyId : 0;
+        if (!instance_exists(o_st_handle) || o_st_handle.lobbyId == undefined) return 0;
+        return vs_http_num(o_st_handle.lobbyId, 0);
     }
     return steam_lobby_get_lobby_id();
 }
@@ -120,6 +121,15 @@ function vs_lobby_get_host_id()
     if (!variable_instance_exists(o_st_handle, "vs_hostId")) return "";
     if (o_st_handle.vs_hostId == undefined) return "";
     return o_st_handle.vs_hostId;
+}
+
+function vs_lobby_sender_ok(_id)
+{
+    var s = string(_id);
+    var n = string_length(s);
+    if (n < 8 || n > 64) return false;
+    if (string_pos("\"", s) > 0 || string_pos("{", s) > 0 || string_pos(":", s) > 0) return false;
+    return true;
 }
 
 function vs_lobby_suggest_q()
@@ -404,6 +414,37 @@ function vs_lobby_log(_msg)
     vs_songstore_log("MP " + string(_msg));
 }
 
+function vs_lobby_refresh_ui()
+{
+    if (instance_exists(vs_online_error))
+    {
+        with (vs_online_error) instance_destroy();
+    }
+    if (instance_exists(obj_multiplayer_lobby))
+    {
+        with (obj_multiplayer_lobby)
+        {
+            updateButtons();
+            unmute_bgm();
+        }
+    }
+}
+
+function vs_lobby_rest_leave(_code)
+{
+    if (_code == undefined || string(_code) == "") return;
+    vs_lobby_log("REST leave extra code=" + string(_code));
+    vs_online_post_json("/api/v1/lobbies/" + string(_code) + "/leave", {}, function(_ok, _data, _s)
+    {
+        vs_lobby_log("leave extra " + vs_lobby_http_why(_ok, _data, _s));
+    });
+}
+
+function vs_lobby_create_busy()
+{
+    return variable_global_exists("vs_lobby_create_busy") && global.vs_lobby_create_busy;
+}
+
 function vs_lobby_flags()
 {
     var n = 0;
@@ -557,6 +598,19 @@ function vs_lobby_create(_public, _on_done)
         if (_on_done != undefined) { _on_done(false, undefined); }
         return;
     }
+    if (vs_lobby_has_code())
+    {
+        vs_lobby_log("create skip already code=" + string(o_st_handle.lobbyCode));
+        vs_lobby_refresh_ui();
+        if (_on_done != undefined) { _on_done(true, undefined); }
+        return;
+    }
+    if (vs_lobby_create_busy())
+    {
+        vs_lobby_log("create skip busy " + vs_lobby_flags());
+        if (_on_done != undefined) { _on_done(true, undefined); }
+        return;
+    }
     if (!variable_global_exists("vs_lobby_cb"))
     {
         global.vs_lobby_cb = { is_public: true, code: "", on_done: undefined };
@@ -565,14 +619,49 @@ function vs_lobby_create(_public, _on_done)
     global.vs_lobby_cb.on_done = _on_done;
     vs_online_with_conn(function()
     {
+        if (vs_lobby_has_code())
+        {
+            vs_lobby_log("create POST skip already code=" + string(o_st_handle.lobbyCode));
+            var already = global.vs_lobby_cb.on_done;
+            global.vs_lobby_cb.on_done = undefined;
+            if (already != undefined) { already(true, undefined); }
+            return;
+        }
+        if (vs_lobby_create_busy())
+        {
+            vs_lobby_log("create POST skip busy");
+            return;
+        }
+        global.vs_lobby_create_busy = true;
         vs_lobby_log("create POST /lobbies public=" + string(global.vs_lobby_cb.is_public));
         var body = "{\"public\":" + (global.vs_lobby_cb.is_public ? "true" : "false") + "}";
         vs_online_post_raw("/api/v1/lobbies", body, function(_ok, _data, _status)
         {
+            global.vs_lobby_create_busy = false;
             vs_lobby_log("create result " + vs_lobby_http_why(_ok, _data, _status));
             var cb = global.vs_lobby_cb.on_done;
             global.vs_lobby_cb.on_done = undefined;
-            if (_ok) { vs_lobby_enter(_data); }
+            if (_ok)
+            {
+                var got = (_data != undefined && variable_struct_exists(_data, "code")) ? string(_data.code) : "";
+                if (vs_lobby_has_code())
+                {
+                    var have = string(o_st_handle.lobbyCode);
+                    if (got != "" && got != have)
+                    {
+                        vs_lobby_log("create extra leave " + got + " keep " + have);
+                        vs_lobby_rest_leave(got);
+                    }
+                    else
+                    {
+                        vs_lobby_enter(_data);
+                    }
+                }
+                else
+                {
+                    vs_lobby_enter(_data);
+                }
+            }
             else { vs_lobby_log("create fail no enter"); }
             if (cb != undefined) { cb(_ok, _data); }
         });
@@ -707,6 +796,34 @@ function vs_lobby_enter(_lobbyJson)
         return;
     }
     vs_lobby_log("enter " + vs_lobby_fmt(_lobbyJson) + " " + vs_lobby_flags());
+    var newCode = variable_struct_exists(_lobbyJson, "code") ? string(_lobbyJson.code) : "";
+    if (vs_lobby_has_code())
+    {
+        var old = string(o_st_handle.lobbyCode);
+        if (old != "" && newCode != "" && old != newCode)
+        {
+            vs_lobby_log("enter replace " + old + " -> " + newCode);
+            vs_lobby_rest_leave(old);
+            vs_lobby_send_q_clear();
+            vs_ws_close();
+        }
+        else if (old != "" && old == newCode && (vs_ws_is_open() || vs_ws_state().state == 1))
+        {
+            vs_lobby_log("enter already " + old + " ws=" + string(vs_ws_state().state));
+            if (instance_exists(o_st_handle))
+            {
+                o_st_handle.lobbyId = _lobbyJson.lobbyId;
+                o_st_handle.lobbyCode = _lobbyJson.code;
+                vs_lobby_apply_roster(_lobbyJson.members);
+                var you0 = vs_online_player_id();
+                o_st_handle.currentMember = o_st_handle.getMember(you0);
+                o_st_handle.vs_hostId = _lobbyJson.hostId;
+                vs_lobby_refresh_host_flags(_lobbyJson.hostId);
+            }
+            vs_lobby_refresh_ui();
+            return;
+        }
+    }
     if (instance_exists(o_st_handle))
     {
         o_st_handle.lobbyId = _lobbyJson.lobbyId;
@@ -724,12 +841,14 @@ function vs_lobby_enter(_lobbyJson)
     {
         vs_lobby_log("enter no o_st_handle");
     }
+    vs_lobby_refresh_ui();
     vs_ws_connect("/api/v1/lobbies/" + string(_lobbyJson.code) + "/ws", vs_online_token());
 }
 
 function vs_lobby_reset()
 {
     vs_lobby_log("reset " + vs_lobby_flags());
+    global.vs_lobby_create_busy = false;
     vs_lobby_send_q_clear();
     vs_ws_close();
     if (instance_exists(o_st_handle))
@@ -746,6 +865,20 @@ function vs_lobby_reset()
 // --- packet send -----------------------------------------------------------
 
 // Called from the patched send_packet while on the custom server.
+function vs_lobby_apply_local(_type, _buffer)
+{
+    var sz = buffer_get_size(_buffer);
+    if (sz <= 0) return;
+    if (!vs_lobby_pkt_quiet(_type))
+    {
+        vs_lobby_log("apply local " + vs_lobby_pkt_name(_type) + " bytes=" + string(sz));
+    }
+    var copy = buffer_create(sz, buffer_fixed, 1);
+    buffer_copy(_buffer, 0, sz, copy, 0);
+    buffer_seek(copy, buffer_seek_start, 0);
+    receive_packet(copy, vs_online_player_id());
+}
+
 function vs_lobby_send_packet(_type, _buffer)
 {
     var name = vs_lobby_pkt_name(_type);
@@ -756,6 +889,7 @@ function vs_lobby_send_packet(_type, _buffer)
             vs_lobby_log("send " + name + " bytes=" + string(buffer_get_size(_buffer)));
         }
         vs_ws_send_binary(_buffer);
+        vs_lobby_apply_local(_type, _buffer);
         return;
     }
     var entering = (vs_ws_state().state == 1) || vs_lobby_has_code();
@@ -777,6 +911,7 @@ function vs_lobby_send_packet(_type, _buffer)
         vs_lobby_log("queue " + name + " bytes=" + string(sz)
             + " n=" + string(array_length(global.vs_lobby_send_q))
             + " " + vs_lobby_flags());
+        vs_lobby_apply_local(_type, _buffer);
         return;
     }
     vs_lobby_log("drop " + name + " (not in a lobby) " + vs_lobby_flags());
@@ -789,12 +924,25 @@ function vs_online_on_ws_frame(_op, _payload)
     if (_op == 2) // binary = stamped game packet
     {
         var senderLen = buffer_read(_payload, buffer_u8);
+        var remain = buffer_get_size(_payload) - buffer_tell(_payload);
+        if (senderLen < 0 || senderLen > remain)
+        {
+            vs_lobby_log("recv binary drop bad senderLen=" + string(senderLen) + " remain=" + string(remain));
+            buffer_delete(_payload);
+            return;
+        }
         var senderId = "";
         var i = 0;
         repeat (senderLen)
         {
             senderId += chr(buffer_read(_payload, buffer_u8));
             i++;
+        }
+        if (!vs_lobby_sender_ok(senderId))
+        {
+            vs_lobby_log("recv binary drop bad sender=" + string_copy(senderId, 1, 80));
+            buffer_delete(_payload);
+            return;
         }
         var pkt = -1;
         if (buffer_get_size(_payload) > buffer_tell(_payload))
@@ -881,10 +1029,7 @@ function vs_lobby_handle_control(_j)
             {
                 vs_lobby_log("welcome skip no o_st_handle");
             }
-            if (instance_exists(obj_multiplayer_lobby))
-            {
-                with (obj_multiplayer_lobby) { unmute_bgm(); }
-            }
+            vs_lobby_refresh_ui();
             break;
         case "member_joined":
             if (instance_exists(o_st_handle) && variable_struct_exists(_j, "member"))

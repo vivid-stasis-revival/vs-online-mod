@@ -64,7 +64,7 @@
     {
         "Entry": "gml_Object_obj_multiplayer_lobby_Create_0",
         "Find": "var leave = steam_lobby_leave();",
-        "Value": "if (vs_online_is_custom()) { vs_lobby_log(\"ui leavelobby\"); vs_lobby_leave(); } else { var leave = steam_lobby_leave(); }",
+        "Value": "var leave = true; if (vs_online_is_custom()) { vs_lobby_log(\"ui leavelobby\"); vs_lobby_leave(); } else { leave = steam_lobby_leave(); }",
         "Type": 1
     },
     {
