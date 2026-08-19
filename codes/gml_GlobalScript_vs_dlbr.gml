@@ -1299,10 +1299,17 @@ function vs_dlbr_open_detail(_r, _local)
     detail_btn = 0;
     detail_loading = !_local;
     detail = undefined;
+    detail_seq += 1;
+    detail_stats = undefined;
+    detail_me = undefined;
     if (_local)
     {
         detail_id = _r.chart_id;
         detail_chart = _r.chart_id;
+        detail_kind = variable_struct_exists(_r, "kind") ? _r.kind : 0;
+        var diffs = (variable_struct_exists(_r, "diffs") && is_array(_r.diffs)) ? _r.diffs : [];
+        detail_diff_i = max(0, array_length(diffs) - 1);
+        detail_diff = (array_length(diffs) > 0) ? string(diffs[detail_diff_i]) : "";
         detail =
         {
             name: _r.name,
@@ -1314,14 +1321,18 @@ function vs_dlbr_open_detail(_r, _local)
             jacketUrl: "",
             previewUrl: "",
             charts: [],
-            diffs: _r.diffs,
+            diffs: diffs,
             pack: _r.pack
         };
         if (variable_struct_exists(_r, "chart_path")) vs_media_load_folder(_r.chart_id, _r.chart_path);
+        vs_dlbr_fetch_local_web();
         return;
     }
     detail_id = _r.id;
     detail_chart = _r.chartId;
+    detail_kind = variable_struct_exists(_r, "kind") ? _r.kind : 0;
+    detail_diff = "";
+    detail_diff_i = 0;
     vs_media_select(_r.id, vs_dlbr_row_jacket(_r), vs_dlbr_row_audio(_r));
     if (vs_dlbr_is_pack(_r))
     {
@@ -1391,6 +1402,8 @@ function vs_dlbr_on_detail(_ok, _data)
         var pu = variable_struct_exists(_data, "previewUrl") ? _data.previewUrl : "";
         var mu = variable_struct_exists(_data, "musicUrl") ? _data.musicUrl : "";
         vs_media_select(detail_id, (ju != "") ? ju : vs_dlbr_row_jacket(vs_dlbr_detail_row()), (pu != "") ? pu : mu);
+        vs_dlbr_pick_detail_diff();
+        vs_dlbr_request_chart_extras();
         var ai = vs_dlbr_row_all_index(detail_chart);
         if (ai < 0) return;
         var rr = rows_all[ai];
@@ -1415,12 +1428,256 @@ function vs_dlbr_on_detail(_ok, _data)
 
 function vs_dlbr_close_detail()
 {
+    detail_seq += 1;
     detail_open = false;
     detail_local = false;
     detail_loading = false;
     detail = undefined;
     detail_confirm = false;
     detail_btn = 0;
+    detail_stats = undefined;
+    detail_me = undefined;
+    detail_diff = "";
+    detail_diff_i = 0;
+}
+
+function vs_dlbr_detail_alive(_seq, _extra)
+{
+    if (!detail_open) return false;
+    if (_seq != undefined && _seq != detail_seq) return false;
+    if (_extra != undefined && _extra != detail_extra) return false;
+    return true;
+}
+
+function vs_dlbr_fetch_local_web()
+{
+    if (!vs_online_is_custom() || detail_chart == "") return;
+    detail_loading = true;
+    global.vs_dlbr_local = { seq: detail_seq };
+    var sid = "";
+    var meta = vs_dlmgr_read_meta(detail_chart);
+    if (meta != undefined && variable_struct_exists(meta, "serverId")) sid = string(meta.serverId);
+    if (sid != "")
+    {
+        var path = (detail_kind == 2) ? "/api/v1/shatters/" : "/api/v1/songs/";
+        vs_online_get_json(path + sid, false, vs_dlbr_on_local_web);
+        return;
+    }
+    if (detail_kind == 2)
+    {
+        vs_online_get_json("/api/v1/shatters?chart_id=" + vs_online_url_encode(detail_chart) + "&size=5", false, vs_dlbr_on_local_lookup);
+        return;
+    }
+    vs_online_get_json("/api/v1/songs?chartId=" + vs_online_url_encode(detail_chart) + "&size=1", false, vs_dlbr_on_local_lookup);
+}
+
+function vs_dlbr_on_local_lookup(_ok, _data, _status)
+{
+    if (!instance_exists(vs_downloader_browser)) return;
+    with (vs_downloader_browser)
+    {
+        if (!variable_global_exists("vs_dlbr_local")) return;
+        if (!vs_dlbr_detail_alive(global.vs_dlbr_local.seq, undefined) || !detail_local)
+        {
+            return;
+        }
+        var sid = "";
+        if (_ok && _data != undefined)
+        {
+            var items = [];
+            if (variable_struct_exists(_data, "songs") && is_array(_data.songs)) items = _data.songs;
+            else if (variable_struct_exists(_data, "shatters") && is_array(_data.shatters)) items = _data.shatters;
+            var i = 0;
+            repeat (array_length(items))
+            {
+                var it = items[i];
+                if (it != undefined && variable_struct_exists(it, "chartId") && string(it.chartId) == string(detail_chart))
+                {
+                    sid = variable_struct_exists(it, "id") ? string(it.id) : "";
+                    break;
+                }
+                i++;
+            }
+            if (sid == "" && array_length(items) > 0 && items[0] != undefined && variable_struct_exists(items[0], "id"))
+            {
+                sid = string(items[0].id);
+            }
+        }
+        if (sid == "")
+        {
+            detail_loading = false;
+            return;
+        }
+        var path = (detail_kind == 2) ? "/api/v1/shatters/" : "/api/v1/songs/";
+        vs_online_get_json(path + sid, false, vs_dlbr_on_local_web);
+    }
+}
+
+function vs_dlbr_on_local_web(_ok, _data, _status)
+{
+    if (!instance_exists(vs_downloader_browser)) return;
+    with (vs_downloader_browser)
+    {
+        if (!variable_global_exists("vs_dlbr_local")) return;
+        if (!vs_dlbr_detail_alive(global.vs_dlbr_local.seq, undefined) || !detail_local)
+        {
+            return;
+        }
+        detail_loading = false;
+        if (!_ok || _data == undefined) return;
+        var keepDiffs = (detail != undefined && variable_struct_exists(detail, "diffs")) ? detail.diffs : [];
+        var keepPack = (detail != undefined && variable_struct_exists(detail, "pack")) ? detail.pack : "";
+        detail = _data;
+        if (array_length(keepDiffs) > 0) detail.diffs = keepDiffs;
+        detail.pack = keepPack;
+        if (variable_struct_exists(_data, "id") && string(_data.id) != "") detail_id = string(_data.id);
+        var ju = variable_struct_exists(_data, "jacketUrl") ? string(_data.jacketUrl) : "";
+        if (ju != "") vs_media_select(detail_id, ju, "");
+        vs_dlbr_pick_detail_diff();
+        vs_dlbr_request_chart_extras();
+    }
+}
+
+function vs_dlbr_detail_diff_list()
+{
+    var out = [];
+    if (detail == undefined) return out;
+    if (variable_struct_exists(detail, "charts") && is_array(detail.charts) && array_length(detail.charts) > 0)
+    {
+        var i = 0;
+        repeat (array_length(detail.charts))
+        {
+            var chd = detail.charts[i];
+            var d = "";
+            if (chd != undefined && variable_struct_exists(chd, "difficulty")) d = string(chd.difficulty);
+            if (d != "") array_push(out, d);
+            i++;
+        }
+        return out;
+    }
+    if (variable_struct_exists(detail, "diffs") && is_array(detail.diffs)) return detail.diffs;
+    if (variable_struct_exists(detail, "difficultyName") && string(detail.difficultyName) != "")
+    {
+        array_push(out, string(detail.difficultyName));
+    }
+    return out;
+}
+
+function vs_dlbr_pick_detail_diff()
+{
+    var diffs = vs_dlbr_detail_diff_list();
+    var n = array_length(diffs);
+    if (n <= 0)
+    {
+        detail_diff = "";
+        detail_diff_i = 0;
+        return;
+    }
+    var want = string_lower(string(detail_diff));
+    var i = 0;
+    repeat (n)
+    {
+        if (string_lower(string(diffs[i])) == want)
+        {
+            detail_diff_i = i;
+            detail_diff = string(diffs[i]);
+            return;
+        }
+        i++;
+    }
+    var pick = n - 1;
+    while (pick > 0 && string_lower(string(diffs[pick])) == "prelude")
+    {
+        pick--;
+    }
+    detail_diff_i = pick;
+    detail_diff = string(diffs[pick]);
+}
+
+function vs_dlbr_cycle_detail_diff(_dir)
+{
+    var diffs = vs_dlbr_detail_diff_list();
+    var n = array_length(diffs);
+    if (n <= 1) return;
+    detail_diff_i = (detail_diff_i + _dir + n) % n;
+    detail_diff = string(diffs[detail_diff_i]);
+    vs_dlbr_request_chart_extras();
+}
+
+function vs_dlbr_active_chart()
+{
+    if (detail == undefined) return undefined;
+    if (variable_struct_exists(detail, "charts") && is_array(detail.charts))
+    {
+        var want = string_lower(string(detail_diff));
+        var i = 0;
+        repeat (array_length(detail.charts))
+        {
+            var chd = detail.charts[i];
+            if (chd != undefined && variable_struct_exists(chd, "difficulty") && string_lower(string(chd.difficulty)) == want)
+            {
+                return chd;
+            }
+            i++;
+        }
+        if (array_length(detail.charts) > 0) return detail.charts[detail_diff_i];
+    }
+    return undefined;
+}
+
+function vs_dlbr_active_fivedim()
+{
+    var chd = vs_dlbr_active_chart();
+    if (chd != undefined && variable_struct_exists(chd, "fiveDim") && chd.fiveDim != undefined) return chd.fiveDim;
+    if (detail != undefined && variable_struct_exists(detail, "fiveDim") && detail.fiveDim != undefined) return detail.fiveDim;
+    return undefined;
+}
+
+function vs_dlbr_request_chart_extras()
+{
+    detail_stats = undefined;
+    detail_me = undefined;
+    var cid = "";
+    var chd = vs_dlbr_active_chart();
+    if (chd != undefined && variable_struct_exists(chd, "id")) cid = string(chd.id);
+    else if (detail != undefined && variable_struct_exists(detail, "difficultyName") && variable_struct_exists(detail, "id"))
+    {
+        cid = string(detail.id);
+    }
+    if (cid == "") return;
+    detail_extra += 1;
+    global.vs_dlbr_extra = { seq: detail_seq, extra: detail_extra, chartId: detail_chart, diff: detail_diff };
+    vs_online_get_json("/api/v1/charts/" + cid + "/stats", false, vs_dlbr_on_chart_stats);
+}
+
+function vs_dlbr_on_chart_stats(_ok, _data, _status)
+{
+    if (!instance_exists(vs_downloader_browser)) return;
+    with (vs_downloader_browser)
+    {
+        if (!variable_global_exists("vs_dlbr_extra")) return;
+        var job = global.vs_dlbr_extra;
+        if (!vs_dlbr_detail_alive(job.seq, job.extra)) return;
+        if (_ok && _data != undefined) detail_stats = _data;
+        if (!vs_online_is_account() || job.chartId == "" || job.diff == "") return;
+        var sha = "";
+        var chd = vs_dlbr_active_chart();
+        if (chd != undefined && variable_struct_exists(chd, "sha1")) sha = string(chd.sha1);
+        else if (detail != undefined && variable_struct_exists(detail, "sha1")) sha = string(detail.sha1);
+        vs_online_get_my_chart_score(job.chartId, job.diff, sha, vs_dlbr_on_chart_me);
+    }
+}
+
+function vs_dlbr_on_chart_me(_ok, _data, _status)
+{
+    if (!instance_exists(vs_downloader_browser)) return;
+    with (vs_downloader_browser)
+    {
+        if (!variable_global_exists("vs_dlbr_extra")) return;
+        var job = global.vs_dlbr_extra;
+        if (!vs_dlbr_detail_alive(job.seq, job.extra)) return;
+        if (_ok && _data != undefined) detail_me = _data;
+    }
 }
 
 function vs_dlbr_detail_row()
@@ -1582,6 +1839,14 @@ function vs_dlbr_step_detail()
     {
         detail_btn = (detail_btn + 1) % n;
     }
+    else if (keyboard_check_pressed(vk_up))
+    {
+        vs_dlbr_cycle_detail_diff(-1);
+    }
+    else if (keyboard_check_pressed(vk_down))
+    {
+        vs_dlbr_cycle_detail_diff(1);
+    }
     else if (keyboard_check_pressed(vk_enter) || keyboard_check_pressed(vk_space))
     {
         vs_dlbr_detail_act(btns[detail_btn].id);
@@ -1599,14 +1864,123 @@ function vs_dlbr_diff_color(_d)
     return make_color_rgb(145, 151, 164);
 }
 
+function vs_dlbr_detail_fat()
+{
+    if (vs_dlbr_is_pack(vs_dlbr_detail_row())) return false;
+    if (detail_local) return vs_online_is_custom();
+    if (vs_dlbr_active_fivedim() != undefined) return true;
+    if (detail_stats != undefined) return true;
+    return false;
+}
+
+function vs_dlbr_fmt_score(_n)
+{
+    var n = vs_http_num(_n, -1);
+    if (n < 0) return "-";
+    return string(floor(n));
+}
+
+function vs_dlbr_fd_axis(_fd, _key)
+{
+    if (_fd == undefined || !variable_struct_exists(_fd, _key)) return 0;
+    var n = vs_http_num(variable_struct_get(_fd, _key), 0);
+    if (n < 0) n = 0;
+    return n;
+}
+
+function vs_dlbr_draw_pill(_x, _y, _lab, _diff, _right, _sel)
+{
+    if (_x + 12 > _right) return -1;
+    var lab = vs_dlbr_clip_text(string(_lab), max(8, _right - _x - 8));
+    var pw2 = string_width(lab) + 8;
+    if (_x + pw2 > _right) return -1;
+    draw_set_color(vs_dlbr_diff_color(_diff));
+    draw_rectangle(_x, _y, _x + pw2, _y + 11, false);
+    if (_sel)
+    {
+        draw_set_color(c_white);
+        draw_rectangle(_x, _y, _x + pw2, _y + 11, true);
+    }
+    draw_set_color(c_black);
+    draw_text(_x + 4, _y + 1, lab);
+    return _x + pw2 + 4;
+}
+
+function vs_dlbr_draw_fivedim(_fd, _x, _y, _w, _maxy)
+{
+    if (_fd == undefined || _w < 40 || _y + 6 > _maxy) return 0;
+    var keys = ["chip", "tech", "stream", "chord", "burst"];
+    var labs = ["CHIP", "TECH", "STRM", "CHRD", "BRST"];
+    var row = 8;
+    var need = row * 5;
+    if (_y + need > _maxy)
+    {
+        row = floor((_maxy - _y) / 5);
+        if (row < 6) return 0;
+    }
+    var i = 0;
+    repeat (5)
+    {
+        var yy = _y + i * row;
+        if (yy + 5 > _maxy) break;
+        var v = vs_dlbr_fd_axis(_fd, keys[i]);
+        var labw = string_width(labs[i]) + 2;
+        if (labw > 32) labw = 32;
+        var num = string(round(v));
+        var numw = string_width(num) + 2;
+        if (numw > 24) numw = 24;
+        var bx = _x + labw;
+        var bw = _x + _w - numw - bx - 2;
+        if (bw < 8) bw = 8;
+        if (bx + bw > _x + _w) bw = max(4, _x + _w - bx);
+        var bh = min(5, row - 2);
+        draw_set_halign(fa_left);
+        draw_set_color(make_color_rgb(170, 176, 186));
+        draw_text(_x, yy, vs_dlbr_clip_text(labs[i], labw));
+        draw_set_color(make_color_rgb(40, 44, 52));
+        draw_rectangle(bx, yy + 1, bx + bw, yy + 1 + bh, false);
+        var capped = v;
+        if (capped > 200) capped = 200;
+        var fill = floor(bw * (capped / 200));
+        if (fill < 0) fill = 0;
+        if (fill > bw) fill = bw;
+        if (fill > 0)
+        {
+            var hue = 55 + 200 * (capped / 200);
+            if (hue > 255) hue = 255;
+            if (hue < 0) hue = 0;
+            draw_set_color(make_color_hsv(hue, 230, 230));
+            draw_rectangle(bx, yy + 1, bx + fill, yy + 1 + bh, false);
+        }
+        if (v > 200 && bw > 4)
+        {
+            var ox = bx + bw - 3;
+            if (ox < bx) ox = bx;
+            draw_set_color(make_color_rgb(241, 75, 180));
+            draw_rectangle(ox, yy + 1, bx + bw, yy + 1 + bh, false);
+        }
+        draw_set_halign(fa_right);
+        draw_set_color((v > 200) ? make_color_rgb(241, 120, 180) : make_color_rgb(140, 146, 156));
+        draw_text(_x + _w, yy, vs_dlbr_clip_text(num, numw));
+        draw_set_halign(fa_left);
+        i++;
+    }
+    return row * 5;
+}
+
 function vs_dlbr_draw_detail()
 {
     var cw = display_get_gui_width();
     var ch = display_get_gui_height();
-    var pw = min(300, max(80, cw - 8));
-    var ph = min(150, max(70, ch - 8));
+    var fat = vs_dlbr_detail_fat();
+    var pw = min(fat ? 336 : 300, max(80, cw - 8));
+    var ph = min(fat ? 216 : 150, max(70, ch - 8));
     var px = (cw - pw) / 2;
     var py = (ch - ph) / 2;
+    if (px < 4) px = 4;
+    if (py < 4) py = 4;
+    if (px + pw > cw - 4) pw = max(80, cw - 4 - px);
+    if (py + ph > ch - 4) ph = max(70, ch - 4 - py);
 
     draw_set_alpha(0.55);
     draw_set_color(c_black);
@@ -1617,9 +1991,34 @@ function vs_dlbr_draw_detail()
     draw_set_color(make_color_rgb(80, 220, 230));
     draw_rectangle(px, py, px + pw, py + ph, true);
 
+    var btns = vs_dlbr_detail_buttons();
+    var bn = array_length(btns);
+    var startx = px + 6;
+    var right = px + pw - 6;
+    var maxw = right - startx;
+    var used = 0;
+    var rows = 1;
+    var i = 0;
+    repeat (bn)
+    {
+        var bw2 = string_width(btns[i].label) + 12;
+        if (used + bw2 > maxw && used > 0)
+        {
+            rows++;
+            used = 0;
+        }
+        used += bw2 + 4;
+        i++;
+    }
+    var btnH = rows * 14;
+    var btnTop = py + ph - 4 - btnH;
+    if (btnTop < py + 36) btnTop = py + 36;
+    var contentBot = btnTop - 2;
+
     var jx = px + 6;
     var jy = py + 6;
-    var js = min(40, ph - 36);
+    var js = min(40, max(16, contentBot - py - 48));
+    if (jy + js > contentBot) js = max(12, contentBot - jy);
     draw_set_color(make_color_rgb(28, 30, 36));
     draw_rectangle(jx, jy, jx + js, jy + js, false);
     var spr = vs_media_jacket(detail_id);
@@ -1644,7 +2043,6 @@ function vs_dlbr_draw_detail()
     var artist = "";
     var owner = "";
     var bpm = "";
-    var jacketBy = "";
     if (detail != undefined)
     {
         if (variable_struct_exists(detail, "name") && detail.name != "") name = detail.name;
@@ -1652,34 +2050,33 @@ function vs_dlbr_draw_detail()
         if (artist == "" && variable_struct_exists(detail, "description")) artist = string(detail.description);
         if (variable_struct_exists(detail, "ownerName")) owner = string(detail.ownerName);
         if (variable_struct_exists(detail, "bpmDisplay")) bpm = string(detail.bpmDisplay);
-        if (variable_struct_exists(detail, "jacketArtist")) jacketBy = string(detail.jacketArtist);
         if (variable_struct_exists(detail, "chartId") && detail.chartId != "") detail_chart = detail.chartId;
     }
-    var textw = px + pw - tx - 6;
+    var textw = right - tx;
+    if (textw < 8) textw = 8;
+    draw_set_halign(fa_left);
     draw_set_font(fnt_monacovs);
     draw_set_color(c_white);
-    draw_text(tx, py + 6, vs_dlbr_clip_text(name, textw));
+    if (py + 6 + 10 < contentBot) draw_text(tx, py + 6, vs_dlbr_clip_text(name, textw));
     draw_set_font(global.default_font);
     draw_set_color(make_color_rgb(180, 186, 196));
-    draw_text(tx, py + 18, vs_dlbr_clip_text((artist != "") ? artist : " ", textw));
+    if (py + 18 + 10 < contentBot) draw_text(tx, py + 18, vs_dlbr_clip_text((artist != "") ? artist : " ", textw));
     draw_set_color(make_color_rgb(140, 146, 156));
     var meta = detail_chart;
     if (owner != "") meta += "  " + owner;
     if (bpm != "") meta += "  BPM " + bpm;
-    draw_text(tx, py + 28, vs_dlbr_clip_text(meta, textw));
-    if (jacketBy != "") draw_text(tx, py + 38, vs_dlbr_clip_text("Jacket " + jacketBy, textw));
+    if (py + 28 + 10 < contentBot) draw_text(tx, py + 28, vs_dlbr_clip_text(meta, textw));
 
-    var right = px + pw - 6;
-    var byb = py + ph - 22;
-    var dy = py + js + 10;
-    draw_set_color(make_color_rgb(200, 204, 212));
-    if (dy + 12 < byb)
+    var dy = jy + js + 6;
+    if (dy + 10 < contentBot)
     {
+        draw_set_color(make_color_rgb(200, 204, 212));
         if (detail_loading)
         {
             draw_text(px + 6, dy, vs_dlbr_clip_text("Loading...", right - px - 6));
+            dy += 12;
         }
-        else if (detail != undefined && (variable_struct_exists(detail, "songs") || variable_struct_exists(detail, "shatters")))
+        else if (detail != undefined && vs_dlbr_is_pack(vs_dlbr_detail_row()) && (variable_struct_exists(detail, "songs") || variable_struct_exists(detail, "shatters")))
         {
             var ns = 0;
             var nh = 0;
@@ -1688,107 +2085,120 @@ function vs_dlbr_draw_detail()
             var lab = string(ns + nh) + " song(s)";
             if (variable_struct_exists(detail, "version")) lab += "  v" + string(detail.version);
             draw_text(px + 6, dy, vs_dlbr_clip_text(lab, right - px - 6));
+            dy += 12;
         }
-        else if (detail != undefined && variable_struct_exists(detail, "charts") && is_array(detail.charts))
-        {
-            var charts = detail.charts;
-            var cx = px + 6;
-            var i = 0;
-            repeat (array_length(charts))
-            {
-                var chd = charts[i];
-                var diff = variable_struct_exists(chd, "difficulty") ? string(chd.difficulty) : "";
-                var pill = string_upper(diff);
-                if (variable_struct_exists(chd, "difficultyDisplay") && chd.difficultyDisplay != "") pill += " " + string(chd.difficultyDisplay);
-                else if (variable_struct_exists(chd, "difficultyConstant")) pill += " " + string(chd.difficultyConstant);
-                var pw2 = string_width(pill) + 8;
-                if (cx + pw2 > right) break;
-                draw_set_color(vs_dlbr_diff_color(diff));
-                draw_rectangle(cx, dy, cx + pw2, dy + 11, false);
-                draw_set_color(c_black);
-                draw_text(cx + 4, dy + 1, pill);
-                cx += pw2 + 4;
-                i++;
-            }
-        }
-        else if (detail != undefined && variable_struct_exists(detail, "diffs") && is_array(detail.diffs))
+        else if (detail != undefined)
         {
             var cx = px + 6;
-            var i = 0;
-            repeat (array_length(detail.diffs))
+            var want = string_lower(string(detail_diff));
+            if (variable_struct_exists(detail, "charts") && is_array(detail.charts) && array_length(detail.charts) > 0)
             {
-                var lab = string(detail.diffs[i]);
-                var pw2 = string_width(lab) + 8;
-                if (cx + pw2 > right) break;
-                draw_set_color(vs_dlbr_diff_color(lab));
-                draw_rectangle(cx, dy, cx + pw2, dy + 11, false);
-                draw_set_color(c_black);
-                draw_text(cx + 4, dy + 1, lab);
-                cx += pw2 + 4;
-                i++;
+                var charts = detail.charts;
+                i = 0;
+                repeat (array_length(charts))
+                {
+                    var chd = charts[i];
+                    var diff = (chd != undefined && variable_struct_exists(chd, "difficulty")) ? string(chd.difficulty) : "";
+                    var pill = string_upper(diff);
+                    if (chd != undefined && variable_struct_exists(chd, "difficultyDisplay") && chd.difficultyDisplay != "") pill += " " + string(chd.difficultyDisplay);
+                    else if (chd != undefined && variable_struct_exists(chd, "difficultyConstant")) pill += " " + string(chd.difficultyConstant);
+                    var nx = vs_dlbr_draw_pill(cx, dy, pill, diff, right, string_lower(diff) == want);
+                    if (nx < 0) break;
+                    cx = nx;
+                    i++;
+                }
+                dy += 12;
             }
-        }
-        else if (detail != undefined && variable_struct_exists(detail, "difficultyName"))
-        {
-            var lab = string(detail.difficultyName);
-            if (variable_struct_exists(detail, "difficultyNumber") && detail.difficultyNumber != "") lab += " " + string(detail.difficultyNumber);
-            lab = vs_dlbr_clip_text(lab, right - px - 14);
-            var pw2 = string_width(lab) + 8;
-            draw_set_color(make_color_rgb(176, 107, 240));
-            draw_rectangle(px + 6, dy, px + 6 + pw2, dy + 11, false);
-            draw_set_color(c_black);
-            draw_text(px + 10, dy + 1, lab);
+            else if (variable_struct_exists(detail, "diffs") && is_array(detail.diffs) && array_length(detail.diffs) > 0)
+            {
+                i = 0;
+                repeat (array_length(detail.diffs))
+                {
+                    var dlab = string(detail.diffs[i]);
+                    var nx2 = vs_dlbr_draw_pill(cx, dy, dlab, dlab, right, string_lower(dlab) == want);
+                    if (nx2 < 0) break;
+                    cx = nx2;
+                    i++;
+                }
+                dy += 12;
+            }
+            else if (variable_struct_exists(detail, "difficultyName"))
+            {
+                var slab = string(detail.difficultyName);
+                if (variable_struct_exists(detail, "difficultyNumber") && detail.difficultyNumber != "") slab += " " + string(detail.difficultyNumber);
+                slab = vs_dlbr_clip_text(slab, right - px - 14);
+                vs_dlbr_draw_pill(px + 6, dy, slab, slab, right, true);
+                dy += 12;
+            }
+
+            if (dy + 10 < contentBot && (detail_stats != undefined || detail_me != undefined || (detail != undefined && variable_struct_exists(detail, "maxScore"))))
+            {
+                var bits = "";
+                if (detail_stats != undefined)
+                {
+                    var topv = variable_struct_exists(detail_stats, "max") ? vs_dlbr_fmt_score(detail_stats.max) : "-";
+                    var plays = variable_struct_exists(detail_stats, "count") ? vs_dlbr_fmt_score(detail_stats.count) : "-";
+                    bits = "TOP " + topv + "  PLAYS " + plays;
+                }
+                if (detail_me != undefined && variable_struct_exists(detail_me, "found") && detail_me.found)
+                {
+                    var me = "ME " + vs_dlbr_fmt_score(variable_struct_exists(detail_me, "score") ? detail_me.score : -1);
+                    if (variable_struct_exists(detail_me, "rank")) me += " #" + string(floor(vs_http_num(detail_me.rank, 0)));
+                    bits = (bits == "") ? me : (bits + "  " + me);
+                }
+                else if (detail != undefined && variable_struct_exists(detail, "maxScore") && bits == "")
+                {
+                    bits = "CAP " + vs_dlbr_fmt_score(detail.maxScore);
+                }
+                if (bits != "")
+                {
+                    draw_set_color(make_color_rgb(80, 220, 230));
+                    draw_text(px + 6, dy, vs_dlbr_clip_text(bits, right - px - 6));
+                    dy += 11;
+                }
+            }
+
+            var fd = vs_dlbr_active_fivedim();
+            if (fd != undefined && dy + 8 < contentBot)
+            {
+                dy += vs_dlbr_draw_fivedim(fd, px + 6, dy, right - px - 6, contentBot);
+            }
         }
     }
 
-    var btns = vs_dlbr_detail_buttons();
-    var bn = array_length(btns);
-    var startx = px + 6;
-    var maxw = right - startx;
-    var used = 0;
-    var rows = 1;
-    var i = 0;
-    repeat (bn)
-    {
-        var bw2 = string_width(btns[i].label) + 12;
-        if (used + bw2 > maxw && used > 0)
-        {
-            rows++;
-            used = 0;
-        }
-        used += bw2 + 4;
-        i++;
-    }
-    var rowY = byb - (rows - 1) * 14;
+    var rowY = btnTop;
+    if (rowY + 12 > py + ph - 2) rowY = py + ph - 2 - btnH;
+    if (rowY < py + 4) rowY = py + 4;
     var bx = startx;
     used = 0;
     i = 0;
     repeat (bn)
     {
-        var lab = btns[i].label;
-        var bw2 = string_width(lab) + 12;
-        if (used + bw2 > maxw && used > 0)
+        var blab = btns[i].label;
+        var bww = string_width(blab) + 12;
+        if (used + bww > maxw && used > 0)
         {
             rowY += 14;
             bx = startx;
             used = 0;
         }
+        if (rowY + 12 > py + ph - 1) break;
         var on = (i == detail_btn);
         if (on)
         {
             draw_set_color((btns[i].id == "yes" || btns[i].id == "del") ? make_color_rgb(241, 75, 107) : make_color_rgb(240, 210, 70));
-            draw_rectangle(bx, rowY, bx + bw2, rowY + 12, false);
+            draw_rectangle(bx, rowY, bx + bww, rowY + 12, false);
             draw_set_color(c_black);
         }
         else
         {
             draw_set_color(make_color_rgb(40, 44, 52));
-            draw_rectangle(bx, rowY, bx + bw2, rowY + 12, false);
+            draw_rectangle(bx, rowY, bx + bww, rowY + 12, false);
             draw_set_color(c_white);
         }
-        draw_text(bx + 6, rowY + 2, lab);
-        bx += bw2 + 4;
-        used += bw2 + 4;
+        draw_text(bx + 6, rowY + 2, vs_dlbr_clip_text(blab, bww - 8));
+        bx += bww + 4;
+        used += bww + 4;
         i++;
     }
 }

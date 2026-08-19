@@ -214,6 +214,25 @@ function vs_dlmgr_write_meta(_chartId, _serverId, _name)
     vs_dlmgr_log(_chartId, _serverId, _name, isNew);
 }
 
+function vs_dlmgr_read_meta(_chartId)
+{
+    if (_chartId == undefined || _chartId == "") return undefined;
+    var p = vs_dlmgr_meta_path(_chartId);
+    if (!file_exists(p)) p = vs_songstore_install_path(p);
+    if (!file_exists(p)) return undefined;
+    var f = file_text_open_read(p);
+    var raw = "";
+    while (!file_text_eof(f)) { raw += file_text_readln(f); }
+    file_text_close(f);
+    try
+    {
+        var j = json_parse(raw);
+        if (j != undefined) return j;
+    }
+    catch (_e) { }
+    return undefined;
+}
+
 // Persistent download history (one entry per chart, most recent wins).
 function vs_dlmgr_log(_chartId, _serverId, _name, _isNew)
 {
