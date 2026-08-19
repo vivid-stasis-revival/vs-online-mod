@@ -114,13 +114,20 @@ function vs_lobby_lobby_id()
     return steam_lobby_get_lobby_id();
 }
 
+function vs_lobby_get_host_id()
+{
+    if (!instance_exists(o_st_handle)) return "";
+    if (!variable_instance_exists(o_st_handle, "vs_hostId")) return "";
+    if (o_st_handle.vs_hostId == undefined) return "";
+    return o_st_handle.vs_hostId;
+}
+
 function vs_lobby_is_owner()
 {
     if (vs_online_is_custom())
     {
-        return instance_exists(o_st_handle)
-            && o_st_handle.vs_hostId != undefined
-            && vs_online_player_id() == o_st_handle.vs_hostId;
+        var hid = vs_lobby_get_host_id();
+        return hid != "" && vs_online_player_id() == hid;
     }
     return steam_lobby_is_owner();
 }
@@ -129,7 +136,7 @@ function vs_lobby_owner_id()
 {
     if (vs_online_is_custom())
     {
-        return (instance_exists(o_st_handle) && o_st_handle.vs_hostId != undefined) ? o_st_handle.vs_hostId : "";
+        return vs_lobby_get_host_id();
     }
     return steam_lobby_get_owner_id();
 }
@@ -396,7 +403,7 @@ function vs_lobby_flags()
     {
         if (o_st_handle.lobbyMembers != undefined) n = array_length(o_st_handle.lobbyMembers);
         if (o_st_handle.lobbyCode != undefined) code = string(o_st_handle.lobbyCode);
-        if (o_st_handle.vs_hostId != undefined) host = string(o_st_handle.vs_hostId);
+        host = string(vs_lobby_get_host_id());
     }
     return "custom=" + string(vs_online_is_custom())
         + " account=" + string(vs_online_is_account())
@@ -513,9 +520,10 @@ function vs_lobby_fetch_members_done(_ok, _data, _status)
     if (!instance_exists(o_st_handle)) return;
     vs_lobby_apply_roster(_data.members);
     o_st_handle.currentMember = o_st_handle.getMember(vs_online_player_id());
-    if (o_st_handle.vs_hostId != undefined)
+    var hid = vs_lobby_get_host_id();
+    if (hid != "")
     {
-        vs_lobby_refresh_host_flags(o_st_handle.vs_hostId);
+        vs_lobby_refresh_host_flags(hid);
     }
 }
 

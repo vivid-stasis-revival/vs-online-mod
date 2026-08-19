@@ -266,6 +266,18 @@
     },
     {
         "Entry": "gml_Object_o_st_handle_Create_0",
+        "Find": "lobbyId = undefined;\nlobbyCode = undefined;\ncurrentMember = undefined;",
+        "Value": "lobbyId = undefined;\nlobbyCode = undefined;\nvs_hostId = undefined;\ncurrentMember = undefined;",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_Object_o_st_handle_Create_0",
+        "Find": "lobbyId = undefined;\nlobbyCode = undefined;\nlobbyMembers = [];",
+        "Value": "lobbyId = undefined;\nlobbyCode = undefined;\nvs_hostId = undefined;\nlobbyMembers = [];",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_Object_o_st_handle_Create_0",
         "Find": "var memberCount = steam_lobby_get_member_count();",
         "Value": "if (vs_online_is_custom()) exit; var memberCount = steam_lobby_get_member_count();",
         "Type": 1
