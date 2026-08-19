@@ -156,6 +156,12 @@
         "Type": 1
     },
     {
+        "Entry": "gml_Object_obj_multiplayer_waiting_room_Create_0",
+        "Find": "    score: global.currentscore,",
+        "Value": "    score_: global.currentscore,",
+        "Type": 0
+    },
+    {
         "Entry": "gml_GlobalScript_StartGamePacket",
         "Find": "            if (song != undefined)\n            {",
         "Value": "            if (song != undefined)\n            {\n                if (vs_online_is_custom()) vs_lobby_log(\"start_game songId=\" + string(song.songId) + \" diff=\" + string(struct_get_fallback(song, \"difficulty\", -1)) + \" members=\" + string(array_length(members)));",
@@ -489,6 +495,12 @@
         "Type": 1
     },
     {
+        "Entry": "gml_Object_o_2023res_songwindow_Draw_0",
+        "Find": "var _score = format_score(member.score);",
+        "Value": "var _score = format_score(vs_member_get_score(member));",
+        "Type": 0
+    },
+    {
         "Entry": "gml_Object_obj_multiplayer_lobby_Create_0",
         "Find": "var s = o_st_handle.songQueue[0];",
         "Value": "var s = o_st_handle.songQueue[0];var song = struct_copy(global.song_list[s.songId]);if (variable_struct_exists(global.song_list[s.songId], \"enc_data\")) song.allowed_difficulties = (s.difficulty == 3) ? [3] : [0, 1, 2];",
@@ -629,6 +641,30 @@
         "Type": 0
     },
     {
+        "Entry": "gml_Object_o_score_updater_Step_0",
+        "Find": "return (arg0.score != arg1.score) ? sign(arg0.score - arg1.score) : (arg0.order - arg1.order);",
+        "Value": "return (vs_member_get_score(arg0) != vs_member_get_score(arg1)) ? sign(vs_member_get_score(arg0) - vs_member_get_score(arg1)) : (arg0.order - arg1.order);",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_Object_o_score_updater_Draw_64",
+        "Find": "    var _score = members[i].score;",
+        "Value": "    var _score = vs_member_get_score(members[i]);",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_Object_o_score_updater_Draw_64",
+        "Find": "        _score = _score - currentMember.score;",
+        "Value": "        _score = _score - vs_member_get_score(currentMember);",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_Object_o_st_handle_Other_69",
+        "Find": "o_st_handle.currentMember.score",
+        "Value": "vs_member_get_score(o_st_handle.currentMember)",
+        "Type": 0
+    },
+    {
         "Entry": "gml_GlobalScript_UpdateScorePacket",
         "Find": "member.score = arg0.score;",
         "Value": "vs_member_set_score(member, arg0.score);",
@@ -651,6 +687,18 @@
         "Find": "arg0.score",
         "Value": "struct_get_fallback(arg0, \"score_\", struct_get_fallback(arg0, \"score\", 0))",
         "Type": 1
+    },
+    {
+        "Entry": "gml_GlobalScript_ReportScorePacket",
+        "Find": "        obj.score = buffer_read(arg0, buffer_f32);",
+        "Value": "        var _sc = buffer_read(arg0, buffer_f32); variable_struct_set(obj, \"score\", _sc); variable_struct_set(obj, \"score_\", _sc);",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_GlobalScript_UpdateScorePacket",
+        "Find": "        obj.score = buffer_read(arg0, buffer_f32);",
+        "Value": "        var _sc = buffer_read(arg0, buffer_f32); variable_struct_set(obj, \"score\", _sc); variable_struct_set(obj, \"score_\", _sc);",
+        "Type": 0
     },
     {
         "Entry": "gml_GlobalScript_StartGamePacket",
