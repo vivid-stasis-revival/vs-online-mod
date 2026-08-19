@@ -422,15 +422,15 @@ function vs_lobby_apply_roster(_members)
 {
     if (!instance_exists(o_st_handle)) return;
     var prevById = {};
-    var pi = 0;
+    var pidx = 0;
     repeat (array_length(o_st_handle.lobbyMembers))
     {
-        var pm = o_st_handle.lobbyMembers[pi];
+        var pm = o_st_handle.lobbyMembers[pidx];
         if (pm != undefined)
         {
             variable_struct_set(prevById, string(pm.id), pm);
         }
-        pi++;
+        pidx++;
     }
     var arr = [];
     var i = 0;
