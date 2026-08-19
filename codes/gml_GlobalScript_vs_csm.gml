@@ -775,6 +775,12 @@ function CustomSongReader()
             array_push(customSongList, array_length(global.song_list));
             array_push(global.song_list, packed);
         }
+        var pid = vs_packmgr_id_from_folder(packJobs[p].name);
+        if (pid != "")
+        {
+            packInfo.vs_pack_id = pid;
+            vs_packmgr_csm_fill(packInfo, pid);
+        }
         array_push(global.custom_song_packs, packInfo);
     }
 

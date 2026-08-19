@@ -1407,6 +1407,8 @@ function vs_dlbr_on_pack_detail(_ok, _data, _status)
             rr.checked = true;
             checking = true;
             check_chart = rr.chartId;
+            var job = vs_packmgr_slot();
+            job.info = vs_packmgr_info_struct(_data);
             vs_packmgr_check_members(rr.id, members, ver, method(id, vs_dlbr_on_pack_check));
         }
         else
