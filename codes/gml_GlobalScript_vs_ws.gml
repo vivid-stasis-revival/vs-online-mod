@@ -322,21 +322,17 @@ function vs_ws_dispatch_payload()
     {
         dataSize = 0;
     }
-    // network_send_binary=0, network_send_text=1 (not in vsml constant table)
-    var msgType = 0;
-    if (ds_map_exists(async_load, "message_type"))
+    // Classify by payload, not message_type. Runner WSS often tags binary
+    // relay frames as text; sender-len 36 is ASCII `$`, which is not JSON.
+    var first = 0;
+    if (dataSize > 0)
     {
-        msgType = vs_http_num(ds_map_find_value(async_load, "message_type"), 0);
+        first = buffer_peek(dataBuf, 0, buffer_u8);
     }
-    var opcode = (msgType == 1) ? 1 : 2;
-    if (opcode != 1 && dataSize > 0)
+    var opcode = 2;
+    if (first == 123 || first == 91)
     {
-        var first = buffer_peek(dataBuf, 0, buffer_u8);
-        // GM often omits message_type; control JSON starts with { or [
-        if (first == 123 || first == 91)
-        {
-            opcode = 1;
-        }
+        opcode = 1;
     }
 
     var payload = buffer_create(max(dataSize, 1), buffer_fixed, 1);

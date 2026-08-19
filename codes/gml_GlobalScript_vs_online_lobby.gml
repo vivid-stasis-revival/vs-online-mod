@@ -858,16 +858,42 @@ function vs_lobby_matchmake(_on_done)
         if (_on_done != undefined) { _on_done(false, undefined); }
         return;
     }
+    if (vs_lobby_has_code() || vs_ws_state().state == 1)
+    {
+        vs_lobby_log("matchmake skip already " + vs_lobby_flags());
+        if (_on_done != undefined) { _on_done(true, undefined); }
+        return;
+    }
     if (!variable_global_exists("vs_lobby_cb"))
     {
-        global.vs_lobby_cb = { is_public: true, code: "", on_done: undefined };
+        global.vs_lobby_cb = { is_public: true, code: "", on_done: undefined, match_busy: false };
+    }
+    if (variable_struct_exists(global.vs_lobby_cb, "match_busy") && global.vs_lobby_cb.match_busy == true)
+    {
+        vs_lobby_log("matchmake skip busy");
+        return;
     }
     global.vs_lobby_cb.on_done = _on_done;
     vs_online_with_conn(function()
     {
+        if (vs_lobby_has_code() || vs_ws_state().state == 1)
+        {
+            vs_lobby_log("matchmake skip already after conn " + vs_lobby_flags());
+            var cb0 = global.vs_lobby_cb.on_done;
+            global.vs_lobby_cb.on_done = undefined;
+            if (cb0 != undefined) { cb0(true, undefined); }
+            return;
+        }
+        if (variable_struct_exists(global.vs_lobby_cb, "match_busy") && global.vs_lobby_cb.match_busy == true)
+        {
+            vs_lobby_log("matchmake skip busy after conn");
+            return;
+        }
+        global.vs_lobby_cb.match_busy = true;
         vs_lobby_log("matchmake POST /lobbies/matchmake");
         vs_online_post_json("/api/v1/lobbies/matchmake", {}, function(_ok, _data, _status)
         {
+            global.vs_lobby_cb.match_busy = false;
             vs_lobby_log("matchmake result " + vs_lobby_http_why(_ok, _data, _status));
             var cb = global.vs_lobby_cb.on_done;
             global.vs_lobby_cb.on_done = undefined;
@@ -983,6 +1009,15 @@ function vs_lobby_enter(_lobbyJson)
         var old = string(o_st_handle.lobbyCode);
         if (old != "" && newCode != "" && old != newCode)
         {
+            // A second matchmake can create a new empty room while we are
+            // still connecting to the first. Keep the first join.
+            if (vs_ws_is_open() || vs_ws_state().state == 1)
+            {
+                vs_lobby_log("enter ignore extra " + newCode + " keep " + old);
+                vs_lobby_rest_leave(newCode);
+                vs_lobby_refresh_ui();
+                return;
+            }
             vs_lobby_log("enter replace " + old + " -> " + newCode);
             vs_lobby_rest_leave(old);
             vs_lobby_send_q_clear();
@@ -1030,6 +1065,10 @@ function vs_lobby_reset()
 {
     vs_lobby_log("reset " + vs_lobby_flags());
     vs_lobby_set_create_pending(false);
+    if (variable_global_exists("vs_lobby_cb") && is_struct(global.vs_lobby_cb))
+    {
+        global.vs_lobby_cb.match_busy = false;
+    }
     vs_lobby_send_q_clear();
     vs_ws_close();
     if (instance_exists(o_st_handle))
@@ -1161,6 +1200,16 @@ function vs_online_on_ws_frame(_op, _payload)
     }
     else if (_op == 1) // text = JSON control message
     {
+        var firstCtrl = 0;
+        if (buffer_get_size(_payload) > 0)
+        {
+            firstCtrl = buffer_peek(_payload, 0, buffer_u8);
+        }
+        if (firstCtrl != 123 && firstCtrl != 91)
+        {
+            vs_online_on_ws_frame(2, _payload);
+            return;
+        }
         var text = "";
         var count = buffer_get_size(_payload);
         var k = 0;
