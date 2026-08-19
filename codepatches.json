@@ -11,6 +11,12 @@
         "Type": 1
     },
     {
+        "Entry": "gml_Object_oCoroutineManager_Other_68",
+        "Find": "CoroutineEventHook();",
+        "Value": "CoroutineEventHook();\nvs_ws_handle_net_event();",
+        "Type": 1
+    },
+    {
         "Entry": "gml_GlobalScript_define_options",
         "Find": "for (var i = 0; i < array_length(global.system_options); i++)",
         "ExternalFile": "add_options.gml",

@@ -164,6 +164,7 @@ function vs_ws_connect(_path, _token)
         return;
     }
     ws.state = 1;
+    ws.asyncId = ws.socket;
     var rc = network_connect_raw_async(ws.socket, url, ws.port);
     if (rc < 0)
     {
@@ -210,27 +211,76 @@ function vs_ws_reset()
 
 // --- async networking event -----------------------------------------------
 
-function vs_ws_handle_net_event()
+function vs_ws_mark_open(_why)
 {
     var ws = vs_ws_state();
+    var was = ws.state;
+    ws.state = 3;
+    if (was != 3)
+    {
+        vs_ws_log("open (" + string(_why) + ") " + vs_ws_url_redact(ws.url));
+        vs_lobby_send_q_flush();
+    }
+}
+
+function vs_ws_handle_net_event()
+{
+    if (async_load == -1) return;
     var type = ds_map_find_value(async_load, "type");
-    var socketId = ds_map_find_value(async_load, "id");
-    if (ws.socket < 0 || socketId != ws.socket)
+    var socketId = vs_http_num(ds_map_find_value(async_load, "id"), -1);
+    var sz = vs_http_num(ds_map_find_value(async_load, "size"), -1);
+    var fp = string(type) + ":" + string(socketId) + ":" + string(sz) + ":" + string(current_time);
+    if (variable_global_exists("vs_ws_evt_fp") && global.vs_ws_evt_fp == fp)
     {
         return;
+    }
+    global.vs_ws_evt_fp = fp;
+
+    var ws = vs_ws_state();
+    var sock = vs_http_num(ws.socket, -2);
+    var succeeded = ds_map_find_value(async_load, "succeeded");
+    if (ws.state != 3)
+    {
+        vs_ws_log("evt type=" + string(type) + " id=" + string(socketId) + " sock=" + string(sock)
+            + " state=" + string(ws.state) + " ok=" + string(succeeded) + " size=" + string(sz));
+    }
+    if (ws.socket < 0)
+    {
+        return;
+    }
+    var id_ok = (socketId == sock);
+    if (!id_ok && variable_struct_exists(ws, "asyncId") && socketId == vs_http_num(ws.asyncId, -3))
+    {
+        id_ok = true;
+    }
+    if (!id_ok)
+    {
+        // Runner WSS often reports a different async id than network_create_socket.
+        if (ws.state == 1 && (type == network_type_non_blocking_connect
+            || type == network_type_connect
+            || type == network_type_data
+            || type == network_type_disconnect))
+        {
+            ws.asyncId = socketId;
+            id_ok = true;
+            vs_ws_log("evt bind asyncId=" + string(socketId) + " sock=" + string(sock));
+        }
+        else
+        {
+            return;
+        }
     }
 
     if (type == network_type_non_blocking_connect)
     {
-        if (ds_map_find_value(async_load, "succeeded"))
+        var ok = (succeeded == true) || (is_real(succeeded) && succeeded != 0);
+        if (ok)
         {
-            ws.state = 3;
-            vs_ws_log("open " + vs_ws_url_redact(ws.url));
-            vs_lobby_send_q_flush();
+            vs_ws_mark_open("async");
         }
         else
         {
-            vs_ws_log("connect failed " + vs_ws_url_redact(ws.url));
+            vs_ws_log("connect failed " + vs_ws_url_redact(ws.url) + " ok=" + string(succeeded));
             ws.lastError = "connect_failed";
             vs_lobby_send_q_clear();
             vs_ws_reset();
@@ -238,16 +288,15 @@ function vs_ws_handle_net_event()
     }
     else if (type == network_type_connect)
     {
-        ws.state = 3;
-        vs_ws_log("open (sync) " + vs_ws_url_redact(ws.url));
-        vs_lobby_send_q_flush();
+        vs_ws_mark_open("sync");
     }
     else if (type == network_type_data)
     {
+        // Welcome can arrive before the connect-succeeded event; ignoring it
+        // leaves state=connecting forever (queue send, never recv).
         if (ws.state != 3)
         {
-            vs_ws_log("data while state=" + string(ws.state) + " ignored");
-            return;
+            vs_ws_mark_open("first data");
         }
         vs_ws_dispatch_payload();
     }

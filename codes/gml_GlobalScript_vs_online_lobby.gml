@@ -1079,6 +1079,10 @@ function vs_lobby_send_packet(_type, _buffer)
     var entering = (vs_ws_state().state == 1) || vs_lobby_has_code();
     if (entering)
     {
+        if (vs_lobby_pkt_quiet(_type))
+        {
+            return;
+        }
         vs_lobby_send_q_init();
         if (array_length(global.vs_lobby_send_q) >= 64)
         {
