@@ -1,7 +1,11 @@
 var filePath = working_directory + "Charts/" + arg0 + "/" + arg1 + ".vsb";
 var chart = undefined;
 var chartPath = "";
-vs_csm_play_log("LoadSong chart=" + string(arg0) + " diff=" + string(arg1) + " vsb=" + string(file_exists(filePath)));
+if (variable_global_exists("song_id_last") && variable_global_exists("song_list")
+    && global.song_id_last >= 0 && global.song_id_last < array_length(global.song_list)
+    && variable_struct_exists(global.song_list[global.song_id_last], "is_custom"))
+    vs_csm_force_gm_audio();
+vs_csm_play_log("LoadSong chart=" + string(arg0) + " diff=" + string(arg1) + " vsb=" + string(file_exists(filePath)) + " gm=" + string(global.op_use_gamemaker_audio));
 
 if (file_exists(filePath))
 {

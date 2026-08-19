@@ -181,14 +181,17 @@ function vs_csm_search_load_dir(_chartId)
 
 function vs_csm_force_gm_audio()
 {
+    // Custom audio_create_stream sounds cannot go through precise_audio_*.
+    // CSM's initSetting flips this to GameMaker; official default is Custom (0).
+    if (variable_global_exists("op_use_gamemaker_audio") && global.op_use_gamemaker_audio == 1)
+        return false;
+    vs_csm_play_log("force gm audio was=" + string(variable_global_exists("op_use_gamemaker_audio") ? global.op_use_gamemaker_audio : "?"));
+    global.op_use_gamemaker_audio = 1;
     ini_open("system");
-    var soundEng = ini_read_real("config", "use_gamemaker_audio", 1);
-    if (soundEng == 0)
-    {
-        global.op_use_gamemaker_audio = 1;
-        ini_write_real("config", "use_gamemaker_audio", 1);
-    }
+    ini_write_real("config", "use_gamemaker_audio", 1);
     ini_close();
+    try { precise_audio_uninit_device(); } catch (_e) { }
+    return true;
 }
 
 function vs_csm_read_json_file(_path)
@@ -408,6 +411,8 @@ function vs_csm_start_song_guard(_song, _diffIdx)
         + " jacket=" + string(jk) + " ok=" + string(vs_csm_asset_ok_sprite(jk))
         + " bpm=" + string(struct_get_fallback(_song, "bpm_display", ""))
         + " encore=" + string(struct_get_fallback(_song, "has_encore", false)));
+    if (variable_struct_exists(_song, "is_custom"))
+        vs_csm_force_gm_audio();
     if (!vs_csm_asset_ok_audio(global.loadaudio))
     {
         vs_csm_play_log("loadaudio invalid, fallback generic");

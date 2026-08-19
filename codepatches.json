@@ -641,6 +641,12 @@
         "Type": 1
     },
     {
+        "Entry": "gml_Object_cc_Create_0",
+        "Find": "precise_audio_load_sound(global.loadaudio);",
+        "Value": "vs_csm_play_log(\"cc precise blocked\"); vs_csm_force_gm_audio(); if (!audio_exists(global.loadaudio)) global.loadaudio = music_chart_desparola; playback = audio_play_sound(global.loadaudio, 1, false, global.op_music_volume); audio_pause_sound(playback);",
+        "Type": 1
+    },
+    {
         "Entry": "gml_GlobalScript_upload_score",
         "Find": "var song = global.song_list[arg0];",
         "Value": "var song = global.song_list[arg0];if (struct_exists(song, \"is_custom\") && !vs_online_is_custom()) return;",
@@ -837,6 +843,12 @@
         "Find": "var song = global.shatter_list[arg0];",
         "Value": "var song = global.shatter_list[arg0];global.currentSongInfo=song;",
         "Type": 0
+    },
+    {
+        "Entry": "gml_GlobalScript_start_song_shatter",
+        "Find": "global.loadaudio = song.audio_id;",
+        "Value": "global.loadaudio = song.audio_id;if (variable_struct_exists(song, \"is_custom\")) vs_csm_force_gm_audio();",
+        "Type": 1
     },
     {
         "Entry": "gml_GlobalScript_start_song",
