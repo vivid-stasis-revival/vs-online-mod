@@ -243,6 +243,32 @@ function vs_lobby_local_autoplay()
     return variable_global_exists("op_autoplay") && global.op_autoplay;
 }
 
+function vs_lobby_has_queued_song()
+{
+    if (!instance_exists(o_st_handle)) return false;
+    if (!is_array(o_st_handle.songQueue) || array_length(o_st_handle.songQueue) <= 0) return false;
+    return o_st_handle.songQueue[0] != undefined;
+}
+
+function vs_lobby_local_need_dl()
+{
+    if (!vs_lobby_has_queued_song()) return false;
+    var s = o_st_handle.songQueue[0];
+    var sid = variable_struct_exists(s, "songId") ? s.songId : -1;
+    return vs_online_song_from_id(sid) == undefined;
+}
+
+function vs_lobby_tag_need_dl(_m)
+{
+    if (!vs_lobby_has_queued_song()) return false;
+    if (vs_lobby_member_is_host(_m)) return false;
+    if (_m != undefined && variable_struct_exists(_m, "id") && string(_m.id) == string(vs_online_player_id()))
+    {
+        return vs_lobby_local_need_dl();
+    }
+    return _m != undefined && variable_struct_exists(_m, "need_dl") && _m.need_dl;
+}
+
 function vs_lobby_diff_short(_d)
 {
     if (_d == 0) return "OPN";
@@ -328,11 +354,28 @@ function vs_lobby_draw_host_mark(_m, _x, _y)
     draw_set_color(c_white);
 }
 
+function vs_lobby_draw_dl_mark(_m, _x, _y)
+{
+    if (!vs_lobby_tag_need_dl(_m)) return;
+    draw_set_font(fnt_monacovs);
+    draw_set_halign(fa_left);
+    draw_set_color(make_color_rgb(255, 40, 40));
+    draw_text_o(_x, _y, "D");
+    draw_set_color(c_white);
+}
+
+function vs_lobby_draw_avatar_marks(_m, _x, _y)
+{
+    vs_lobby_draw_host_mark(_m, _x, _y);
+    vs_lobby_draw_dl_mark(_m, _x, _y);
+}
+
 function vs_lobby_keep_play_tags(_dst, _src)
 {
     if (_dst == undefined || _src == undefined) return;
     if (variable_struct_exists(_src, "play_diff")) _dst.play_diff = _src.play_diff;
     if (variable_struct_exists(_src, "autoplay")) _dst.autoplay = _src.autoplay;
+    if (variable_struct_exists(_src, "need_dl")) _dst.need_dl = _src.need_dl;
 }
 
 function vs_lobby_ops_lobby()
@@ -757,6 +800,7 @@ function vs_lobby_build_member(_mv)
         class: variable_struct_exists(_mv, "class") ? _mv.class : 0,
         play_diff: -1,
         autoplay: false,
+        need_dl: 0,
         sticker_scale: 0,
         sticker_alpha: 0,
         sticker_id: 0,

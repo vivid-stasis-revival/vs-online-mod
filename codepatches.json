@@ -194,7 +194,7 @@
     {
         "Entry": "gml_GlobalScript_SendQueuePacket",
         "Find": "        o_st_handle.songQueue = arg0;",
-        "Value": "        o_st_handle.songQueue = arg0; if (vs_online_is_custom()) vs_lobby_log(\"queue recv n=\" + string(array_length(arg0)));",
+        "Value": "        o_st_handle.songQueue = arg0; send_packet(SendPlayerInfoPacket); if (vs_online_is_custom()) vs_lobby_log(\"queue recv n=\" + string(array_length(arg0)));",
         "Type": 1
     },
     {
@@ -840,7 +840,7 @@
     {
         "Entry": "gml_GlobalScript_SendPlayerInfoPacket",
         "Find": "return buffer;",
-        "Value": "buffer_write(buffer, buffer_bool, true);buffer_write(buffer, buffer_s8, vs_lobby_local_play_diff());buffer_write(buffer, buffer_u8, vs_lobby_local_autoplay() ? 1 : 0);return buffer;",
+        "Value": "buffer_write(buffer, buffer_bool, true);buffer_write(buffer, buffer_s8, vs_lobby_local_play_diff());buffer_write(buffer, buffer_u8, vs_lobby_local_autoplay() ? 1 : 0);buffer_write(buffer, buffer_u8, vs_lobby_local_need_dl() ? 1 : 0);return buffer;",
         "Type": 0
     },
     {
@@ -852,13 +852,13 @@
     {
         "Entry": "gml_GlobalScript_SendPlayerInfoPacket",
         "Find": "buffer_delete(arg0);",
-        "Value": "try{obj.has_bwp = buffer_read(arg0, buffer_bool);}catch(e){obj.has_bwp = false;}try{obj.play_diff = buffer_read(arg0, buffer_s8);}catch(e){obj.play_diff = -1;}try{obj.autoplay = buffer_read(arg0, buffer_u8);}catch(e){obj.autoplay = 0;}buffer_delete(arg0);",
+        "Value": "try{obj.has_bwp = buffer_read(arg0, buffer_bool);}catch(e){obj.has_bwp = false;}try{obj.play_diff = buffer_read(arg0, buffer_s8);}catch(e){obj.play_diff = -1;}try{obj.autoplay = buffer_read(arg0, buffer_u8);}catch(e){obj.autoplay = 0;}try{obj.need_dl = buffer_read(arg0, buffer_u8);}catch(e){obj.need_dl = 0;}buffer_delete(arg0);",
         "Type": 0
     },
     {
         "Entry": "gml_GlobalScript_SendPlayerInfoPacket",
         "Find": "member.class = arg0.class;",
-        "Value": "member.class = arg0.class;member.has_bwp = arg0.has_bwp;member.play_diff = struct_get_fallback(arg0, \"play_diff\", -1);member.autoplay = struct_get_fallback(arg0, \"autoplay\", 0);",
+        "Value": "member.class = arg0.class;member.has_bwp = arg0.has_bwp;member.play_diff = struct_get_fallback(arg0, \"play_diff\", -1);member.autoplay = struct_get_fallback(arg0, \"autoplay\", 0);member.need_dl = struct_get_fallback(arg0, \"need_dl\", 0);",
         "Type": 0
     },
     {
@@ -942,7 +942,7 @@
     {
         "Entry": "gml_Object_obj_multiplayer_lobby_Draw_64",
         "Find": "draw_sprite_stretched(member.avatar, 0, bx + ox + 5, by + oy + 5 + (i * 35), 23, 23);",
-        "Value": "draw_sprite_stretched(member.avatar, 0, bx + ox + 5, by + oy + 5 + (i * 35), 23, 23);vs_lobby_draw_host_mark(member, bx + ox + 5, by + oy + 4 + (i * 35));",
+        "Value": "draw_sprite_stretched(member.avatar, 0, bx + ox + 5, by + oy + 5 + (i * 35), 23, 23);vs_lobby_draw_avatar_marks(member, bx + ox + 5, by + oy + 4 + (i * 35));",
         "Type": 0
     },
 
