@@ -826,6 +826,30 @@
         "Type": 0
     },
     {
+        "Entry": "gml_GlobalScript_SendStickerPacket",
+        "Find": "        TweenFire(o_st_handle.getMember(arg1), EaseOutBack, 0, true, 0, 0.5, \"sticker_scale\", 0, 1);",
+        "Value": "        var member = o_st_handle.getMember(arg1); if (member == undefined) { if (vs_online_is_custom()) vs_lobby_log(\"SendSticker drop no member from=\" + string(arg1)); exit; }\n        TweenFire(member, EaseOutBack, 0, true, 0, 0.5, \"sticker_scale\", 0, 1);",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_GlobalScript_SendStickerPacket",
+        "Find": "        TweenFire(o_st_handle.getMember(arg1), EaseOutExpo, 0, true, 0, 0.5, \"sticker_alpha\", 0, 1);",
+        "Value": "        TweenFire(member, EaseOutExpo, 0, true, 0, 0.5, \"sticker_alpha\", 0, 1);",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_GlobalScript_SendStickerPacket",
+        "Find": "        o_st_handle.getMember(arg1).sticker_id = arg0;",
+        "Value": "        member.sticker_id = arg0;",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_GlobalScript_SendStickerPacket",
+        "Find": "        o_st_handle.getMember(arg1).sticker_timer = 60;",
+        "Value": "        member.sticker_timer = 60; if (vs_online_is_custom()) vs_lobby_log(\"recv SendSticker from=\" + string(arg1) + \" id=\" + string(arg0));",
+        "Type": 0
+    },
+    {
         "Entry": "gml_Object_obj_multiplayer_lobby_Draw_64",
         "Find": "if (member.score != 0)",
         "Value": "if (vs_member_get_score(member) != 0)",

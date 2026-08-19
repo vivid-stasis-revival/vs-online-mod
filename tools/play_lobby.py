@@ -270,8 +270,9 @@ class FakeHost:
         if self.host_id != self.me:
             return
         log(f"host_sync ({why})")
-        await self.send(pkt_send_queue(self.queue, self.roster(), self.previous, self.winner), "SendQueue")
         await self.send(pkt_player_info(), "SendPlayerInfo")
+        await self.send_sticker(why="sync")
+        await self.send(pkt_send_queue(self.queue, self.roster(), self.previous, self.winner), "SendQueue")
         await self.send(pkt_update_score(self.my_score, self.my_flag), "UpdateScore")
 
     def everyone_ready(self) -> bool:

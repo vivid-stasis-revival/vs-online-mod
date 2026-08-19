@@ -681,7 +681,7 @@ function vs_lobby_pkt_name(_type)
 function vs_lobby_pkt_quiet(_type)
 {
     var n = vs_lobby_pkt_name(_type);
-    return (n == "UpdateScore" || n == "SendSticker");
+    return (n == "UpdateScore");
 }
 
 // Host copies queue / player info / score to everyone who is Connected.
