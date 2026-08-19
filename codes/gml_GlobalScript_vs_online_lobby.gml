@@ -1400,33 +1400,52 @@ function vs_lobby_leave()
     vs_lobby_reset();
 }
 
+function vs_lobby_count_busy()
+{
+    return variable_global_exists("vs_lobby_count_busy") && global.vs_lobby_count_busy;
+}
+
+function vs_lobby_count_waiting()
+{
+    return variable_global_exists("vs_lobby_count_wait") && global.vs_lobby_count_wait;
+}
+
+function vs_lobby_count_schedule()
+{
+    if (vs_lobby_count_waiting()) return;
+    if (!instance_exists(obj_multiplayer_lobby)) return;
+    if (!vs_online_is_custom()) return;
+    global.vs_lobby_count_wait = true;
+    call_later(60 * 5, time_source_units_frames, vs_lobby_count_on_timer);
+}
+
+function vs_lobby_count_on_timer()
+{
+    global.vs_lobby_count_wait = false;
+    vs_lobby_refresh_count();
+}
+
 function vs_lobby_refresh_count()
 {
-    if (!vs_online_is_account())
+    if (!instance_exists(obj_multiplayer_lobby) || !vs_online_is_custom()) return;
+    if (vs_lobby_has_code() || !vs_online_is_account() || vs_lobby_count_busy())
     {
-        vs_lobby_log("count skip guest");
+        vs_lobby_count_schedule();
         return;
     }
-    vs_lobby_log("count GET /lobbies");
+    global.vs_lobby_count_busy = true;
     vs_online_get_json("/api/v1/lobbies", false, vs_lobby_count_done);
 }
 
 function vs_lobby_count_done(_ok, _data, _status)
 {
-    var n = 0;
-    if (_ok && _data != undefined && variable_struct_exists(_data, "lobbies") && is_array(_data.lobbies))
+    global.vs_lobby_count_busy = false;
+    if (_ok && _data != undefined && variable_struct_exists(_data, "lobbies") && is_array(_data.lobbies)
+        && instance_exists(obj_multiplayer_lobby))
     {
-        n = array_length(_data.lobbies);
+        obj_multiplayer_lobby.lobbyCount = array_length(_data.lobbies);
     }
-    vs_lobby_log("count result ok=" + string(_ok) + " http=" + string(_status) + " n=" + string(n));
-    if (instance_exists(obj_multiplayer_lobby))
-    {
-        obj_multiplayer_lobby.lobbyCount = n;
-    }
-    else
-    {
-        vs_lobby_log("count skip no lobby ui");
-    }
+    vs_lobby_count_schedule();
 }
 
 // --- state ----------------------------------------------------------------
