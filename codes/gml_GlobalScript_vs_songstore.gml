@@ -69,6 +69,15 @@ function vs_songstore_tmp_abs(_tmp)
     return working_directory + name;
 }
 
+function vs_songstore_tmp_src(_tmp)
+{
+    if (_tmp == undefined || _tmp == "") return "";
+    if (file_exists(_tmp)) return _tmp;
+    var abs = vs_songstore_tmp_abs(_tmp);
+    if (abs != "" && file_exists(abs)) return abs;
+    return "";
+}
+
 function vs_songstore_parent(_path)
 {
     var p = string_replace_all(string(_path), "\\", "/");
@@ -632,27 +641,28 @@ function vs_songstore_dl_commit(_ok)
 {
     var st = global.vs_dl_state;
     var tmp = st.tmpPath;
+    var src = vs_songstore_tmp_src(tmp);
     var dest = st.localPath;
     if (_ok)
     {
-        if (tmp != "" && file_exists(tmp))
+        if (src != "")
         {
             vs_songstore_ensure_dir(vs_songstore_parent(dest));
             var put = vs_songstore_install_path(dest);
             if (file_exists(dest)) file_delete(dest);
             if (file_exists(put)) file_delete(put);
-            file_copy(tmp, dest);
-            if (!file_exists(dest) && !file_exists(put)) file_copy(tmp, put);
-            if (file_exists(tmp)) file_delete(tmp);
+            file_copy(src, dest);
+            if (!file_exists(dest) && !file_exists(put)) file_copy(src, put);
+            if (file_exists(src)) file_delete(src);
             dest = file_exists(dest) ? dest : put;
         }
         _ok = file_exists(dest) || file_exists(vs_songstore_install_path(st.localPath));
         if (!_ok) vs_songstore_set_err("could not write " + vs_songstore_install_path(st.localPath));
         else vs_songstore_log("wrote " + vs_songstore_install_path(st.localPath));
     }
-    else if (tmp != "" && file_exists(tmp))
+    else if (src != "")
     {
-        file_delete(tmp);
+        file_delete(src);
     }
     vs_songstore_sweep_tmp();
     return _ok;
@@ -665,7 +675,9 @@ function vs_songstore_dl_complete(_ok)
     var cb = st.on_done;
     var path = st.localPath;
     var tmp = st.tmpPath;
-    if (tmp != "" && file_exists(tmp)) file_delete(tmp);
+    var src = vs_songstore_tmp_src(tmp);
+    if (src != "") file_delete(src);
+    else if (tmp != "" && file_exists(tmp)) file_delete(tmp);
     st.on_done = undefined;
     st.rid = -1;
     st.gen = 0;
@@ -681,6 +693,38 @@ function vs_songstore_dl_finish(_ok)
     vs_songstore_dl_init();
     _ok = vs_songstore_dl_commit(_ok);
     vs_songstore_dl_complete(_ok);
+}
+
+function vs_songstore_dl_wait_tmp()
+{
+    var st = global.vs_dl_state;
+    if (st.placing) return;
+    st.placing = true;
+    st.placeTries = 0;
+    vs_songstore_log("wait tmp " + string(st.localPath));
+    call_later(1, time_source_units_frames, vs_songstore_dl_on_place);
+}
+
+function vs_songstore_dl_on_place()
+{
+    vs_songstore_dl_init();
+    if (!global.vs_dl_busy) return;
+    var st = global.vs_dl_state;
+    if (!st.placing) return;
+    if (vs_songstore_tmp_src(st.tmpPath) != "")
+    {
+        vs_songstore_log("tmp ready " + string(st.localPath));
+        vs_songstore_dl_finish(true);
+        return;
+    }
+    st.placeTries += 1;
+    if (st.placeTries >= 45)
+    {
+        vs_songstore_set_err("could not write " + vs_songstore_install_path(st.localPath));
+        vs_songstore_dl_finish(false);
+        return;
+    }
+    call_later(1, time_source_units_frames, vs_songstore_dl_on_place);
 }
 
 function vs_songstore_on_http()
@@ -702,22 +746,44 @@ function vs_songstore_on_http()
         global.vs_dlmgr_dl.fileTotal = st.total;
     }
     var doneProg = (st.total > 0 && st.got >= st.total);
-    if (gmStatus == 1 && !doneProg)
+    var tmpHere = (vs_songstore_tmp_src(st.tmpPath) != "");
+    // status=1 is progress. Tiny files (info.json) report got==total before
+    // the temp file exists; finishing here writes nothing.
+    if (gmStatus == 1)
     {
-        return;
+        if (!(tmpHere && doneProg))
+        {
+            if (doneProg && !tmpHere) vs_songstore_dl_wait_tmp();
+            return;
+        }
     }
     var httpStatus = vs_http_num(ds_map_find_value(async_load, "http_status"), -1);
-    var httpOk = (httpStatus < 0 || (httpStatus >= 200 && httpStatus < 300));
-    var tmpHere = (st.tmpPath != "" && (file_exists(st.tmpPath) || file_exists(vs_songstore_tmp_abs(st.tmpPath))));
-    var ok = httpOk && ((gmStatus >= 0) || doneProg || tmpHere);
     if (variable_global_exists("vs_dlmgr_dl") && global.vs_dlmgr_dl.cancel)
     {
-        ok = false;
+        vs_songstore_dl_finish(false);
+        return;
     }
-    if (!ok && !httpOk) vs_songstore_set_err("http " + string(httpStatus) + " for " + string(st.url));
-    else if (!ok) vs_songstore_set_err("download file missing after http " + string(httpStatus) + " st=" + string(gmStatus));
-    vs_songstore_log("done " + string(st.localPath) + " ok=" + string(ok) + " http=" + string(httpStatus) + " st=" + string(gmStatus) + " tmp=" + string(tmpHere));
-    vs_songstore_dl_finish(ok);
+    if (gmStatus < 0)
+    {
+        vs_songstore_set_err("download file missing after http " + string(httpStatus) + " st=" + string(gmStatus));
+        vs_songstore_log("done " + string(st.localPath) + " ok=0 http=" + string(httpStatus) + " st=" + string(gmStatus) + " tmp=" + string(tmpHere));
+        vs_songstore_dl_finish(false);
+        return;
+    }
+    if (httpStatus >= 400)
+    {
+        vs_songstore_set_err("http " + string(httpStatus) + " for " + string(st.url));
+        vs_songstore_log("done " + string(st.localPath) + " ok=0 http=" + string(httpStatus) + " st=" + string(gmStatus) + " tmp=" + string(tmpHere));
+        vs_songstore_dl_finish(false);
+        return;
+    }
+    if (!tmpHere)
+    {
+        vs_songstore_dl_wait_tmp();
+        return;
+    }
+    vs_songstore_log("done " + string(st.localPath) + " ok=1 http=" + string(httpStatus) + " st=" + string(gmStatus) + " tmp=1");
+    vs_songstore_dl_finish(true);
 }
 
 function vs_songstore_download_package(_songId, _chartId, _on_done)
