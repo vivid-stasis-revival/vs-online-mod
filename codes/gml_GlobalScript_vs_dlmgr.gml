@@ -4,7 +4,7 @@
 // Downloads / updates custom charts from the live vs-server-go catalog into
 // "Custom Songs/" (CSM format), plus the matching Local tab.
 //
-//   - browse songs / backstage / shatters (paginated, size=100) with search (?q=)
+//   - browse songs / backstage / shatters / packs (paginated, size=100) with search (?q=)
 //   - annotate each row with local state (downloaded / needs update via
 //     sha1 diff against the local folder)
 //   - single download/update, "check page", and "update page" batch actions
@@ -21,8 +21,8 @@
 // below. The browser object drives everything else through its own instances.
 // ============================================================================
 
-// GET /api/v1/songs or /shatters?q=&page=&size=100.
-// _kind: 0 songs, 1 songs?backstage=1, 2 shatters.
+// GET /api/v1/songs or /shatters or /packs?q=&page=&size=100.
+// _kind: 0 songs, 1 songs?backstage=1, 2 shatters, 3 packs.
 // _on_done(ok, data|undefined).
 function vs_dlmgr_list(_query, _page, _kind, _on_done)
 {
@@ -37,7 +37,9 @@ function vs_dlmgr_list(_query, _page, _kind, _on_done)
     vs_online_with_conn(function()
     {
         var kind = global.vs_dlmgr_cb.kind;
-        var path = (kind == 2) ? "/api/v1/shatters" : "/api/v1/songs";
+        var path = "/api/v1/songs";
+        if (kind == 2) path = "/api/v1/shatters";
+        else if (kind == 3) path = "/api/v1/packs";
         var url = path + "?page=" + string(max(global.vs_dlmgr_cb.page, 1)) + "&size=100";
         var q = global.vs_dlmgr_cb.query;
         if (q != undefined && q != "")

@@ -63,6 +63,60 @@ function vs_dlbr_build_row(_song)
     };
 }
 
+function vs_dlbr_is_pack(_r)
+{
+    return _r != undefined && variable_struct_exists(_r, "kind") && _r.kind == 3;
+}
+
+function vs_dlbr_build_pack_row(_p)
+{
+    var pid = variable_struct_exists(_p, "id") ? string(_p.id) : "";
+    var jackets = (variable_struct_exists(_p, "jackets") && is_array(_p.jackets)) ? _p.jackets : [];
+    var ju = (array_length(jackets) > 0) ? string(jackets[0]) : "";
+    var sub = vs_packmgr_subscribed(pid);
+    var n = variable_struct_exists(_p, "songCount") ? _p.songCount : 0;
+    return
+    {
+        id: pid,
+        chartId: pid,
+        name: variable_struct_exists(_p, "name") ? _p.name : pid,
+        artist: variable_struct_exists(_p, "ownerName") ? _p.ownerName : "",
+        chartCount: n,
+        songCount: n,
+        version: variable_struct_exists(_p, "version") ? _p.version : 0,
+        diffName: "",
+        diffNum: "",
+        jackets: jackets,
+        jacketUrl: ju,
+        previewUrl: "",
+        musicUrl: "",
+        ownerName: variable_struct_exists(_p, "ownerName") ? _p.ownerName : "",
+        downloads: 0,
+        hasBackstage: false,
+        kind: 3,
+        downloaded: sub,
+        tracked: sub,
+        checked: false,
+        need: -1
+    };
+}
+
+function vs_dlbr_filter_name(_f)
+{
+    if (catalog == 3)
+    {
+        switch (_f)
+        {
+            case 0: return "All";
+            case 1: return "Not subscribed";
+            case 2: return "Subscribed";
+            case 3: return "Updates available";
+        }
+        return "?";
+    }
+    return vs_dlmgr_filter_name(_f);
+}
+
 function vs_dlbr_row_all_index(_chartId)
 {
     var n = array_length(rows_all);
@@ -102,6 +156,14 @@ function vs_dlbr_row_jacket(_r)
 {
     if (_r == undefined) return "";
     if (variable_struct_exists(_r, "jacketUrl") && _r.jacketUrl != "") return string(_r.jacketUrl);
+    if (vs_dlbr_is_pack(_r))
+    {
+        if (variable_struct_exists(_r, "jackets") && is_array(_r.jackets) && array_length(_r.jackets) > 0)
+        {
+            return string(_r.jackets[0]);
+        }
+        return "";
+    }
     var sid = "";
     if (variable_struct_exists(_r, "id")) sid = string(_r.id);
     if (sid == "") return "";
@@ -112,6 +174,7 @@ function vs_dlbr_row_jacket(_r)
 function vs_dlbr_row_audio(_r)
 {
     if (_r == undefined) return "";
+    if (vs_dlbr_is_pack(_r)) return "";
     if (variable_struct_exists(_r, "previewUrl") && _r.previewUrl != "") return string(_r.previewUrl);
     if (variable_struct_exists(_r, "musicUrl") && _r.musicUrl != "") return string(_r.musicUrl);
     return vs_media_audio_url("", vs_dlbr_row_jacket(_r), variable_struct_exists(_r, "id") ? _r.id : "");
@@ -127,6 +190,8 @@ function vs_dlbr_selected_refresh()
     var r = rows[sel];
     if (checking && check_chart == r.chartId)
         vs_dlbr_set_status("Checking " + r.chartId + " ...");
+    else if (vs_dlbr_is_pack(r))
+        vs_dlbr_set_status(vs_packmgr_row_status(r));
     else
         vs_dlbr_set_status(vs_dlmgr_row_status(r));
     vs_media_select(r.id, vs_dlbr_row_jacket(r), vs_dlbr_row_audio(r));
@@ -164,6 +229,7 @@ function vs_dlbr_page_url(_r)
     if (sid == "") return "";
     var path = "/songs/";
     if (variable_struct_exists(_r, "kind") && _r.kind == 2) path = "/shatters/";
+    else if (variable_struct_exists(_r, "kind") && _r.kind == 3) path = "/packs/";
     return vs_online_frontend_url() + path + sid;
 }
 
@@ -190,7 +256,7 @@ function vs_dlbr_open_page()
     var page = vs_dlbr_page_url(vs_dlbr_current_web_row());
     if (page == "")
     {
-        vs_dlbr_set_status("No web page for this chart.");
+        vs_dlbr_set_status("No web page for this item.");
         return;
     }
     url_open(page);
@@ -238,7 +304,9 @@ function vs_dlbr_fetch_page()
         vs_dlbr_set_status("Guest / not logged in - online catalog disabled. Play downloaded charts (V -> Local) or log in: Settings -> VS Online -> Account Management.");
         return;
     }
-    vs_dlbr_set_status(query == "" ? "Loading charts..." : "Search: \"" + query + "\" ...");
+    vs_dlbr_set_status(query == ""
+        ? ((catalog == 3) ? "Loading packs..." : "Loading charts...")
+        : "Search: \"" + query + "\" ...");
     vs_dlmgr_list(query, page, catalog, method(self, vs_dlbr_on_list));
     if (instance_exists(vs_online_error))
     {
@@ -254,14 +322,20 @@ function vs_dlbr_on_list(_ok, _data)
     {
         var arr = [];
         var items = [];
-        if (variable_struct_exists(_data, "shatters") && is_array(_data.shatters)) items = _data.shatters;
+        var packMode = false;
+        if (variable_struct_exists(_data, "packs") && is_array(_data.packs))
+        {
+            items = _data.packs;
+            packMode = true;
+        }
+        else if (variable_struct_exists(_data, "shatters") && is_array(_data.shatters)) items = _data.shatters;
         else if (variable_struct_exists(_data, "songs") && is_array(_data.songs)) items = _data.songs;
         total = variable_struct_exists(_data, "total") ? floor(_data.total) : array_length(items);
         maxpage = max(1, ceil(total / 100));
         var i = 0;
         repeat (array_length(items))
         {
-            array_push(arr, vs_dlbr_build_row(items[i]));
+            array_push(arr, packMode ? vs_dlbr_build_pack_row(items[i]) : vs_dlbr_build_row(items[i]));
             i++;
         }
         rows_all = arr;
@@ -286,7 +360,55 @@ function vs_dlbr_check_row_index(_ai)
     checking = true;
     check_chart = r.chartId;
     vs_dlbr_set_status("Checking " + r.chartId + " ...");
+    if (vs_dlbr_is_pack(r))
+    {
+        vs_packmgr_check(r.id, method(self, vs_dlbr_on_pack_check));
+        return;
+    }
     vs_dlmgr_check(r.id, r.chartId, r.kind, method(self, vs_dlbr_on_check));
+}
+
+function vs_dlbr_on_pack_check(_ok, _need)
+{
+    checking = false;
+    var n = array_length(rows_all);
+    var i = 0;
+    repeat (n)
+    {
+        if (rows_all[i].chartId == check_chart)
+        {
+            var rr = rows_all[i];
+            rr.need = _ok ? _need : -2;
+            break;
+        }
+        i++;
+    }
+    if (check_all)
+    {
+        vs_dlbr_set_status("Checking " + string(check_idx) + "/" + string(n) + " ...");
+        vs_dlbr_check_next();
+        return;
+    }
+    vs_dlbr_apply_filter();
+    vs_dlbr_selected_refresh();
+    if (enter_act)
+    {
+        enter_act = false;
+        var ai2 = vs_dlbr_row_all_index(check_chart);
+        if (ai2 >= 0)
+        {
+            var after = rows_all[ai2];
+            if (after.need > 0)
+            {
+                vs_dlbr_start_download(after);
+                return;
+            }
+            if (after.tracked && after.need == 0)
+            {
+                vs_dlbr_set_status(after.name + " is up to date.");
+            }
+        }
+    }
 }
 
 function vs_dlbr_on_check(_ok, _need)
@@ -365,7 +487,7 @@ function vs_dlbr_check_next()
     check_all = false;
     vs_dlbr_apply_filter();
     vs_dlbr_selected_refresh();
-    vs_dlbr_set_status("Checked " + string(n) + " chart(s) on this page.");
+    vs_dlbr_set_status("Checked " + string(n) + ((catalog == 3) ? " pack(s)" : " chart(s)") + " on this page.");
 }
 
 function vs_dlbr_check_all_rows()
@@ -389,9 +511,14 @@ function vs_dlbr_start_download(_r)
     if (updating) return;
     updating = true;
     cur_id = _r.id;
-    cur_chart = _r.chartId;
+    cur_chart = vs_dlbr_is_pack(_r) ? _r.name : _r.chartId;
     note = "";
-    vs_dlbr_set_status("Downloading " + _r.name + " ...");
+    vs_dlbr_set_status((vs_dlbr_is_pack(_r) ? "Installing " : "Downloading ") + _r.name + " ...");
+    if (vs_dlbr_is_pack(_r))
+    {
+        vs_packmgr_install(_r.id, method(self, vs_dlbr_on_download));
+        return;
+    }
     vs_dlmgr_download(_r.id, _r.chartId, _r.kind, method(self, vs_dlbr_on_download));
 }
 
@@ -399,7 +526,8 @@ function vs_dlbr_on_download(_ok)
 {
     updating = false;
     vs_dlbr_close_detail();
-    var cancelled = variable_global_exists("vs_dlmgr_dl") && global.vs_dlmgr_dl.cancel;
+    var cancelled = (variable_global_exists("vs_dlmgr_dl") && global.vs_dlmgr_dl.cancel)
+        || (variable_global_exists("vs_pack_job") && global.vs_pack_job.cancel);
     if (cancelled)
     {
         note = "Download cancelled.";
@@ -447,13 +575,15 @@ function vs_dlbr_batch_update()
     }
     if (array_length(q) == 0)
     {
-        vs_dlbr_set_status("No tracked updates on this page. Press K to check the page first.");
+        vs_dlbr_set_status((catalog == 3)
+            ? "No subscribed pack updates on this page. Press K to check the page first."
+            : "No tracked updates on this page. Press K to check the page first.");
         return;
     }
     update_queue = q;
     update_qidx = 0;
     updating = true;
-    vs_dlbr_set_status("Updating " + string(array_length(q)) + " chart(s) on this page...");
+    vs_dlbr_set_status("Updating " + string(array_length(q)) + ((catalog == 3) ? " pack(s)" : " chart(s)") + " on this page...");
     vs_dlbr_batch_next();
 }
 
@@ -470,12 +600,18 @@ function vs_dlbr_batch_next()
     var ri = update_queue[update_qidx];
     var r = rows_all[ri];
     batch_name = r.name;
+    if (vs_dlbr_is_pack(r))
+    {
+        vs_packmgr_install(r.id, method(self, vs_dlbr_on_batch));
+        return;
+    }
     vs_dlmgr_download(r.id, r.chartId, r.kind, method(self, vs_dlbr_on_batch));
 }
 
 function vs_dlbr_on_batch(_ok)
 {
-    if (variable_global_exists("vs_dlmgr_dl") && global.vs_dlmgr_dl.cancel)
+    if ((variable_global_exists("vs_dlmgr_dl") && global.vs_dlmgr_dl.cancel)
+        || (variable_global_exists("vs_pack_job") && global.vs_pack_job.cancel))
     {
         updating = false;
         update_queue = [];
@@ -491,7 +627,7 @@ function vs_dlbr_cycle_filter()
 {
     if (view == 1) return;
     filter = (filter + 1) % 4;
-    vs_dlbr_set_status("Filter: " + vs_dlmgr_filter_name(filter));
+    vs_dlbr_set_status("Filter: " + vs_dlbr_filter_name(filter));
     if (filter == 3)
     {
         vs_dlbr_check_all_rows();
@@ -524,7 +660,7 @@ function vs_dlbr_set_catalog(_c)
 
 function vs_dlbr_cycle_catalog()
 {
-    vs_dlbr_set_catalog((catalog + 1) % 3);
+    vs_dlbr_set_catalog((catalog + 1) % 4);
 }
 
 function vs_dlbr_catalog_key()
@@ -547,6 +683,11 @@ function vs_dlbr_catalog_key()
     if (keyboard_check_pressed(ord("3")))
     {
         vs_dlbr_set_catalog(2);
+        return true;
+    }
+    if (keyboard_check_pressed(ord("4")))
+    {
+        vs_dlbr_set_catalog(3);
         return true;
     }
     return false;
@@ -627,6 +768,24 @@ function vs_dlbr_jump_from_detail()
     else
     {
         var r = vs_dlbr_detail_row();
+        if (vs_dlbr_is_pack(r))
+        {
+            var members = vs_packmgr_members_from_detail(detail);
+            var i = 0;
+            repeat (array_length(members))
+            {
+                var m = members[i];
+                if (m != undefined && vs_songstore_has_chart(m.chartId))
+                {
+                    vs_dlbr_close_detail();
+                    vs_dlbr_jump_chart(m.chartId, m.kind, m.name);
+                    return;
+                }
+                i++;
+            }
+            vs_dlbr_set_status("No pack songs downloaded yet.");
+            return;
+        }
         if (r != undefined)
         {
             chartId = r.chartId;
@@ -697,7 +856,7 @@ function vs_dlbr_step()
     {
         if (keyboard_check_pressed(vk_escape))
         {
-            vs_dlmgr_cancel();
+            vs_packmgr_cancel();
             vs_dlbr_set_status("Cancelling download...");
         }
         return;
@@ -1026,12 +1185,12 @@ function vs_dlbr_draw_hints(_x, _y, _w)
 
 function vs_dlbr_draw_tabs(_x, _y, _w)
 {
-    var names = ["SONG", "BACK", "SHTR", "LOC"];
+    var names = ["SONG", "BACK", "SHTR", "PACK", "LOC"];
     var tx = _x;
     var i = 0;
-    repeat (4)
+    repeat (5)
     {
-        var on = (i == 3) ? (view == 1) : (view == 0 && catalog == i);
+        var on = (i == 4) ? (view == 1) : (view == 0 && catalog == i);
         var lab = names[i];
         var tw = string_width(lab) + 8;
         if (tx + tw > _x + _w) break;
@@ -1113,7 +1272,13 @@ function vs_dlbr_draw_bar(_x, _y, _w, _h, _idx)
     draw_text(_x + 4, _y + 2, mk);
     var line = r.name;
     if (r.artist != "") line += " - " + r.artist;
-    if (web && variable_struct_exists(r, "kind") && r.kind == 2)
+    if (web && vs_dlbr_is_pack(r))
+    {
+        var n = variable_struct_exists(r, "songCount") ? r.songCount : r.chartCount;
+        var ver = variable_struct_exists(r, "version") ? r.version : 0;
+        line += " [" + string(n) + "] v" + string(ver);
+    }
+    else if (web && variable_struct_exists(r, "kind") && r.kind == 2)
     {
         var dlab = r.diffName;
         if (r.diffNum != "") dlab = (dlab != "") ? (dlab + " " + r.diffNum) : r.diffNum;
@@ -1158,7 +1323,56 @@ function vs_dlbr_open_detail(_r, _local)
     detail_id = _r.id;
     detail_chart = _r.chartId;
     vs_media_select(_r.id, vs_dlbr_row_jacket(_r), vs_dlbr_row_audio(_r));
+    if (vs_dlbr_is_pack(_r))
+    {
+        vs_online_get_json("/api/v1/packs/" + _r.id, false, vs_dlbr_on_pack_detail);
+        return;
+    }
     vs_songstore_fetch(variable_struct_exists(_r, "kind") ? _r.kind : 0, _r.id, vs_dlbr_on_detail);
+}
+
+function vs_dlbr_on_pack_detail(_ok, _data, _status)
+{
+    if (!instance_exists(vs_downloader_browser)) return;
+    with (vs_downloader_browser)
+    {
+        detail_loading = false;
+        if (!_ok || _data == undefined)
+        {
+            vs_dlbr_set_status("Could not load pack.");
+            return;
+        }
+        detail = _data;
+        var ju = "";
+        if (variable_struct_exists(_data, "songs") && is_array(_data.songs) && array_length(_data.songs) > 0)
+        {
+            var s0 = _data.songs[0];
+            if (s0 != undefined && variable_struct_exists(s0, "jacketUrl")) ju = string(s0.jacketUrl);
+        }
+        if (ju == "" && variable_struct_exists(_data, "shatters") && is_array(_data.shatters) && array_length(_data.shatters) > 0)
+        {
+            var sh0 = _data.shatters[0];
+            if (sh0 != undefined && variable_struct_exists(sh0, "jacketUrl")) ju = string(sh0.jacketUrl);
+        }
+        vs_media_select(detail_id, (ju != "") ? ju : vs_dlbr_row_jacket(vs_dlbr_detail_row()), "");
+        var ai = vs_dlbr_row_all_index(detail_chart);
+        if (ai < 0) return;
+        var rr = rows_all[ai];
+        var members = vs_packmgr_members_from_detail(_data);
+        var ver = variable_struct_exists(_data, "version") ? _data.version : 0;
+        rr.need = vs_packmgr_missing_count(members);
+        if (!checking)
+        {
+            rr.checked = true;
+            checking = true;
+            check_chart = rr.chartId;
+            vs_packmgr_check_members(rr.id, members, ver, method(id, vs_dlbr_on_pack_check));
+        }
+        else
+        {
+            rr.checked = true;
+        }
+    }
 }
 
 function vs_dlbr_on_detail(_ok, _data)
@@ -1226,7 +1440,7 @@ function vs_dlbr_detail_buttons()
     var b = [];
     if (detail_confirm)
     {
-        array_push(b, { id: "yes", label: "Confirm delete" });
+        array_push(b, { id: "yes", label: vs_dlbr_is_pack(vs_dlbr_detail_row()) ? "Confirm unsub" : "Confirm delete" });
         array_push(b, { id: "no", label: "Cancel" });
         return b;
     }
@@ -1238,6 +1452,16 @@ function vs_dlbr_detail_buttons()
         return b;
     }
     var r = vs_dlbr_detail_row();
+    if (vs_dlbr_is_pack(r))
+    {
+        if (vs_dlbr_pack_has_local(detail)) array_push(b, { id: "jump", label: "Play" });
+        if (!r.downloaded) array_push(b, { id: "dl", label: "Get" });
+        else if (r.need > 0) array_push(b, { id: "dl", label: "Update" });
+        if (r.downloaded) array_push(b, { id: "unsub", label: "Unsub" });
+        array_push(b, { id: "page", label: "Page" });
+        array_push(b, { id: "close", label: "Close" });
+        return b;
+    }
     if (r != undefined)
     {
         if (r.downloaded) array_push(b, { id: "jump", label: "Play" });
@@ -1249,6 +1473,29 @@ function vs_dlbr_detail_buttons()
     array_push(b, { id: "page", label: "Page" });
     array_push(b, { id: "close", label: "Close" });
     return b;
+}
+
+function vs_dlbr_pack_has_local(_data)
+{
+    var members = vs_packmgr_members_from_detail(_data);
+    var i = 0;
+    repeat (array_length(members))
+    {
+        var m = members[i];
+        if (m != undefined && variable_struct_exists(m, "chartId") && vs_songstore_has_chart(m.chartId)) return true;
+        i++;
+    }
+    return false;
+}
+
+function vs_dlbr_do_unsub()
+{
+    var packId = detail_id;
+    var name = (detail != undefined && variable_struct_exists(detail, "name")) ? string(detail.name) : packId;
+    vs_packmgr_unsub(packId);
+    vs_dlbr_close_detail();
+    vs_dlbr_fetch_page();
+    vs_dlbr_set_status("Unsubscribed " + name + " (charts kept)");
 }
 
 function vs_dlbr_do_delete()
@@ -1271,7 +1518,15 @@ function vs_dlbr_detail_act(_id)
     }
     if (_id == "yes")
     {
-        vs_dlbr_do_delete();
+        var r = vs_dlbr_detail_row();
+        if (vs_dlbr_is_pack(r)) vs_dlbr_do_unsub();
+        else vs_dlbr_do_delete();
+        return;
+    }
+    if (_id == "unsub")
+    {
+        detail_confirm = true;
+        detail_btn = 0;
         return;
     }
     if (_id == "del")
@@ -1394,6 +1649,7 @@ function vs_dlbr_draw_detail()
     {
         if (variable_struct_exists(detail, "name") && detail.name != "") name = detail.name;
         if (variable_struct_exists(detail, "artist")) artist = string(detail.artist);
+        if (artist == "" && variable_struct_exists(detail, "description")) artist = string(detail.description);
         if (variable_struct_exists(detail, "ownerName")) owner = string(detail.ownerName);
         if (variable_struct_exists(detail, "bpmDisplay")) bpm = string(detail.bpmDisplay);
         if (variable_struct_exists(detail, "jacketArtist")) jacketBy = string(detail.jacketArtist);
@@ -1422,6 +1678,16 @@ function vs_dlbr_draw_detail()
         if (detail_loading)
         {
             draw_text(px + 6, dy, vs_dlbr_clip_text("Loading...", right - px - 6));
+        }
+        else if (detail != undefined && (variable_struct_exists(detail, "songs") || variable_struct_exists(detail, "shatters")))
+        {
+            var ns = 0;
+            var nh = 0;
+            if (variable_struct_exists(detail, "songs") && is_array(detail.songs)) ns = array_length(detail.songs);
+            if (variable_struct_exists(detail, "shatters") && is_array(detail.shatters)) nh = array_length(detail.shatters);
+            var lab = string(ns + nh) + " song(s)";
+            if (variable_struct_exists(detail, "version")) lab += "  v" + string(detail.version);
+            draw_text(px + 6, dy, vs_dlbr_clip_text(lab, right - px - 6));
         }
         else if (detail != undefined && variable_struct_exists(detail, "charts") && is_array(detail.charts))
         {
