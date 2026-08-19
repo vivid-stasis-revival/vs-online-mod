@@ -334,6 +334,8 @@ class FakeHost:
                 self.my_score = min(990000.0, 8000.0 * (i + 1))
                 await self.send(pkt_update_score(self.my_score, self.my_flag), "UpdateScore")
                 await asyncio.sleep(0.5)
+            if self.host_id != self.me and self.playing:
+                await self.send(pkt_report_score(min(980000.0, self.my_score), 1), "ReportScore guest")
         except asyncio.CancelledError:
             return
 
@@ -406,6 +408,9 @@ class FakeHost:
                 f"members={len(self.members)} code={msg.get('code')}"
             )
             await self.send(pkt_player_info(), "SendPlayerInfo welcome")
+            if self.host_id != self.me:
+                self.ensure_emotes()
+                await self.send_sticker(why="guest hello")
             return
         if kind == "member_joined":
             mem = msg.get("member") or {}
@@ -454,6 +459,18 @@ class FakeHost:
             await self.on_report(sender, inner)
         elif typ == t.PKT_SEND_PLAYER_INFO:
             await self.on_player_info(sender)
+        elif typ == t.PKT_ADD_SONG and sender != self.me and self.host_id != self.me:
+            await asyncio.sleep(0.3)
+            await self.send(pkt_ready(1), "SendReady guest after AddSong")
+        elif typ == t.PKT_START_GAME and self.host_id != self.me and not self.playing:
+            self.playing = True
+            self.my_score = 0.0
+            self.my_flag = 1
+            self._score_task = asyncio.create_task(self._run_fake_play())
+        elif typ == t.PKT_SHOW_SCORE:
+            self.playing = False
+            if self._score_task and not self._score_task.done():
+                self._score_task.cancel()
         elif typ == t.PKT_SEND_STICKER and sender != self.me and len(inner) > 1:
             reply = (inner[1] + 1) % 12
             await asyncio.sleep(0.4)
