@@ -425,6 +425,7 @@ function vs_lobby_build_member(_mv)
         sticker_timer: 0,
         is_winner: false,
         order: variable_struct_exists(_mv, "order") ? _mv.order : 0,
+        connected: variable_struct_exists(_mv, "connected") ? vs_lobby_json_true(_mv.connected) : false,
         remove_sticker: function()
         {
             var _m = o_st_handle.getMember(self.id);
@@ -509,6 +510,16 @@ function vs_lobby_touch_member(_mv)
         if (sc != 0) vs_member_set_score(ex, sc);
     }
     if (variable_struct_exists(_mv, "scoreFlag")) vs_member_set_flag(ex, variable_struct_get(_mv, "scoreFlag"));
+    if (variable_struct_exists(_mv, "connected")) ex.connected = vs_lobby_json_true(_mv.connected);
+}
+
+function vs_lobby_json_true(_v)
+{
+    if (_v == undefined) return false;
+    if (_v == true) return true;
+    if (is_real(_v) && _v != 0) return true;
+    if (is_string(_v) && (_v == "true" || _v == "1")) return true;
+    return false;
 }
 
 function vs_lobby_remove_member(_id)
@@ -674,8 +685,9 @@ function vs_lobby_pkt_quiet(_type)
 }
 
 // Host copies queue / player info / score to everyone who is Connected.
-// REST member_joined is too early (guest WS is still down). The server notifies
-// again on WS attach; SendPlayerInfo from the joiner is a third fallback.
+// REST / matchmake member_joined is too early (guest WS is still down). The
+// server notifies again on WS attach with connected:true; SendPlayerInfo from
+// the joiner is a third fallback.
 function vs_lobby_host_sync(_why)
 {
     if (!vs_lobby_is_owner()) return;
@@ -1210,11 +1222,22 @@ function vs_lobby_handle_control(_j)
                 var mid = variable_struct_exists(_j.member, "playerId") ? string(_j.member.playerId) : "?";
                 var mname = variable_struct_exists(_j.member, "name") ? string(_j.member.name) : "";
                 vs_lobby_touch_member(_j.member);
+                var connected = variable_struct_exists(_j.member, "connected")
+                    && vs_lobby_json_true(_j.member.connected);
                 vs_lobby_log("member_joined id=" + mid + " name=" + mname
                     + " n=" + string(array_length(o_st_handle.lobbyMembers))
-                    + " connected=" + string(variable_struct_exists(_j.member, "connected") ? _j.member.connected : "?")
+                    + " connected=" + string(connected)
                     + " owner=" + string(vs_lobby_is_owner()));
-                vs_lobby_host_sync("member_joined");
+                // REST join fires while the guest socket is still down. Wait for
+                // the WS-attach notify (connected:true) before SendQueue.
+                if (connected && mid != vs_online_player_id())
+                {
+                    vs_lobby_host_sync("member_joined");
+                }
+                else
+                {
+                    vs_lobby_log("member_joined skip sync connected=" + string(connected));
+                }
                 vs_lobby_refresh_ui();
             }
             else

@@ -10,9 +10,10 @@ Mirrors vs-online-mod wiring:
 Identities are throwaway POST /auth/register accounts (not guest POST /players).
 Host vs non-host follow GM order:
   host  POST /lobbies → enter → WS welcome → SendPlayerInfo
-  guest POST /lobbies/join → host member_joined sync (dropped: guest not Connected)
-        → guest enter → WS welcome → SendPlayerInfo
-        → host vs_lobby_host_sync() → guest gets SendQueue
+  guest POST /lobbies/join → host member_joined (connected=false; skip SendQueue)
+        → guest enter → WS welcome
+        → host member_joined (connected=true) → vs_lobby_host_sync() → guest SendQueue
+        → guest welcome SendPlayerInfo (third fallback if the second notify is missed)
 
 Usage:
   python3 tools/test_lobby_ws.py
@@ -201,6 +202,22 @@ def pkt_suggest(diff: int = 2, chart_id: str = "testchart") -> bytes:
 
 def pkt_update_score(pts: float = 0.0, flag: int = 1) -> bytes:
     return bytes([PKT_UPDATE_SCORE]) + struct.pack("<f", pts) + bytes([flag])
+
+
+def pkt_shadow_song() -> bytes:
+    return bytes([PKT_SHADOW_SONG])
+
+
+def pkt_show_score() -> bytes:
+    return bytes([PKT_SHOW_SCORE])
+
+
+def pkt_sticker(sticker: int = 3) -> bytes:
+    return bytes([PKT_SEND_STICKER, sticker & 0xFF])
+
+
+def pkt_opaque(t: int = 99) -> bytes:
+    return bytes([t, 0xAA, 0xBB])
 
 
 def pkt_send_queue(items: Optional[List[Tuple[int, int]]] = None, members: int = 2) -> bytes:
@@ -476,7 +493,7 @@ async def run(base: str) -> int:
     await host_ws.send_bin(pkt_player_info())
     rec("host welcome SendPlayerInfo (GM)", True, "sent type 60", "gml")
 
-    # --- Non-host: POST /join then host member_joined sync, then guest WS ---
+    # --- Non-host: POST /join then host member_joined (connected=false), then guest WS ---
     st, joined, raw = guest.post("/api/v1/lobbies/join", json.dumps({"code": code}))
     rec("POST /lobbies/join {code} (non-host)", st == 200 and isinstance(joined, dict) and joined.get("code") == code,
         f"http={st} members={joined.get('memberCount') if isinstance(joined, dict) else raw[:80]}", "rest")
@@ -491,13 +508,8 @@ async def run(base: str) -> int:
     except Exception as e:
         rec("host ctrl member_joined", False, str(e), "ws")
 
-    # GM host on member_joined: SendQueue + SendPlayerInfo + UpdateScore.
-    # Guest WS is not up yet — server only relays to Connected members.
-    await host_ws.send_bin(pkt_send_queue())
-    await host_ws.send_bin(pkt_player_info())
-    await host_ws.send_bin(pkt_update_score())
-    rec("host member_joined sync queue/info/score (GM)", True, "sent types 6/60/22 before guest WS", "gml")
-    await asyncio.sleep(0.25)
+    # GM skips host_sync while connected=false (guest WS is not up yet).
+    rec("host skips SendQueue on REST member_joined (GM)", True, "connected=false → no types 6/60/22", "gml")
 
     guest_ws = await connect_gm_ws(ws_url(base, code, guest.token))
     rec("guest WS connect", True, "code=" + code, "ws")
@@ -513,17 +525,41 @@ async def run(base: str) -> int:
         await host_ws.conn.close()
         return 1
 
-    late = await drain_binaries(guest_ws, 1.5)
+    try:
+        mj2 = await host_ws.recv_text("member_joined", timeout=8)
+        mem2 = mj2.get("member") or {}
+        rec(
+            "WS-attach member_joined.connected is true",
+            mem2.get("playerId") == guest.player_id and mem2.get("connected") is True,
+            f"member={mem2.get('playerId')} connected={mem2.get('connected')}",
+            "gml",
+        )
+    except Exception as e:
+        rec("WS-attach member_joined.connected is true", False, str(e), "gml")
+
+    late = await drain_binaries(guest_ws, 0.4)
     late_types = [inner[0] for _, inner in late if inner]
     rec(
-        "REST-time host sync dropped (guest not Connected)",
+        "no SendQueue before host_sync (welcome has no queue)",
         PKT_SEND_QUEUE not in late_types,
         f"got_types={late_types}",
         "gml",
     )
 
-    # GM guest welcome SendPlayerInfo is the "I'm Connected" signal.
-    # Host then vs_lobby_host_sync() so the joiner gets the queue.
+    # GM host_sync on connected:true — guest is now Connected so the queue arrives.
+    await host_ws.send_bin(pkt_send_queue([(7, 2)]))
+    await host_ws.send_bin(pkt_player_info())
+    await host_ws.send_bin(pkt_update_score(123.0, 1))
+    replay = await drain_binaries(guest_ws, 2.0)
+    replay_types = [inner[0] for _, inner in replay if inner]
+    rec(
+        "host sync on connected member_joined → guest SendQueue",
+        PKT_SEND_QUEUE in replay_types and PKT_SEND_PLAYER_INFO in replay_types,
+        f"got_types={replay_types}",
+        "gml",
+    )
+
+    # GM guest welcome still sends SendPlayerInfo (third fallback if attach notify is missed).
     await guest_ws.send_bin(pkt_player_info())
     try:
         sender, inner = await host_ws.recv_binary(timeout=8)
@@ -532,21 +568,10 @@ async def run(base: str) -> int:
             f"from={sender} type={inner[0] if inner else '?'}", "gml")
     except Exception as e:
         rec("guest welcome SendPlayerInfo reaches host", False, str(e), "gml")
-
-    await host_ws.send_bin(pkt_send_queue([(7, 2)]))
-    await host_ws.send_bin(pkt_player_info())
-    await host_ws.send_bin(pkt_update_score(123.0, 1))
-    replay = await drain_binaries(guest_ws, 2.0)
-    replay_types = [inner[0] for _, inner in replay if inner]
-    rec(
-        "host resync on guest SendPlayerInfo → guest gets SendQueue",
-        PKT_SEND_QUEUE in replay_types and PKT_SEND_PLAYER_INFO in replay_types,
-        f"got_types={replay_types}",
-        "gml",
-    )
     await drain_binaries(host_ws, 0.3)
+    await drain_binaries(guest_ws, 0.3)
 
-    # Reconnect supersedes the old socket; no member_joined / member_left.
+    # Reconnect supersedes the old socket. Others get member_joined connected=true; no member_left.
     old_guest = guest_ws
     guest_ws = await connect_gm_ws(ws_url(base, code, guest.token))
     try:
@@ -563,12 +588,17 @@ async def run(base: str) -> int:
             await old_guest.conn.close()
         except Exception:
             pass
-    recon_texts, _ = await drain_all(host_ws, 1.0)
+    recon_texts, _ = await drain_all(host_ws, 1.5)
     recon_types = [t.get("type") for t in recon_texts]
+    recon_joined = next((t for t in recon_texts if t.get("type") == "member_joined"), None)
+    recon_mem = (recon_joined or {}).get("member") or {}
     rec(
-        "reconnect does not emit member_joined/left",
-        "member_joined" not in recon_types and "member_left" not in recon_types,
-        f"ctrl={recon_types}",
+        "reconnect emits member_joined connected=true, no member_left",
+        recon_joined is not None
+        and recon_mem.get("playerId") == guest.player_id
+        and recon_mem.get("connected") is True
+        and "member_left" not in recon_types,
+        f"ctrl={recon_types} connected={recon_mem.get('connected')}",
         "ws",
     )
     await guest_ws.send_bin(pkt_player_info())
@@ -580,20 +610,28 @@ async def run(base: str) -> int:
     except Exception as e:
         rec("reconnect SendPlayerInfo reaches host", False, str(e), "gml")
     await drain_binaries(guest_ws, 0.4)
+    await drain_binaries(host_ws, 0.3)
 
-    # Matchmake into this public unstarted room: no member_joined (server gap).
+    # Matchmake into this public unstarted room: same join notify as POST /join.
     st, mm, raw = other.post("/api/v1/lobbies/matchmake", "{}")
     joined_us = st == 200 and isinstance(mm, dict) and mm.get("code") == code
     rec("POST /lobbies/matchmake into existing public room", joined_us,
         f"http={st} code={mm.get('code') if isinstance(mm, dict) else raw[:80]} created={mm.get('hostId')==other.player_id if isinstance(mm, dict) else '?'}",
         "rest")
     mm_texts, _ = await drain_all(host_ws, 1.2)
-    mm_types = [t.get("type") for t in mm_texts]
+    mm_joined = next((t for t in mm_texts if t.get("type") == "member_joined"), None)
+    mm_mem = (mm_joined or {}).get("member") or {}
     rec(
-        "matchmake into existing room does not emit member_joined",
-        "member_joined" not in mm_types,
-        f"ctrl={mm_types}",
+        "matchmake into existing room emits member_joined",
+        mm_joined is not None and mm_mem.get("playerId") == other.player_id,
+        f"ctrl={[t.get('type') for t in mm_texts]} connected={mm_mem.get('connected')}",
         "ws",
+    )
+    rec(
+        "matchmake REST member_joined.connected is false",
+        mm_mem.get("connected") is False,
+        f"connected={mm_mem.get('connected')}",
+        "gml",
     )
     if joined_us:
         try:
@@ -601,6 +639,26 @@ async def run(base: str) -> int:
             w = await mm_ws.recv_text("welcome", timeout=8)
             rec("matchmake joiner welcome", w.get("you") == other.player_id and len(w.get("members") or []) >= 3,
                 f"n={len(w.get('members') or [])} you={w.get('you')}", "ws")
+            try:
+                mj_mm = await host_ws.recv_text("member_joined", timeout=8)
+                mem_mm = mj_mm.get("member") or {}
+                rec(
+                    "matchmake WS-attach member_joined.connected is true",
+                    mem_mm.get("playerId") == other.player_id and mem_mm.get("connected") is True,
+                    f"connected={mem_mm.get('connected')}",
+                    "gml",
+                )
+            except Exception as e:
+                rec("matchmake WS-attach member_joined.connected is true", False, str(e), "gml")
+            await host_ws.send_bin(pkt_send_queue())
+            await host_ws.send_bin(pkt_player_info())
+            got_q = await drain_binaries(mm_ws, 2.0)
+            rec(
+                "host sync on matchmake connected member_joined → joiner SendQueue",
+                any(inner[:1] == bytes([PKT_SEND_QUEUE]) for _, inner in got_q),
+                f"got_types={[inner[0] for _, inner in got_q if inner]}",
+                "gml",
+            )
             await mm_ws.send_bin(pkt_player_info())
             try:
                 sender, inner = await host_ws.recv_binary(timeout=8)
@@ -609,15 +667,6 @@ async def run(base: str) -> int:
                     f"from={sender}", "gml")
             except Exception as e:
                 rec("matchmake joiner SendPlayerInfo reaches host", False, str(e), "gml")
-            await host_ws.send_bin(pkt_send_queue())
-            await host_ws.send_bin(pkt_player_info())
-            got_q = await drain_binaries(mm_ws, 2.0)
-            rec(
-                "host resync after matchmake SendPlayerInfo → joiner SendQueue",
-                any(inner[:1] == bytes([PKT_SEND_QUEUE]) for _, inner in got_q),
-                f"got_types={[inner[0] for _, inner in got_q if inner]}",
-                "gml",
-            )
             await drain_binaries(guest_ws, 0.4)
             other.post("/api/v1/lobbies/" + code + "/leave", "{}")
             try:
@@ -667,6 +716,20 @@ async def run(base: str) -> int:
     except (asyncio.TimeoutError, TimeoutError):
         rec("host does not get non-host AddSong", True, "no frame (dropped)", "ws")
 
+    await guest_ws.send_bin(pkt_show_score())
+    try:
+        err = await guest_ws.recv_text("error", timeout=8)
+        rec("non-host ShowScore → owner_only error text",
+            err.get("code") == "owner_only",
+            json.dumps(err), "ws")
+    except Exception as e:
+        rec("non-host ShowScore → owner_only error text", False, str(e), "ws")
+    try:
+        kind, payload = await asyncio.wait_for(host_ws.recv(), timeout=1.5)
+        rec("host does not get non-host ShowScore", False, f"got {kind} {payload}", "ws")
+    except (asyncio.TimeoutError, TimeoutError):
+        rec("host does not get non-host ShowScore", True, "no frame (dropped)", "ws")
+
     await host_ws.send_bin(pkt_add_song(7, 2))
     try:
         sender, inner = await guest_ws.recv_binary(timeout=8)
@@ -675,6 +738,15 @@ async def run(base: str) -> int:
             f"from={sender} inner={inner.hex()}", "ws")
     except Exception as e:
         rec("host AddSong relayed to guest", False, str(e), "ws")
+
+    await host_ws.send_bin(pkt_shadow_song())
+    try:
+        sender, inner = await guest_ws.recv_binary(timeout=8)
+        rec("host ShadowSong relayed to guest",
+            sender == host.player_id and inner[0] == PKT_SHADOW_SONG,
+            f"from={sender} inner={inner.hex()}", "ws")
+    except Exception as e:
+        rec("host ShadowSong relayed to guest", False, str(e), "ws")
 
     await host_ws.send_bin(pkt_countdown(3))
     try:
@@ -693,12 +765,30 @@ async def run(base: str) -> int:
     except Exception as e:
         rec("SuggestSong (type 101) relayed to host", False, str(e), "ws")
 
+    await guest_ws.send_bin(pkt_opaque())
+    try:
+        sender, inner = await host_ws.recv_binary(timeout=8)
+        rec("unlisted packet type 99 relayed unchanged",
+            sender == guest.player_id and inner == bytes([99, 0xAA, 0xBB]),
+            f"from={sender} inner={inner.hex()}", "ws")
+    except Exception as e:
+        rec("unlisted packet type 99 relayed unchanged", False, str(e), "ws")
+
     await host_ws.send_bin(pkt_start_game())
     try:
         sender, inner = await guest_ws.recv_binary(timeout=8)
         rec("host StartGame relayed", inner[0] == PKT_START_GAME, f"inner={inner.hex()}", "ws")
     except Exception as e:
         rec("host StartGame relayed", False, str(e), "ws")
+
+    await guest_ws.send_bin(pkt_update_score(555.0, 2))
+    try:
+        sender, inner = await host_ws.recv_binary(timeout=8)
+        rec("guest UpdateScore relayed to host",
+            sender == guest.player_id and inner[0] == PKT_UPDATE_SCORE,
+            f"from={sender} inner={inner.hex()}", "ws")
+    except Exception as e:
+        rec("guest UpdateScore relayed to host", False, str(e), "ws")
 
     await guest_ws.send_bin(pkt_report_score())
     try:
@@ -708,6 +798,24 @@ async def run(base: str) -> int:
             f"from={sender} inner={inner.hex()}", "ws")
     except Exception as e:
         rec("guest ReportScore relayed to host", False, str(e), "ws")
+
+    await host_ws.send_bin(pkt_show_score())
+    try:
+        sender, inner = await guest_ws.recv_binary(timeout=8)
+        rec("host ShowScore relayed to guest",
+            sender == host.player_id and inner[0] == PKT_SHOW_SCORE,
+            f"from={sender} inner={inner.hex()}", "ws")
+    except Exception as e:
+        rec("host ShowScore relayed to guest", False, str(e), "ws")
+
+    await guest_ws.send_bin(pkt_sticker(3))
+    try:
+        sender, inner = await host_ws.recv_binary(timeout=8)
+        rec("guest SendSticker relayed to host",
+            sender == guest.player_id and inner[0] == PKT_SEND_STICKER and inner[1:2] == b"\x03",
+            f"from={sender} inner={inner.hex()}", "ws")
+    except Exception as e:
+        rec("guest SendSticker relayed to host", False, str(e), "ws")
 
     st, members, _ = host.get("/api/v1/lobbies/" + code + "/members")
     ready_ok = False
@@ -744,11 +852,8 @@ async def run(base: str) -> int:
     except Exception as e:
         rec("rejoin welcome", False, str(e), "ws")
 
-    # Drain host's member_joined from rejoin
-    try:
-        await host_ws.recv_text("member_joined", timeout=5)
-    except Exception:
-        pass
+    # Drain host's REST + WS-attach member_joined from rejoin
+    await drain_all(host_ws, 1.0)
 
     # After StartGame the room is out of the match pool; matchmake should create.
     st, mm, raw = other.post("/api/v1/lobbies/matchmake", "{}")
