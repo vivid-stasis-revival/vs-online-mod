@@ -126,6 +126,7 @@ function vs_csm_list_subdirs(_root)
 {
     var out = [];
     if (_root == undefined || _root == "") return out;
+    if (!directory_exists(_root)) return out;
     var n = file_find_first(_root + "*", 16);
     if (n == "")
     {
@@ -645,6 +646,9 @@ function readCustomSongInfo(dir, rel)
     songInfo.chart_path = rel;
     songInfo.chart_load_dir = dir;
     songInfo.is_custom = true;
+    var folderId = vs_localcharts_folder_name(rel);
+    var cid0 = string(struct_get_fallback(songInfo, "chart_id", ""));
+    if (cid0 == "" || cid0 == "generic") songInfo.chart_id = folderId;
     songInfo.song_id = array_length(global.song_list);
     vs_csm_ensure_unlock(songInfo);
     vs_csm_apply_has_encore(songInfo, dir);
@@ -772,8 +776,19 @@ function CustomSongReader()
             array_push(customSongList, array_length(global.song_list));
             array_push(global.song_list, packed);
         }
+        var pid = vs_packmgr_id_from_folder(packJobs[p].name);
+        if (pid != "")
+        {
+            packInfo.vs_pack_id = pid;
+            vs_packmgr_csm_fill(packInfo, pid);
+        }
         array_push(global.custom_song_packs, packInfo);
     }
+
+    // Subscribed online packs stay as loose Custom Songs/<chart_id>/ folders.
+    // Build a real song-select pack from vsonline.packs.json; members also
+    // stay in All Custom Songs, same as a CSM folder pack.
+    vs_packmgr_csm_append();
 
     array_push(global.custom_song_packs,
     {
@@ -783,6 +798,23 @@ function CustomSongReader()
         color2: 16777215,
         description: "Custom Songs."
     });
+}
+
+function vs_csm_song_index(_chartId)
+{
+    var want = string_lower(string(_chartId));
+    if (want == "" || !variable_global_exists("song_list")) return -1;
+    var n = array_length(global.song_list);
+    for (var i = 0; i < n; i++)
+    {
+        var s = global.song_list[i];
+        if (s == undefined) continue;
+        var cid = string_lower(string(struct_get_fallback(s, "chart_id", "")));
+        if (cid == want) return i;
+        var folder = string_lower(vs_localcharts_folder_name(struct_get_fallback(s, "chart_path", "")));
+        if (folder != "" && folder == want) return i;
+    }
+    return -1;
 }
 
 function vs_csm_row_score(_row)

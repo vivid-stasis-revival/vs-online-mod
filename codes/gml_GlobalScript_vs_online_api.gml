@@ -1609,11 +1609,12 @@ function vs_online_lb_apply(_data)
 
 function vs_online_highscore_file(_orig)
 {
+    var base = vs_online_highscore_base(_orig);
     if (vs_online_is_custom())
     {
-        return _orig + "_vson" + string_copy(sha1_string_utf8(vs_online_server_url()), 1, 8);
+        return base + "_vson" + string_copy(sha1_string_utf8(vs_online_server_url()), 1, 8);
     }
-    return _orig;
+    return base;
 }
 
 function vs_online_highscore_is_dev()

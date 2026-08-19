@@ -162,6 +162,7 @@ function vs_localcharts_scan()
 
     var seen = {};
     var packs = [];
+    var pmap = vs_packmgr_chart_pack_map();
     for (var r = 0; r < array_length(roots); r++)
     {
         var entries = vs_csm_list_subdirs(roots[r]);
@@ -177,6 +178,9 @@ function vs_localcharts_scan()
                 {
                     variable_struct_set(seen, key, true);
                     if (s.chart_id != "") variable_struct_set(seen, string_lower(s.chart_id), true);
+                    var pk0 = string_lower(string(s.chart_id));
+                    if (s.pack == "Unpacked" && pk0 != "" && variable_struct_exists(pmap, pk0))
+                        s.pack = variable_struct_get(pmap, pk0);
                     array_push(out, s);
                 }
             }
@@ -188,6 +192,9 @@ function vs_localcharts_scan()
                 {
                     variable_struct_set(seen, key, true);
                     if (sh.chart_id != "") variable_struct_set(seen, string_lower(sh.chart_id), true);
+                    var pk1 = string_lower(string(sh.chart_id));
+                    if (sh.pack == "Shatter" && pk1 != "" && variable_struct_exists(pmap, pk1))
+                        sh.pack = variable_struct_get(pmap, pk1);
                     array_push(out, sh);
                 }
             }
@@ -251,7 +258,7 @@ function vs_localcharts_song_id_in_list(_chart_id)
     for (var i = 0; i < n; i++)
     {
         var s = global.song_list[i];
-        if (s != undefined && variable_struct_exists(s, "chart_id") && s.chart_id == _chart_id)
+        if (s != undefined && vs_localcharts_chart_matches(s, _chart_id))
             return i;
     }
     return -1;
@@ -270,11 +277,22 @@ function vs_localcharts_shatter_id_in_list(_chart_id)
     return -1;
 }
 
+function vs_localcharts_chart_matches(_song, _chart_id)
+{
+    if (_song == undefined || _chart_id == undefined || _chart_id == "") return false;
+    var want = string_lower(string(_chart_id));
+    var cid = string_lower(string(struct_get_fallback(_song, "chart_id", "")));
+    if (cid != "" && cid == want) return true;
+    var folder = string_lower(vs_localcharts_folder_name(struct_get_fallback(_song, "chart_path", "")));
+    return folder != "" && folder == want;
+}
+
 // Find { pack_index, pos, song_id } of a chart across the current song packs.
 // Returns undefined when the chart is not reachable in the select.
 function vs_localcharts_pack_pos(_chart_id)
 {
     if (!variable_global_exists("song_packs") || !variable_global_exists("song_list")) return undefined;
+    var want = string(_chart_id);
     for (var p = 0; p < array_length(global.song_packs); p++)
     {
         var pk = global.song_packs[p];
@@ -285,10 +303,29 @@ function vs_localcharts_pack_pos(_chart_id)
             var sid = pk.songs[s];
             if (is_real(sid) && sid >= 0 && sid < array_length(global.song_list))
             {
-                var e = global.song_list[sid];
-                if (e != undefined && variable_struct_exists(e, "chart_id") && e.chart_id == _chart_id)
+                if (vs_localcharts_chart_matches(global.song_list[sid], want))
                     return { pack_index: p, pos: s, song_id: sid };
             }
+        }
+    }
+    return undefined;
+}
+
+function vs_localcharts_pack_pos_by_id(_pack_id)
+{
+    var pid = string(_pack_id);
+    if (pid == "" || !variable_global_exists("song_packs")) return undefined;
+    for (var p = 0; p < array_length(global.song_packs); p++)
+    {
+        var pk = global.song_packs[p];
+        if (pk == undefined) continue;
+        if (variable_struct_exists(pk, "vs_pack_id") && string(pk.vs_pack_id) == pid)
+        {
+            if (!variable_struct_exists(pk, "songs") || !is_array(pk.songs) || array_length(pk.songs) <= 0)
+                return undefined;
+            var sid = pk.songs[0];
+            if (!is_real(sid) || sid < 0 || sid >= array_length(global.song_list)) return undefined;
+            return { pack_index: p, pos: 0, song_id: sid };
         }
     }
     return undefined;
@@ -313,27 +350,17 @@ function vs_localcharts_refresh()
 // Jump into the song select with a chart focused (used from both the download
 // manager's Local tab and any local-chart entry). Returns false when the chart
 // is not reachable in the select.
-function vs_localcharts_jump(_chart_id)
+function vs_localcharts_enter_select(_loc)
 {
-    if (_chart_id == undefined || _chart_id == "") return false;
+    if (_loc == undefined) return false;
 
-    // Rebuild packs first so CSM custom packs are present in the same layout
-    // the select will rebuild (same create_song_packs -> same indexes).
-    if (variable_global_exists("custom_song_packs"))
-    {
-        try { create_song_packs(); } catch (_e) { }
-    }
-
-    var loc = vs_localcharts_pack_pos(_chart_id);
-    if (loc == undefined) return false;
-
-    // o_songselect_main already honors force_song_select (finds pack + cursor).
-    global.force_song_select = loc.song_id;
-    global.last_freeplay_pack = loc.pack_index;
-    // Encore-only customs have no OPENING/MIDDLE/FINALE files. Start on the
-    // first chart that actually exists so Play does not land on an empty 0.
+    // Old song select restores last_freeplay_pack / last_freeplay_index.
+    global.force_song_select = _loc.song_id;
+    global.last_freeplay_pack = _loc.pack_index;
+    global.last_freeplay_index = _loc.pos;
+    global.last_freeplay_song = _loc.song_id;
     var jumpDiff = 0;
-    var jumpSong = global.song_list[loc.song_id];
+    var jumpSong = global.song_list[_loc.song_id];
     if (jumpSong != undefined)
     {
         var jumpDir = struct_get_fallback(jumpSong, "chart_load_dir", struct_get_fallback(jumpSong, "chart_path", ""));
@@ -355,9 +382,33 @@ function vs_localcharts_jump(_chart_id)
         }
         return true;
     }
-    // No menu to hand the transition to — fall back to an instant room change.
     room_goto(scene_songselect_old);
     return true;
+}
+
+function vs_localcharts_rebuild_packs()
+{
+    if (variable_global_exists("custom_song_packs"))
+    {
+        try { create_song_packs(); } catch (_e) { }
+    }
+}
+
+// Jump into the song select with a chart focused (used from both the download
+// manager's Local tab and any local-chart entry). Returns false when the chart
+// is not reachable in the select.
+function vs_localcharts_jump(_chart_id)
+{
+    if (_chart_id == undefined || _chart_id == "") return false;
+    vs_localcharts_rebuild_packs();
+    return vs_localcharts_enter_select(vs_localcharts_pack_pos(_chart_id));
+}
+
+function vs_localcharts_jump_pack(_pack_id)
+{
+    if (_pack_id == undefined || _pack_id == "") return false;
+    vs_localcharts_rebuild_packs();
+    return vs_localcharts_enter_select(vs_localcharts_pack_pos_by_id(_pack_id));
 }
 
 function vs_localcharts_jump_shatter(_chart_id)

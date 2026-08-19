@@ -60,6 +60,20 @@ function vs_online_trim_url(_s)
     return s;
 }
 
+function vs_online_config_write(_cfg)
+{
+    var path = vs_online_config_path();
+    var fw = file_text_open_write(path);
+    if (fw < 0)
+    {
+        show_debug_message("VS Online: could not write config " + path);
+        return false;
+    }
+    file_text_write_string(fw, json_stringify(_cfg));
+    file_text_close(fw);
+    return true;
+}
+
 // Read (and cache) the vsonline config. Creates a default file if missing.
 function vs_online_get_config()
 {
@@ -70,29 +84,28 @@ function vs_online_get_config()
 
     var cfg = { server: vs_online_default_server() };
     var path = vs_online_config_path();
+    var parsed_ok = false;
     if (file_exists(path))
     {
         var f = file_text_open_read(path);
-        var raw = file_text_read_string(f);
-        file_text_close(f);
-        try
+        if (f >= 0)
         {
-            var parsed = json_parse(raw);
-            if (parsed != undefined && typeof(parsed) == "struct")
+            var raw = file_text_read_string(f);
+            file_text_close(f);
+            try
             {
-                cfg = parsed;
+                var parsed = json_parse(raw);
+                if (parsed != undefined && typeof(parsed) == "struct")
+                {
+                    cfg = parsed;
+                    parsed_ok = true;
+                }
+            }
+            catch (_e)
+            {
+                show_debug_message("VS Online: config parse error -> " + string(_e));
             }
         }
-        catch (_e)
-        {
-            show_debug_message("VS Online: config parse error -> " + string(_e));
-        }
-    }
-    else
-    {
-        var fw = file_text_open_write(path);
-        file_text_write_string(fw, json_stringify(cfg));
-        file_text_close(fw);
     }
 
     if (!variable_struct_exists(cfg, "server") || cfg.server == "")
@@ -122,11 +135,9 @@ function vs_online_get_config()
         migrated = true;
     }
     global.vs_online_config = cfg;
-    if (migrated)
+    if (!parsed_ok || migrated)
     {
-        var fw2 = file_text_open_write(path);
-        file_text_write_string(fw2, json_stringify(cfg));
-        file_text_close(fw2);
+        vs_online_config_write(cfg);
     }
     return cfg;
 }
@@ -274,10 +285,7 @@ function vs_online_ws_normalize(_url)
 // Rewrite the current config back to the file (used once credentials exist).
 function vs_online_save_config()
 {
-    var path = vs_online_config_path();
-    var fw = file_text_open_write(path);
-    file_text_write_string(fw, json_stringify(vs_online_get_config()));
-    file_text_close(fw);
+    vs_online_config_write(vs_online_get_config());
 }
 
 // --- mode switch -----------------------------------------------------------
@@ -310,7 +318,64 @@ function vs_online_is_custom()
 
 function vs_online_opt_toggle_change(_v)
 {
+    var was = 0;
+    if (variable_global_exists("op_vs_custom_server")) was = global.op_vs_custom_server;
+    if (!is_real(_v) || _v != _v) _v = 0;
+    _v = clamp(floor(_v), 0, 1);
     global.op_vs_custom_server = _v;
+    if (_v == 1 && was != 1) vs_online_apply_custom_on();
+    else if (_v != 1 && was == 1) vs_online_apply_custom_off();
+}
+
+function vs_online_highscore_base(_orig)
+{
+    var s = string(_orig);
+    var p = string_last_pos("_vson", s);
+    if (p > 0) return string_copy(s, 1, p - 1);
+    return s;
+}
+
+function vs_online_apply_custom_on()
+{
+    vs_online_get_config();
+    if (variable_global_exists("highscore_file"))
+        global.highscore_file = vs_online_highscore_file(global.highscore_file);
+    vs_csm_force_gm_audio();
+    vs_online_ensure_identity(vs_online_init_on_identity);
+}
+
+function vs_online_apply_custom_off()
+{
+    global.vs_online_conn = 0;
+    if (variable_global_exists("highscore_file"))
+        global.highscore_file = vs_online_highscore_base(global.highscore_file);
+}
+
+function vs_online_opt_read_clamped(_file, _sec, _key, _def, _max, _varname)
+{
+    var v = _def;
+    ini_open(_file);
+    v = ini_read_real(_sec, _key, _def);
+    ini_close();
+    if (!is_real(v) || v != v) v = _def;
+    v = clamp(floor(v), 0, _max);
+    variable_global_set(_varname, v);
+    return v;
+}
+
+function vs_online_opt_read_server()
+{
+    return vs_online_opt_read_clamped("custom_profile", "vsonline", "enabled", 0, 1, "op_vs_custom_server");
+}
+
+function vs_online_opt_read_countdown()
+{
+    return vs_online_opt_read_clamped("custom_profile", "betterWP", "countdown", 0, 2, "op_bwp_countdown_sound");
+}
+
+function vs_online_opt_read_hidelb()
+{
+    return vs_online_opt_read_clamped("custom_profile", "betterWP", "hide_leaderboard", 0, 1, "op_bwp_hide_leaderboard");
 }
 
 function vs_online_opt_noop()
@@ -334,6 +399,11 @@ function vs_online_opt_account_desc()
 
 function vs_online_opt_account_do()
 {
+    if (!vs_online_is_custom())
+    {
+        show_message("Enable Custom Server first.\n\n请先打开 Custom Server。");
+        return;
+    }
     if (!instance_exists(vs_auth_panel))
     {
         instance_create_depth(0, 0, -10000, vs_auth_panel);
@@ -357,6 +427,9 @@ function vs_online_opt_logout_do()
 
 function vs_online_add_options()
 {
+    if (!variable_global_exists("system_options") || !is_array(global.system_options)) return;
+    if (!variable_global_exists("options_categories") || !is_array(global.options_categories)) return;
+
     var cat = { title: "VS Online", options: [] };
     array_push(global.options_categories, cat);
     var ci = array_length(global.options_categories) - 1;
@@ -369,6 +442,7 @@ function vs_online_add_options()
         default_value: 0,
         varname: "op_vs_custom_server",
         key: ["custom_profile", "vsonline", "enabled"],
+        read_value: vs_online_opt_read_server,
         on_change: vs_online_opt_toggle_change
     };
     array_push(global.options_categories[ci].options, array_length(global.system_options));
@@ -376,6 +450,7 @@ function vs_online_add_options()
 
     var accountOpt = {
         name: "Account Management",
+        description: "Sign in or manage the custom-server account.",
         type: 3,
         get_description: vs_online_opt_account_desc,
         read_value: vs_online_opt_noop,
@@ -395,7 +470,8 @@ function vs_online_add_options()
         values: ["Original", "Type 2", "Type 3"],
         default_value: 0,
         varname: "op_bwp_countdown_sound",
-        key: ["custom_profile", "betterWP", "countdown"]
+        key: ["custom_profile", "betterWP", "countdown"],
+        read_value: vs_online_opt_read_countdown
     };
     array_push(global.options_categories[bi].options, array_length(global.system_options));
     array_push(global.system_options, countdownOpt);
@@ -407,7 +483,8 @@ function vs_online_add_options()
         values: ["Disabled", "Enabled"],
         default_value: 0,
         varname: "op_bwp_hide_leaderboard",
-        key: ["custom_profile", "betterWP", "hide_leaderboard"]
+        key: ["custom_profile", "betterWP", "hide_leaderboard"],
+        read_value: vs_online_opt_read_hidelb
     };
     array_push(global.options_categories[bi].options, array_length(global.system_options));
     array_push(global.system_options, hideLbOpt);
@@ -1003,9 +1080,7 @@ function vs_online_disable_custom()
     ini_open("custom_profile");
     ini_write_real("vsonline", "enabled", 0);
     ini_close();
-    global.vs_online_conn = 0;
-    // (The old Web Charts in-select browser was removed; the home Chart
-    // Downloader overlay closes itself on disable via vs_online_error flow.)
+    vs_online_apply_custom_off();
     show_debug_message("VS Online: custom server disabled by player.");
 }
 

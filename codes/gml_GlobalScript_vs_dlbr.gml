@@ -784,20 +784,36 @@ function vs_dlbr_jump_from_detail()
                 vs_dlbr_set_status("Pack is not finished installing.");
                 return;
             }
-            var members = vs_packmgr_members_from_detail(detail);
+            vs_dlbr_close_detail();
+            vs_localcharts_refresh();
+            if (vs_localcharts_jump_pack(r.id)) return;
+            var members = vs_dlbr_pack_members(r, detail);
             var i = 0;
+            var sh = undefined;
             repeat (array_length(members))
             {
                 var m = members[i];
                 if (m != undefined && vs_songstore_has_chart(m.chartId))
                 {
-                    vs_dlbr_close_detail();
-                    vs_dlbr_jump_chart(m.chartId, m.kind, m.name);
-                    return;
+                    var mk = variable_struct_exists(m, "kind") ? m.kind : 0;
+                    if (mk == 2)
+                    {
+                        if (sh == undefined) sh = m;
+                    }
+                    else
+                    {
+                        vs_dlbr_jump_chart(m.chartId, mk, m.name);
+                        return;
+                    }
                 }
                 i++;
             }
-            vs_dlbr_set_status("No pack songs downloaded yet.");
+            if (sh != undefined)
+            {
+                vs_dlbr_jump_chart(sh.chartId, 2, sh.name);
+                return;
+            }
+            vs_dlbr_set_status(r.name + " is not in song select yet.");
             return;
         }
         if (r != undefined)
@@ -1391,6 +1407,8 @@ function vs_dlbr_on_pack_detail(_ok, _data, _status)
             rr.checked = true;
             checking = true;
             check_chart = rr.chartId;
+            var job = vs_packmgr_slot();
+            job.info = vs_packmgr_info_struct(_data);
             vs_packmgr_check_members(rr.id, members, ver, method(id, vs_dlbr_on_pack_check));
         }
         else
