@@ -25,3 +25,4 @@ if (is_struct(chart) && variable_struct_exists(chart, "mods") && chart.mods != u
     try { modOutputer(chart.mods, global.songname, arg1, arg0); }
     catch (_mo) { vs_csm_play_log("modOutputer " + string(_mo)); }
 }
+vs_csm_play_log("LoadSong parsed notes=" + string(array_length(chart.notes)) + " mods=" + string(variable_struct_exists(chart, "mods") && chart.mods != undefined));

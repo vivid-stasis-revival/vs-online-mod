@@ -349,6 +349,23 @@ function vs_csm_empty_chart()
     return { notes: [], mods: undefined };
 }
 
+function vs_csm_note_extra_get(_extra, _key, _fallback)
+{
+    if (!is_struct(_extra)) return _fallback;
+    var v = variable_struct_get(_extra, _key);
+    if (v == undefined) v = variable_struct_get(_extra, string(_key));
+    if (v == undefined) return _fallback;
+    return vs_csm_safe_real(v, _fallback);
+}
+
+function vs_csm_note_extra_set(_end)
+{
+    var e = {};
+    variable_struct_set(e, 1, _end);
+    variable_struct_set(e, "1", _end);
+    return e;
+}
+
 function vs_csm_pick_diff_file(_dir, _want)
 {
     if (_dir == undefined) _dir = "";

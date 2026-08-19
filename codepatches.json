@@ -605,6 +605,42 @@
         "Type": 1
     },
     {
+        "Entry": "gml_GlobalScript_LoadSong",
+        "Find": "var holdendms = struct_get(noteExtra, UnknownEnum.Value_1);",
+        "Value": "var holdendms = vs_csm_note_extra_get(noteExtra, 1, notems + 151);",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_GlobalScript_LoadSong",
+        "Find": "var newBpm = struct_get(noteExtra, UnknownEnum.Value_1);",
+        "Value": "var newBpm = vs_csm_note_extra_get(noteExtra, 1, undefined);",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_GlobalScript_LoadSong",
+        "Find": "instance_create_depth(room_width / 2, room_height / 2, -1000, cc,",
+        "Value": "vs_csm_play_log(\"LoadSong build hit=\" + string(hitcount) + \" count=\" + string(notecount));instance_create_depth(room_width / 2, room_height / 2, -1000, cc,",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_Object_cc_Create_0",
+        "Find": "global.notecount = notecount;",
+        "Value": "vs_csm_play_log(\"cc create count=\" + string(notecount) + \" audio=\" + string(global.loadaudio) + \" gm=\" + string(global.op_use_gamemaker_audio));global.notecount = notecount;",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_Object_cc_Create_0",
+        "Find": "global.notevalue = 1000000 / notecount;",
+        "Value": "global.notevalue = 1000000 / max(1, notecount);",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_Object_cc_Create_0",
+        "Find": "playback = audio_play_sound(global.loadaudio, 1, false, global.op_music_volume);",
+        "Value": "if (!audio_exists(global.loadaudio)) { vs_csm_play_log(\"cc audio missing\"); global.loadaudio = music_chart_desparola; } vs_csm_play_log(\"cc play audio\"); playback = audio_play_sound(global.loadaudio, 1, false, global.op_music_volume);",
+        "Type": 1
+    },
+    {
         "Entry": "gml_GlobalScript_upload_score",
         "Find": "var song = global.song_list[arg0];",
         "Value": "var song = global.song_list[arg0];if (struct_exists(song, \"is_custom\") && !vs_online_is_custom()) return;",

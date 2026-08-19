@@ -80,12 +80,14 @@ function load_text_chart(path, diff)
         {
             if (type == 2)
             {
-                variable_struct_set(extra, 1, vs_csm_safe_real(parts[3], time));
+                extra = vs_csm_note_extra_set(vs_csm_safe_real(parts[3], time));
             }
             else if (type == 3)
             {
                 extra = parse_custom_extra_value(parts[3]);
                 if (!is_struct(extra)) extra = {};
+                var bpmv = vs_csm_note_extra_get(extra, 1, 0);
+                extra = vs_csm_note_extra_set(bpmv);
             }
             else
             {
