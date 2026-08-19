@@ -1043,6 +1043,18 @@
         "Type": 0
     },
     {
+        "Entry": "gml_Object_o_songselect_main_Create_0",
+        "Find": "refresh_song_objects(0);\nevent_inherited();",
+        "Value": "refresh_song_objects(0);\nif (array_length(songs) == 0) vs_csm_recover_empty_songsel();\nevent_inherited();",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_Object_o_songselect_main_Create_0",
+        "Find": "    refresh_song_objects(0);\n    target_song(selected_song.song_id, selected_diff);",
+        "Value": "    refresh_song_objects(0);\n    if (array_length(songs) == 0) vs_csm_recover_empty_songsel();\n    target_song(selected_song.song_id, selected_diff);",
+        "Type": 0
+    },
+    {
         "Entry": "gml_GlobalScript_refresh_song_objects",
         "Find": "            if ((chk >= arg0 && chk <= arg1) || chk == -1)",
         "Value": "            if (vs_csm_level_in_range(chk, arg0, arg1))",

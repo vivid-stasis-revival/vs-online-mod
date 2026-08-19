@@ -292,8 +292,25 @@ function vs_csm_ensure_unlock(_song)
 function vs_csm_has_encore_file(_dir)
 {
     if (_dir == undefined || _dir == "") return false;
-    return file_exists(_dir + "ENCORE.vsc") || file_exists(_dir + "ENCORE.vsb")
-        || file_exists(_dir + "encore.vsc") || file_exists(_dir + "encore.vsb");
+    return vs_csm_chart_file_exists(_dir, "ENCORE");
+}
+
+function vs_csm_chart_file_exists(_dir, _name)
+{
+    if (_dir == undefined || _dir == "" || _name == undefined) return false;
+    var n = string(_name);
+    return file_exists(_dir + n + ".vsc") || file_exists(_dir + n + ".vsb")
+        || file_exists(_dir + string_lower(n) + ".vsc") || file_exists(_dir + string_lower(n) + ".vsb");
+}
+
+function vs_csm_diff_has_file(_song, _d)
+{
+    if (_song == undefined) return true;
+    var dir = struct_get_fallback(_song, "chart_load_dir", struct_get_fallback(_song, "chart_path", ""));
+    if (dir == "") return true;
+    var names = ["OPENING", "MIDDLE", "FINALE", "ENCORE"];
+    if (_d < 0 || _d > 3) return true;
+    return vs_csm_chart_file_exists(dir, names[_d]);
 }
 
 function vs_csm_json_has_encore(_v)
@@ -318,10 +335,13 @@ function vs_csm_meta_has_encore(_song)
 // compares with == / != "1.0". JSON bool true is truthy for `&&` checks but
 // fails those comparisons, so refresh_song_objects remaps ENCORE -> FINALE
 // and the old select never lets you cursor onto difficulty 3.
+//
+// Only a real ENCORE.vsc/vsb counts. info.json often has constant_4 / has_encore
+// leftover from templates; treating that as Encore makes Encore-only select
+// drop Finale 16/15+ and empty the list (NO SIGNAL).
 function vs_csm_apply_has_encore(_song, _dir)
 {
-    var yes = vs_csm_has_encore_file(_dir) || vs_csm_meta_has_encore(_song);
-    _song.has_encore = yes ? "1.0" : false;
+    _song.has_encore = vs_csm_has_encore_file(_dir) ? "1.0" : false;
     if (!variable_struct_exists(_song, "show_encore")) _song.show_encore = true;
 }
 
@@ -330,20 +350,39 @@ function vs_csm_first_chart_diff(_dir)
     var names = ["OPENING", "MIDDLE", "FINALE", "ENCORE"];
     for (var i = 0; i < 4; i++)
     {
-        if (file_exists(_dir + names[i] + ".vsc") || file_exists(_dir + names[i] + ".vsb"))
+        if (vs_csm_chart_file_exists(_dir, names[i]))
             return i;
     }
     return 0;
 }
 
-// Official MAX LEVEL "17" is index 22. 17+ (const 17.5) maps to 23 and was
-// dropped, which emptied All Custom Songs when the filter was Encore-only.
+// Official MAX LEVEL "17" is index 22. Custom 17+ (const 17.5) maps to 23
+// and anything above that is 18, 18+, … Saved max is often still 22, which
+// emptied Encore-only lists (no Finale rows to fall back on) into NO SIGNAL.
 function vs_csm_level_in_range(_chk, _lo, _hi)
 {
     if (_chk == -1) return true;
     if (_chk >= _lo && _chk <= _hi) return true;
-    if (_chk == 23 && _hi >= 22) return true;
+    if (_chk >= 23 && _hi >= 22) return true;
     return false;
+}
+
+function vs_csm_recover_empty_songsel()
+{
+    var changed = false;
+    if (level_range_end < 23)
+    {
+        level_range_end = 23;
+        global.last_freeplay_max_level = 23;
+        changed = true;
+    }
+    if (level_range_start > 22)
+    {
+        level_range_start = 22;
+        global.last_freeplay_min_level = 22;
+        changed = true;
+    }
+    if (changed) refresh_song_objects(0);
 }
 
 // Song-select badges are sprite frames: 1..18 and 9+..16+. 17+ is frame 27,
