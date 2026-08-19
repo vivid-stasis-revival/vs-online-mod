@@ -506,7 +506,7 @@ function vs_lobby_dl_draw_ask()
     draw_text(px + pw / 2, py + 8, vs_dlbr_clip_text(title, pw - 12));
     draw_set_font(global.default_font);
     draw_set_color(c_white);
-    draw_text(px + pw / 2, py + 28, vs_dlbr_clip_text(name, pw - 12));
+    vs_draw_clip(px + pw / 2, py + 28, name, pw - 12);
     draw_set_color(c_yellow);
     draw_text(px + pw / 2, py + 52, vs_dlbr_clip_text("CONFIRM / ESCAPE", pw - 12));
     draw_set_halign(fa_left);

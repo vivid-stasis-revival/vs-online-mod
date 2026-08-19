@@ -44,9 +44,11 @@ if (vs_lobby_lobby_id() > 0 && vs_lobby_is_owner())
         draw_rectangle(80, 60, 240, 120, true);
         draw_set_halign(fa_center);
         draw_set_color(c_white);
+        var _ft = vs_font_begin(string(member_name) + string(song_get_info(song, "name", suggestSong.difficulty)));
         draw_text(160, 60, @@string@@("{0} suggested", member_name), 65535, 0);
         draw_text_ext_color(160, 75, @@string@@("{0}", song_get_info(song, "name", suggestSong.difficulty)), 9, 125, grad1, grad1, grad2, grad2, draw_get_alpha());
         draw_text(160, 110, "CONFIRM:ACCEPT / ESCAPE:IGNORE");
+        vs_font_end(_ft);
     }
 }
 vs_lobby_dl_draw();
