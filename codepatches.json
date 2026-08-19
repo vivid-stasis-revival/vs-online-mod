@@ -106,9 +106,21 @@
     },
     {
         "Entry": "gml_Object_obj_multiplayer_lobby_Step_0",
+        "Find": "if (confirmMenu != undefined)\n{\n    exit;\n}",
+        "Value": "if (confirmMenu != undefined)\n{\n    exit;\n}\nif (vs_lobby_ops_step())\n{\n    exit;\n}",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_Object_obj_multiplayer_lobby_Step_0",
         "Find": "if (!isReady)",
         "Value": "if (instance_exists(vs_online_error)) exit; if (!isReady)",
         "Type": 1
+    },
+    {
+        "Entry": "gml_Object_obj_multiplayer_lobby_Create_0",
+        "Find": "case \"hostlobby\":",
+        "Value": "case \"kick\": vs_lobby_ops_begin(\"kick\"); break;\n        case \"hostlobby\":",
+        "Type": 0
     },
 
     {
@@ -883,6 +895,12 @@
         "Entry": "gml_Object_obj_multiplayer_lobby_Draw_64",
         "Find": "draw_text_o(bx + ox + 32, by + oy + 4 + (i * 35), truncate_string(member.name, 112));",
         "Value": "draw_text_o(bx + ox + 32, by + oy + 4 + (i * 35), truncate_string(member.name, 112));vs_lobby_draw_namecard_tags(member, bx + ox + 143, by + oy + 4 + (i * 35));",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_Object_obj_multiplayer_lobby_Draw_64",
+        "Find": "draw_sprite(sp_wc_player, 0, bx + ox, by + (35 * i) + oy);",
+        "Value": "vs_lobby_draw_ops_card(member, bx + ox, by + (35 * i) + oy);draw_sprite(sp_wc_player, 0, bx + ox, by + (35 * i) + oy);",
         "Type": 0
     },
     {

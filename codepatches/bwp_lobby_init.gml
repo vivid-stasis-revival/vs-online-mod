@@ -1,9 +1,15 @@
 joining = 0;
 lobbyCount = 0;
 randomJoinOffset = 0;
+opsMode = "";
+opsCursor = 0;
 if (vs_online_is_custom())
 {
     vs_lobby_log("ui lobby init");
+    array_insert(menu_actions_host, 2, {
+        txt: "Kick",
+        callback: "kick"
+    });
     vs_lobby_refresh_count();
     if (vs_lobby_has_code())
     {

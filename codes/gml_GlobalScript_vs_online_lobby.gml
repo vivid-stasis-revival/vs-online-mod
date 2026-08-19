@@ -279,6 +279,227 @@ function vs_lobby_keep_play_tags(_dst, _src)
     if (variable_struct_exists(_src, "autoplay")) _dst.autoplay = _src.autoplay;
 }
 
+function vs_lobby_ops_lobby()
+{
+    if (!instance_exists(obj_multiplayer_lobby)) return noone;
+    return obj_multiplayer_lobby.id;
+}
+
+function vs_lobby_ops_active()
+{
+    var lobby = vs_lobby_ops_lobby();
+    if (lobby == noone) return false;
+    return variable_instance_exists(lobby, "opsMode") && string(lobby.opsMode) != "";
+}
+
+function vs_lobby_ops_targets()
+{
+    var out = [];
+    if (!instance_exists(o_st_handle) || !is_array(o_st_handle.lobbyMembers)) return out;
+    var me = string(vs_online_player_id());
+    var i = 0;
+    repeat (array_length(o_st_handle.lobbyMembers))
+    {
+        var m = o_st_handle.lobbyMembers[i];
+        if (m != undefined && variable_struct_exists(m, "id") && string(m.id) != "" && string(m.id) != me)
+        {
+            array_push(out, m);
+        }
+        i++;
+    }
+    return out;
+}
+
+function vs_lobby_ops_kick_slot()
+{
+    var lobby = vs_lobby_ops_lobby();
+    if (lobby == noone || !variable_instance_exists(lobby, "menu_actions_host")) return -1;
+    var acts = lobby.menu_actions_host;
+    var i = 0;
+    repeat (array_length(acts))
+    {
+        if (acts[i].callback == "kick") return i;
+        i++;
+    }
+    return -1;
+}
+
+function vs_lobby_ops_relabel()
+{
+    var lobby = vs_lobby_ops_lobby();
+    var slot = vs_lobby_ops_kick_slot();
+    if (lobby == noone || slot < 0) return;
+    var lab = "Kick";
+    if (vs_lobby_ops_active())
+    {
+        var t = vs_lobby_ops_targets();
+        var i = lobby.opsCursor;
+        if (i >= 0 && i < array_length(t) && t[i] != undefined)
+        {
+            lab = "Kick " + truncate_string(string(t[i].name), 48);
+        }
+    }
+    lobby.menu_actions_host[slot].txt = lab;
+}
+
+function vs_lobby_ops_end()
+{
+    var lobby = vs_lobby_ops_lobby();
+    if (lobby == noone) return;
+    if (variable_instance_exists(lobby, "opsMode")) lobby.opsMode = "";
+    if (variable_instance_exists(lobby, "opsCursor")) lobby.opsCursor = 0;
+    vs_lobby_ops_relabel();
+}
+
+function vs_lobby_ops_begin(_mode)
+{
+    if (!vs_online_is_custom() || !vs_lobby_is_owner()) return;
+    var lobby = vs_lobby_ops_lobby();
+    if (lobby == noone) return;
+    var t = vs_lobby_ops_targets();
+    if (array_length(t) <= 0)
+    {
+        play_se(sfx_songsel_select);
+        vs_lobby_log("ops " + string(_mode) + " no targets");
+        return;
+    }
+    lobby.opsMode = string(_mode);
+    lobby.opsCursor = 0;
+    var slot = vs_lobby_ops_kick_slot();
+    if (slot >= 0) lobby.cursor_pos = slot;
+    vs_lobby_ops_relabel();
+    play_se(sfx_songsel_diff);
+    vs_lobby_log("ops begin " + string(_mode) + " n=" + string(array_length(t)));
+}
+
+function vs_lobby_ops_selected()
+{
+    if (!vs_lobby_ops_active()) return undefined;
+    var lobby = vs_lobby_ops_lobby();
+    var t = vs_lobby_ops_targets();
+    var i = lobby.opsCursor;
+    if (i < 0 || i >= array_length(t)) return undefined;
+    return t[i];
+}
+
+function vs_lobby_draw_ops_card(_m, _x, _y)
+{
+    var sel = vs_lobby_ops_selected();
+    if (sel == undefined || _m == undefined) return;
+    if (!variable_struct_exists(_m, "id") || string(_m.id) != string(sel.id)) return;
+    draw_set_color(c_yellow);
+    draw_set_alpha(0.28 + 0.12 * sin(current_time / 140));
+    draw_rectangle(_x, _y, _x + 145, _y + 32, false);
+    draw_set_alpha(1);
+    draw_rectangle(_x, _y, _x + 145, _y + 32, true);
+    draw_set_color(c_white);
+}
+
+function vs_lobby_ops_scroll_to(_m)
+{
+    var lobby = vs_lobby_ops_lobby();
+    if (lobby == noone || _m == undefined || !instance_exists(o_st_handle)) return;
+    var members = o_st_handle.lobbyMembers;
+    var i = 0;
+    var idx = -1;
+    repeat (array_length(members))
+    {
+        if (members[i] != undefined && string(members[i].id) == string(_m.id))
+        {
+            idx = i;
+            break;
+        }
+        i++;
+    }
+    if (idx < 0) return;
+    var y0 = idx * 35;
+    var max_off = clamp((array_length(members) - 3) * 35, 0, 999);
+    if (y0 < lobby.member_y_offset) lobby.member_y_offset = y0;
+    if (y0 > lobby.member_y_offset + 70) lobby.member_y_offset = y0 - 70;
+    lobby.member_y_offset = clamp(lobby.member_y_offset, 0, max_off);
+}
+
+function vs_lobby_kick_done(_ok, _data, _status)
+{
+    vs_lobby_log("kick " + vs_lobby_http_why(_ok, _data, _status));
+    if (!_ok)
+    {
+        show_message("Could not kick that player.\n\n无法踢出该玩家。");
+    }
+}
+
+function vs_lobby_kick(_playerId)
+{
+    if (!vs_online_is_custom() || !vs_lobby_is_owner()) return;
+    if (!vs_lobby_has_code()) return;
+    var pid = string(_playerId);
+    if (pid == "" || pid == string(vs_online_player_id())) return;
+    var code = string(o_st_handle.lobbyCode);
+    vs_lobby_log("REST kick id=" + pid);
+    vs_http_request_path(
+        "/api/v1/lobbies/" + code + "/members/" + vs_online_url_encode(pid),
+        true,
+        "DELETE",
+        { Accept: "application/json" },
+        "",
+        vs_lobby_kick_done,
+        true,
+        "",
+        "");
+}
+
+function vs_lobby_ops_confirm()
+{
+    var lobby = vs_lobby_ops_lobby();
+    if (lobby == noone) return;
+    var sel = vs_lobby_ops_selected();
+    if (sel == undefined)
+    {
+        play_se(sfx_songsel_select);
+        vs_lobby_ops_end();
+        return;
+    }
+    if (lobby.opsMode == "kick")
+    {
+        play_se(sfx_songsel_beginsong);
+        vs_lobby_kick(sel.id);
+    }
+    vs_lobby_ops_end();
+}
+
+function vs_lobby_ops_step()
+{
+    if (!vs_lobby_ops_active()) return false;
+    var lobby = vs_lobby_ops_lobby();
+    var t = vs_lobby_ops_targets();
+    if (array_length(t) <= 0)
+    {
+        vs_lobby_ops_end();
+        return true;
+    }
+    if (lobby.opsCursor < 0) lobby.opsCursor = 0;
+    if (lobby.opsCursor >= array_length(t)) lobby.opsCursor = array_length(t) - 1;
+    var d = (input_check_pressed(12) - input_check_pressed(11))
+        + (input_check_pressed(14) - input_check_pressed(13));
+    if (d != 0)
+    {
+        play_se(sfx_songsel_cursor);
+        lobby.opsCursor = (array_length(t) + lobby.opsCursor + d) % array_length(t);
+    }
+    vs_lobby_ops_relabel();
+    vs_lobby_ops_scroll_to(t[lobby.opsCursor]);
+    if (input_check_pressed(4))
+    {
+        vs_lobby_ops_confirm();
+    }
+    else if (input_check_pressed(5))
+    {
+        play_se(sfx_songsel_select);
+        vs_lobby_ops_end();
+    }
+    return true;
+}
+
 // --- member struct ---------------------------------------------------------
 
 // Deterministic avatar fallback: hash(name) -> a jacket from global.song_list.
@@ -1134,6 +1355,7 @@ function vs_lobby_reset()
     {
         global.vs_lobby_cb.match_busy = false;
     }
+    vs_lobby_ops_end();
     vs_lobby_send_q_clear();
     vs_ws_close();
     if (instance_exists(o_st_handle))
@@ -1382,6 +1604,7 @@ function vs_lobby_handle_control(_j)
                 o_st_handle.vs_hostId = _j.hostId;
                 vs_lobby_refresh_host_flags(_j.hostId);
                 vs_lobby_log("host_changed host=" + string(_j.hostId) + " owner=" + string(vs_lobby_is_owner()));
+                if (!vs_lobby_is_owner()) vs_lobby_ops_end();
             }
             else
             {
