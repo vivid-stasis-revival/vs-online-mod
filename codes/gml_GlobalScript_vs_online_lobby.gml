@@ -378,17 +378,20 @@ function vs_lobby_create(_public, _on_done)
     if (!vs_online_is_account())
     {
         vs_lobby_log("create skip guest");
+        if (_on_done != undefined) { _on_done(false, undefined); }
+        return;
     }
     if (!variable_global_exists("vs_lobby_cb"))
     {
-        global.vs_lobby_cb = { public: true, code: "", on_done: undefined };
+        global.vs_lobby_cb = { is_public: true, code: "", on_done: undefined };
     }
-    global.vs_lobby_cb.public = _public;
+    global.vs_lobby_cb.is_public = _public;
     global.vs_lobby_cb.on_done = _on_done;
     vs_online_with_conn(function()
     {
-        vs_lobby_log("create POST /lobbies public=" + string(global.vs_lobby_cb.public));
-        vs_online_post_json("/api/v1/lobbies", { public: global.vs_lobby_cb.public }, function(_ok, _data, _status)
+        vs_lobby_log("create POST /lobbies public=" + string(global.vs_lobby_cb.is_public));
+        var body = "{\"public\":" + (global.vs_lobby_cb.is_public ? "true" : "false") + "}";
+        vs_online_post_raw("/api/v1/lobbies", body, function(_ok, _data, _status)
         {
             vs_lobby_log("create result " + vs_lobby_http_why(_ok, _data, _status));
             var cb = global.vs_lobby_cb.on_done;
@@ -407,10 +410,12 @@ function vs_lobby_matchmake(_on_done)
     if (!vs_online_is_account())
     {
         vs_lobby_log("matchmake skip guest");
+        if (_on_done != undefined) { _on_done(false, undefined); }
+        return;
     }
     if (!variable_global_exists("vs_lobby_cb"))
     {
-        global.vs_lobby_cb = { public: true, code: "", on_done: undefined };
+        global.vs_lobby_cb = { is_public: true, code: "", on_done: undefined };
     }
     global.vs_lobby_cb.on_done = _on_done;
     vs_online_with_conn(function()
@@ -434,14 +439,18 @@ function vs_lobby_join(_code, _on_done)
     if (_code == undefined || string(_code) == "")
     {
         vs_lobby_log("join empty code");
+        if (_on_done != undefined) { _on_done(false, undefined); }
+        return;
     }
     if (!vs_online_is_account())
     {
         vs_lobby_log("join skip guest");
+        if (_on_done != undefined) { _on_done(false, undefined); }
+        return;
     }
     if (!variable_global_exists("vs_lobby_cb"))
     {
-        global.vs_lobby_cb = { public: true, code: "", on_done: undefined };
+        global.vs_lobby_cb = { is_public: true, code: "", on_done: undefined };
     }
     global.vs_lobby_cb.code = _code;
     global.vs_lobby_cb.on_done = _on_done;
@@ -604,12 +613,8 @@ function vs_online_on_ws_frame(_op, _payload)
         }
         // payload position is now exactly at the packet type byte.
         var got = receive_packet(_payload, senderId);
-        // receive_packet only deletes on unknown/empty; we own this buffer.
-        if (got != undefined)
-        {
-            buffer_delete(_payload);
-        }
-        else if (!vs_lobby_pkt_quiet(pkt))
+        // packet.read already deletes the buffer on a known type.
+        if (got == undefined && !vs_lobby_pkt_quiet(pkt))
         {
             vs_lobby_log("recv unhandled from=" + senderId + " type=" + vs_lobby_pkt_name(pkt));
         }
