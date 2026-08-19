@@ -122,6 +122,12 @@
         "Value": "case \"kick\": vs_lobby_ops_begin(\"kick\"); break;\n        case \"downloadchart\": vs_lobby_dl_prompt(); break;\n        case \"hostlobby\":",
         "Type": 0
     },
+    {
+        "Entry": "gml_Object_obj_multiplayer_lobby_Create_0",
+        "Find": "case \"startgame\":",
+        "Value": "case \"startgame\": if (vs_lobby_dl_prompt()) break;",
+        "Type": 0
+    },
 
     {
         "Entry": "gml_Object_obj_multiplayer_lobby_Draw_64",

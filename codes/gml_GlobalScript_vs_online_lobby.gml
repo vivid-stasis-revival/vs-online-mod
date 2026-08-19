@@ -293,12 +293,20 @@ function vs_lobby_has_queued_song()
     return o_st_handle.songQueue[0] != undefined;
 }
 
-function vs_lobby_local_need_dl()
+function vs_lobby_local_missing()
 {
     if (!vs_lobby_has_queued_song()) return false;
     var s = o_st_handle.songQueue[0];
     var sid = variable_struct_exists(s, "songId") ? s.songId : -1;
     return vs_online_song_from_id(sid) == undefined;
+}
+
+function vs_lobby_local_need_dl()
+{
+    if (vs_lobby_local_missing()) return true;
+    var st = vs_lobby_dl_st();
+    var cid = vs_lobby_queued_chart_id();
+    return cid != "" && st.need_upd && string(st.chartId) == cid;
 }
 
 function vs_lobby_tag_need_dl(_m)

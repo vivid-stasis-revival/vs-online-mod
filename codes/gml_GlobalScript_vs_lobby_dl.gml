@@ -6,7 +6,7 @@ function vs_lobby_dl_st()
 {
     if (!variable_global_exists("vs_lobby_dl"))
     {
-        global.vs_lobby_dl = { open: false, looking: false, chartId: "", seq: 0, err: "" };
+        global.vs_lobby_dl = { open: false, looking: false, checking: false, need_upd: false, chartId: "", serverId: "", seq: 0, err: "" };
     }
     return global.vs_lobby_dl;
 }
@@ -55,6 +55,7 @@ function vs_lobby_dl_cancel()
     var st = vs_lobby_dl_st();
     st.seq += 1;
     st.looking = false;
+    st.checking = false;
     if (vs_dlmgr_is_busy() && string(global.vs_dlmgr_dl.chartId) == string(st.chartId))
     {
         vs_dlmgr_cancel();
@@ -66,20 +67,124 @@ function vs_lobby_dl_cancel()
 function vs_lobby_dl_on_queue()
 {
     var st = vs_lobby_dl_st();
-    if (!st.open) return;
     var cid = vs_lobby_queued_chart_id();
-    if (cid == "" || string(st.chartId) != string(cid))
+    if (st.open && (cid == "" || string(st.chartId) != string(cid)))
     {
         vs_lobby_dl_cancel();
     }
+    vs_lobby_dl_arm_check();
+}
+
+function vs_lobby_dl_unready()
+{
+    if (!instance_exists(obj_multiplayer_lobby)) return;
+    with (obj_multiplayer_lobby)
+    {
+        if (!isReady) return;
+        isReady = false;
+        send_packet(SendReadyPacket, false);
+        if (variable_instance_exists(self, "countdownTimer") && countdownTimer != undefined)
+        {
+            cancelCountdown();
+        }
+    }
+}
+
+function vs_lobby_dl_arm_check()
+{
+    if (!vs_online_is_custom()) return;
+    var st = vs_lobby_dl_st();
+    if (st.open) return;
+    st.need_upd = false;
+    st.checking = false;
+    st.serverId = "";
+    var cid = vs_lobby_queued_chart_id();
+    if (cid == "" || vs_lobby_local_missing()) return;
+    if (!vs_dlmgr_tracked(cid) || !vs_songstore_has_chart(cid)) return;
+    st.seq += 1;
+    var seq = st.seq;
+    st.chartId = cid;
+    st.checking = true;
+    vs_lobby_log("dl check chart=" + cid);
+    vs_online_get_json("/api/v1/songs?chartId=" + vs_online_url_encode(cid) + "&size=1", false,
+        function(_ok, _data, _status)
+        {
+            vs_lobby_dl_on_check_lookup(seq, _ok, _data);
+        });
+}
+
+function vs_lobby_dl_on_check_lookup(_seq, _ok, _data)
+{
+    var st = vs_lobby_dl_st();
+    if (_seq != st.seq) return;
+    var sid = vs_lobby_dl_catalog_id(_ok, _data, st.chartId);
+    if (sid == "")
+    {
+        st.checking = false;
+        vs_lobby_log("dl check skip not on server chart=" + st.chartId);
+        return;
+    }
+    st.serverId = sid;
+    vs_online_get_json("/api/v1/songs/" + sid, false,
+        function(_ok2, _data2, _status2)
+        {
+            vs_lobby_dl_on_check_detail(_seq, _ok2, _data2);
+        });
+}
+
+function vs_lobby_dl_on_check_detail(_seq, _ok, _data)
+{
+    var st = vs_lobby_dl_st();
+    if (_seq != st.seq) return;
+    st.checking = false;
+    var n = 0;
+    if (_ok && _data != undefined && variable_struct_exists(_data, "files"))
+    {
+        n = array_length(vs_songstore_diff(_data.files, st.chartId));
+    }
+    st.need_upd = n > 0;
+    vs_lobby_log("dl check chart=" + st.chartId + (st.need_upd ? (" UPDATE files=" + string(n)) : " current"));
+    send_packet(SendPlayerInfoPacket);
+    if (st.need_upd) vs_lobby_dl_unready();
+    if (!st.open) return;
+    if (st.need_upd) vs_lobby_dl_begin(st.chartId);
+    else vs_lobby_dl_close();
+}
+
+function vs_lobby_dl_catalog_id(_ok, _data, _cid)
+{
+    if (!_ok || _data == undefined) return "";
+    if (!variable_struct_exists(_data, "songs") || !is_array(_data.songs)) return "";
+    var items = _data.songs;
+    var i = 0;
+    repeat (array_length(items))
+    {
+        var it = items[i];
+        if (it != undefined && variable_struct_exists(it, "chartId") && string(it.chartId) == string(_cid))
+        {
+            return variable_struct_exists(it, "id") ? string(it.id) : "";
+        }
+        i++;
+    }
+    if (array_length(items) > 0 && items[0] != undefined && variable_struct_exists(items[0], "id"))
+    {
+        return string(items[0].id);
+    }
+    return "";
 }
 
 function vs_lobby_dl_prompt()
 {
     if (!vs_online_is_custom()) return false;
-    if (!vs_lobby_local_need_dl()) return false;
     var cid = vs_lobby_queued_chart_id();
     var st = vs_lobby_dl_st();
+    if (st.checking && string(st.chartId) == string(cid))
+    {
+        st.open = true;
+        vs_lobby_dl_seed_popup("Checking", cid);
+        return true;
+    }
+    if (!vs_lobby_local_need_dl()) return false;
     if (st.open && (cid == "" || string(st.chartId) == string(cid)))
     {
         return true;
@@ -109,6 +214,7 @@ function vs_lobby_dl_begin(_cid)
     if (vs_lobby_dl_try_local(st.chartId))
     {
         vs_lobby_dl_close();
+        vs_lobby_dl_arm_check();
         return;
     }
     if (vs_songstore_has_chart(st.chartId) && !vs_dlmgr_tracked(st.chartId))
@@ -138,11 +244,12 @@ function vs_lobby_dl_begin(_cid)
 
 function vs_lobby_dl_try_local(_cid)
 {
+    if (vs_lobby_dl_st().need_upd) return false;
     if (!vs_songstore_has_chart(_cid)) return false;
     vs_localcharts_refresh();
     vs_lobby_resolve_queued_songs();
     send_packet(SendPlayerInfoPacket);
-    return !vs_lobby_local_need_dl();
+    return !vs_lobby_local_missing();
 }
 
 function vs_lobby_dl_on_lookup(_seq, _ok, _data)
@@ -150,26 +257,7 @@ function vs_lobby_dl_on_lookup(_seq, _ok, _data)
     var st = vs_lobby_dl_st();
     if (_seq != st.seq || !st.open) return;
     st.looking = false;
-    var sid = "";
-    if (_ok && _data != undefined && variable_struct_exists(_data, "songs") && is_array(_data.songs))
-    {
-        var items = _data.songs;
-        var i = 0;
-        repeat (array_length(items))
-        {
-            var it = items[i];
-            if (it != undefined && variable_struct_exists(it, "chartId") && string(it.chartId) == st.chartId)
-            {
-                sid = variable_struct_exists(it, "id") ? string(it.id) : "";
-                break;
-            }
-            i++;
-        }
-        if (sid == "" && array_length(items) > 0 && items[0] != undefined && variable_struct_exists(items[0], "id"))
-        {
-            sid = string(items[0].id);
-        }
-    }
+    var sid = vs_lobby_dl_catalog_id(_ok, _data, st.chartId);
     if (sid == "")
     {
         vs_lobby_dl_fail("not on server");
@@ -209,6 +297,7 @@ function vs_lobby_dl_on_done(_ok)
     }
     vs_localcharts_refresh();
     vs_lobby_resolve_queued_songs();
+    st.need_upd = false;
     send_packet(SendPlayerInfoPacket);
     vs_lobby_log("dl ok chart=" + st.chartId + " songId=" + string(vs_online_song_id_from_chart(st.chartId)));
     vs_lobby_dl_close();
@@ -252,9 +341,14 @@ function vs_lobby_dl_menu_apply(_acts)
     if (_acts == undefined || !is_array(_acts)) return;
     var want = vs_online_is_custom() && (vs_lobby_local_need_dl() || vs_lobby_dl_open());
     var have = vs_lobby_dl_menu_find(_acts, "downloadchart");
+    var lab = vs_lobby_local_missing() ? "Download" : "Update";
     if (want)
     {
-        if (have >= 0) return;
+        if (have >= 0)
+        {
+            _acts[have].txt = lab;
+            return;
+        }
         var slot = 1;
         if (vs_lobby_dl_menu_find(_acts, "readytoggle") >= 0)
         {
@@ -265,7 +359,7 @@ function vs_lobby_dl_menu_apply(_acts)
             var start = vs_lobby_dl_menu_find(_acts, "startgame");
             slot = (start >= 0) ? start : array_length(_acts);
         }
-        array_insert(_acts, slot, { txt: "Download", callback: "downloadchart" });
+        array_insert(_acts, slot, { txt: lab, callback: "downloadchart" });
     }
     else if (have >= 0)
     {
