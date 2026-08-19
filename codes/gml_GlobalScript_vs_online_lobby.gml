@@ -220,6 +220,65 @@ function vs_member_set_flag(_m, _v)
     variable_struct_set(_m, "scoreFlag", _v);
 }
 
+function vs_lobby_local_play_diff()
+{
+    if (!instance_exists(o_st_handle)) return -1;
+    if (!is_array(o_st_handle.songQueue) || array_length(o_st_handle.songQueue) <= 0) return -1;
+    if (variable_global_exists("songselect_difficulty")) return global.songselect_difficulty;
+    var s = o_st_handle.songQueue[0];
+    if (s == undefined) return -1;
+    if (variable_struct_exists(s, "difficulty")) return s.difficulty;
+    return -1;
+}
+
+function vs_lobby_local_autoplay()
+{
+    return variable_global_exists("op_autoplay") && global.op_autoplay;
+}
+
+function vs_lobby_diff_short(_d)
+{
+    if (_d == 0) return "OPN";
+    if (_d == 1) return "MID";
+    if (_d == 2) return "FIN";
+    if (_d == 3) return "ENC";
+    if (_d == 4) return "PRE";
+    return "";
+}
+
+function vs_lobby_diff_color(_d)
+{
+    if (_d == 0) return make_color_rgb(0, 224, 255);
+    if (_d == 1) return make_color_rgb(255, 220, 0);
+    if (_d == 2) return make_color_rgb(255, 80, 80);
+    if (_d == 3) return make_color_rgb(255, 80, 200);
+    if (_d == 4) return make_color_rgb(255, 210, 26);
+    return c_white;
+}
+
+function vs_lobby_draw_namecard_tags(_m, _rx, _ry)
+{
+    if (_m == undefined) return;
+    var d = variable_struct_exists(_m, "play_diff") ? _m.play_diff : -1;
+    var lab = vs_lobby_diff_short(d);
+    var ap = variable_struct_exists(_m, "autoplay") && _m.autoplay;
+    if (lab == "" && !ap) return;
+    var bits = lab;
+    if (ap) bits = (bits == "") ? "AP" : (bits + " AP");
+    draw_set_halign(fa_right);
+    draw_set_color(ap && lab == "" ? c_yellow : vs_lobby_diff_color(d));
+    draw_text_o(_rx, _ry, bits);
+    draw_set_halign(fa_left);
+    draw_set_color(c_white);
+}
+
+function vs_lobby_keep_play_tags(_dst, _src)
+{
+    if (_dst == undefined || _src == undefined) return;
+    if (variable_struct_exists(_src, "play_diff")) _dst.play_diff = _src.play_diff;
+    if (variable_struct_exists(_src, "autoplay")) _dst.autoplay = _src.autoplay;
+}
+
 // --- member struct ---------------------------------------------------------
 
 // Deterministic avatar fallback: hash(name) -> a jacket from global.song_list.
@@ -419,6 +478,8 @@ function vs_lobby_build_member(_mv)
         npc: false,
         rate: variable_struct_exists(_mv, "rate") ? _mv.rate : 0,
         class: variable_struct_exists(_mv, "class") ? _mv.class : 0,
+        play_diff: -1,
+        autoplay: false,
         sticker_scale: 0,
         sticker_alpha: 0,
         sticker_id: 0,
@@ -465,14 +526,18 @@ function vs_lobby_apply_roster(_members)
         var src = _members[i];
         var m = vs_lobby_build_member(src);
         var pid = string(m.id);
-        if (variable_struct_exists(prevById, pid) && vs_member_get_score(m) == 0)
+        if (variable_struct_exists(prevById, pid))
         {
             var old = variable_struct_get(prevById, pid);
-            var oldSc = vs_member_get_score(old);
-            if (oldSc != 0)
+            vs_lobby_keep_play_tags(m, old);
+            if (vs_member_get_score(m) == 0)
             {
-                vs_member_set_score(m, oldSc);
-                if (variable_struct_exists(old, "scoreFlag")) vs_member_set_flag(m, vs_member_get_flag(old));
+                var oldSc = vs_member_get_score(old);
+                if (oldSc != 0)
+                {
+                    vs_member_set_score(m, oldSc);
+                    if (variable_struct_exists(old, "scoreFlag")) vs_member_set_flag(m, vs_member_get_flag(old));
+                }
             }
         }
         arr[i] = m;

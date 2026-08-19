@@ -13,6 +13,8 @@ addMember = function(arg0)
         rate: 0,
         class: 0,
         has_bwp: false,
+        play_diff: -1,
+        autoplay: false,
         sticker_scale: 0,
         sticker_alpha: 0,
         sticker_id: 0,

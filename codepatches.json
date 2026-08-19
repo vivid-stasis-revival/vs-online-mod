@@ -591,6 +591,12 @@
     },
     {
         "Entry": "gml_Object_obj_multiplayer_lobby_Create_0",
+        "Find": "    global.op_autoplay = false;",
+        "Value": "    // keep accessibility autoplay in Worldcross Play (betterWP)",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_Object_obj_multiplayer_lobby_Create_0",
         "Find": "var _lb_ID = steam_lobby_list_get_lobby_id(i);",
         "Value": "var _lb_ID = steam_lobby_list_get_lobby_id((i + randomJoinOffset) % _lb_count);",
         "Type": 1
@@ -749,9 +755,15 @@
         "Type": 0
     },
     {
+        "Entry": "gml_Object_obj_multiplayer_lobby_Create_0",
+        "Find": "obj_multiplayer_lobby.isReady = true;\n            send_packet(SendReadyPacket, true);",
+        "Value": "obj_multiplayer_lobby.isReady = true;\n            send_packet(SendPlayerInfoPacket);\n            send_packet(SendReadyPacket, true);",
+        "Type": 0
+    },
+    {
         "Entry": "gml_GlobalScript_AddSongPacket",
         "Find": "o_st_handle.songQueue = [arg0];",
-        "Value": "o_st_handle.songQueue = [arg0];global.songselect_difficulty = arg0.difficulty; if (vs_online_is_custom()) vs_lobby_log(\"AddSong songId=\" + string(arg0.songId) + \" diff=\" + string(arg0.difficulty));",
+        "Value": "o_st_handle.songQueue = [arg0];global.songselect_difficulty = arg0.difficulty; send_packet(SendPlayerInfoPacket); if (vs_online_is_custom()) vs_lobby_log(\"AddSong songId=\" + string(arg0.songId) + \" diff=\" + string(arg0.difficulty));",
         "Type": 0
     },
     {
@@ -780,13 +792,13 @@
     {
         "Entry": "gml_GlobalScript_StartGamePacket",
         "Find": "                start_song(song.songId, song.difficulty, ",
-        "Value": "                if (vs_online_song_from_id(song.songId) == undefined) { if (vs_online_is_custom()) vs_lobby_log(\"start_game skip missing songId=\" + string(song.songId)); }\n                else start_song(song.songId, song.difficulty, ",
+        "Value": "                if (vs_online_song_from_id(song.songId) == undefined) { if (vs_online_is_custom()) vs_lobby_log(\"start_game skip missing songId=\" + string(song.songId)); }\n                else start_song(song.songId, global.songselect_difficulty, ",
         "Type": 1
     },
     {
         "Entry": "gml_GlobalScript_SendPlayerInfoPacket",
         "Find": "return buffer;",
-        "Value": "buffer_write(buffer, buffer_bool, true);return buffer;",
+        "Value": "buffer_write(buffer, buffer_bool, true);buffer_write(buffer, buffer_s8, vs_lobby_local_play_diff());buffer_write(buffer, buffer_u8, vs_lobby_local_autoplay() ? 1 : 0);return buffer;",
         "Type": 0
     },
     {
@@ -798,13 +810,13 @@
     {
         "Entry": "gml_GlobalScript_SendPlayerInfoPacket",
         "Find": "buffer_delete(arg0);",
-        "Value": "try{obj.has_bwp = buffer_read(arg0, buffer_bool);}catch(e){obj.has_bwp = false;}buffer_delete(arg0);",
+        "Value": "try{obj.has_bwp = buffer_read(arg0, buffer_bool);}catch(e){obj.has_bwp = false;}try{obj.play_diff = buffer_read(arg0, buffer_s8);}catch(e){obj.play_diff = -1;}try{obj.autoplay = buffer_read(arg0, buffer_u8);}catch(e){obj.autoplay = 0;}buffer_delete(arg0);",
         "Type": 0
     },
     {
         "Entry": "gml_GlobalScript_SendPlayerInfoPacket",
         "Find": "member.class = arg0.class;",
-        "Value": "member.class = arg0.class;member.has_bwp = arg0.has_bwp;",
+        "Value": "member.class = arg0.class;member.has_bwp = arg0.has_bwp;member.play_diff = struct_get_fallback(arg0, \"play_diff\", -1);member.autoplay = struct_get_fallback(arg0, \"autoplay\", 0);",
         "Type": 0
     },
     {
@@ -865,6 +877,12 @@
         "Entry": "gml_Object_obj_multiplayer_lobby_Draw_64",
         "Find": "format_score(member.score)",
         "Value": "format_score(vs_member_get_score(member))",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_Object_obj_multiplayer_lobby_Draw_64",
+        "Find": "draw_text_o(bx + ox + 32, by + oy + 4 + (i * 35), truncate_string(member.name, 112));",
+        "Value": "draw_text_o(bx + ox + 32, by + oy + 4 + (i * 35), truncate_string(member.name, 112));vs_lobby_draw_namecard_tags(member, bx + ox + 143, by + oy + 4 + (i * 35));",
         "Type": 0
     },
     {
