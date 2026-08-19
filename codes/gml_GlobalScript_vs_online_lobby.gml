@@ -480,6 +480,37 @@ function vs_lobby_apply_roster(_members)
     o_st_handle.lobbyMembers = arr;
 }
 
+function vs_lobby_touch_member(_mv)
+{
+    if (!instance_exists(o_st_handle) || _mv == undefined) return;
+    if (!variable_struct_exists(_mv, "playerId")) return;
+    var pid = string(_mv.playerId);
+    if (pid == "" || pid == "?") return;
+    var ex = o_st_handle.getMember(pid);
+    if (ex == undefined)
+    {
+        array_push(o_st_handle.lobbyMembers, vs_lobby_build_member(_mv));
+        var j = 0;
+        repeat (array_length(o_st_handle.lobbyMembers))
+        {
+            o_st_handle.lobbyMembers[j].order = j;
+            j++;
+        }
+        return;
+    }
+    if (variable_struct_exists(_mv, "name") && string(_mv.name) != "") ex.name = _mv.name;
+    if (variable_struct_exists(_mv, "ready")) ex.ready = _mv.ready;
+    if (variable_struct_exists(_mv, "host")) ex.host = _mv.host;
+    if (variable_struct_exists(_mv, "rate")) ex.rate = _mv.rate;
+    if (variable_struct_exists(_mv, "class")) ex.class = _mv.class;
+    if (variable_struct_exists(_mv, "score"))
+    {
+        var sc = variable_struct_get(_mv, "score");
+        if (sc != 0) vs_member_set_score(ex, sc);
+    }
+    if (variable_struct_exists(_mv, "scoreFlag")) vs_member_set_flag(ex, variable_struct_get(_mv, "scoreFlag"));
+}
+
 function vs_lobby_remove_member(_id)
 {
     if (!instance_exists(o_st_handle)) return;
@@ -1178,16 +1209,7 @@ function vs_lobby_handle_control(_j)
             {
                 var mid = variable_struct_exists(_j.member, "playerId") ? string(_j.member.playerId) : "?";
                 var mname = variable_struct_exists(_j.member, "name") ? string(_j.member.name) : "";
-                if (mid != "?" && o_st_handle.getMember(mid) == undefined)
-                {
-                    array_push(o_st_handle.lobbyMembers, vs_lobby_build_member(_j.member));
-                    var i = 0;
-                    repeat (array_length(o_st_handle.lobbyMembers))
-                    {
-                        o_st_handle.lobbyMembers[i].order = i;
-                        i++;
-                    }
-                }
+                vs_lobby_touch_member(_j.member);
                 vs_lobby_log("member_joined id=" + mid + " name=" + mname
                     + " n=" + string(array_length(o_st_handle.lobbyMembers))
                     + " connected=" + string(variable_struct_exists(_j.member, "connected") ? _j.member.connected : "?")

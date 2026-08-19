@@ -210,6 +210,12 @@
         "Type": 0
     },
     {
+        "Entry": "gml_GlobalScript_SendQueuePacket",
+        "Find": "        o_st_handle.lobbyMembers = newLobbyMembers;",
+        "Value": "        if (!vs_online_is_custom()) o_st_handle.lobbyMembers = newLobbyMembers;",
+        "Type": 0
+    },
+    {
         "Entry": "gml_GlobalScript_ReportScorePacket",
         "Find": "        member.reportedScore = true;",
         "Value": "        member.reportedScore = true; if (vs_online_is_custom()) vs_lobby_log(\"recv ReportScore from=\" + string(arg1) + \" pts=\" + string(arg0.score) + \" flag=\" + string(arg0.flag));",
