@@ -1031,6 +1031,12 @@
         "Type": 1
     },
     {
+        "Entry": "gml_Object_o_songobject_main_Other_25",
+        "Find": "var diff_index = 0;\nif (string_char_at(diff_value, string_length(diff_value)) == \"+\")\n{\n    var lowest_plus_diff = 9;\n    var plus_index_start = 19;\n    diff_index = (plus_index_start + real(string_copy(diff_value, 1, string_length(diff_value) - 1))) - lowest_plus_diff;\n}\nelse\n{\n    diff_index = real(diff_value);\n}\nif (show_detail)\n{\n    draw_sprite(diff_sprite, diff_index, 2, 2);\n}",
+        "Value": "if (show_detail)\n{\n    vs_csm_draw_diff_badge(diff_sprite, diff_value, 2, 2);\n}",
+        "Type": 1
+    },
+    {
         "Entry": "gml_GlobalScript_AddSongPacket",
         "Find": "return buffer;",
         "Value": "buffer_write(buffer, buffer_string, global.song_list[arg0.songId].chart_id);return buffer;",

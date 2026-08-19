@@ -336,6 +336,36 @@ function vs_csm_first_chart_diff(_dir)
     return 0;
 }
 
+// Song-select badges are sprite frames: 1..18 and 9+..16+. 17+ is frame 27,
+// which the official sheet does not have. Draw the display string instead.
+function vs_csm_draw_diff_badge(_sprite, _diff_value, _x, _y)
+{
+    var dv = string(_diff_value);
+    var idx = 0;
+    if (string_length(dv) > 0 && string_char_at(dv, string_length(dv)) == "+")
+    {
+        idx = (19 + vs_csm_safe_real(string_copy(dv, 1, string_length(dv) - 1), 0)) - 9;
+    }
+    else
+    {
+        idx = vs_csm_safe_real(dv, 0);
+    }
+    if (sprite_exists(_sprite) && idx >= 0 && idx < sprite_get_number(_sprite))
+    {
+        draw_sprite(_sprite, idx, _x, _y);
+        return;
+    }
+    var ha = draw_get_halign();
+    var va = draw_get_valign();
+    var w = sprite_exists(_sprite) ? sprite_get_width(_sprite) : 18;
+    var h = sprite_exists(_sprite) ? sprite_get_height(_sprite) : 18;
+    draw_set_halign(fa_center);
+    draw_set_valign(fa_middle);
+    draw_text(_x + (w / 2), _y + (h / 2), dv);
+    draw_set_halign(ha);
+    draw_set_valign(va);
+}
+
 function vs_csm_play_log(_msg)
 {
     var line = "VS PLAY: " + string(_msg);
