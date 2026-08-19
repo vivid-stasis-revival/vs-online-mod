@@ -168,6 +168,11 @@ function vs_http_q_init()
         global.vs_http_gen = 0;
         global.vs_http_to = [];
     }
+    if (!variable_global_exists("vs_http_hold"))
+    {
+        global.vs_http_hold = false;
+        global.vs_http_held = undefined;
+    }
 }
 
 function vs_http_default_timeout()
@@ -207,6 +212,10 @@ function vs_http_request_ex(_url, _method, _headers, _body, _on_done, _json, _af
     array_push(global.vs_http_q,
     {
         url: _url,
+        path: "",
+        authed: false,
+        is_refresh: false,
+        retries: 0,
         method: _method,
         headers: _headers,
         body: (_body == undefined) ? "" : _body,
@@ -221,11 +230,145 @@ function vs_http_request_ex(_url, _method, _headers, _body, _on_done, _json, _af
     vs_http_pump();
 }
 
+function vs_http_request_path(_path, _authed, _method, _headers, _body, _on_done, _json, _after, _timeout)
+{
+    vs_http_q_init();
+    var to = vs_http_default_timeout();
+    if (_timeout != undefined && _timeout > 0)
+    {
+        to = _timeout;
+    }
+    array_push(global.vs_http_q,
+    {
+        url: "",
+        path: _path,
+        authed: (_authed == true),
+        is_refresh: false,
+        retries: 0,
+        method: _method,
+        headers: _headers,
+        body: (_body == undefined) ? "" : _body,
+        on_done: _on_done,
+        json: _json,
+        after: (_after == undefined) ? "" : _after,
+        email: "",
+        timeout: to,
+        rid: -1,
+        hdr: undefined
+    });
+    vs_http_pump();
+}
+
+function vs_online_abs_url(_path, _authed)
+{
+    var url = vs_online_server_url() + _path;
+    if (_authed)
+    {
+        var cfg = vs_online_get_config();
+        if (variable_struct_exists(cfg, "token") && cfg.token != "")
+        {
+            url += (string_pos("?", url) > 0 ? "&" : "?") + "token=" + vs_online_url_encode(cfg.token);
+        }
+    }
+    return url;
+}
+
+function vs_http_job_url(_job)
+{
+    if (_job != undefined && variable_struct_exists(_job, "path") && _job.path != "")
+    {
+        return vs_online_abs_url(_job.path, _job.authed);
+    }
+    return _job.url;
+}
+
+function vs_http_make_refresh_job()
+{
+    var cfg = vs_online_get_config();
+    var body = "grant_type=refresh_token&refresh_token=" + vs_online_url_encode(cfg.refresh_token) + "&client_id=game";
+    return {
+        url: vs_online_server_url() + "/oauth2/token",
+        path: "",
+        authed: false,
+        is_refresh: true,
+        retries: 0,
+        method: "POST",
+        headers: "Content-Type: application/x-www-form-urlencoded\r\n",
+        body: body,
+        on_done: undefined,
+        json: true,
+        after: "oauth_refresh_inline",
+        email: "",
+        timeout: vs_http_default_timeout(),
+        rid: -1,
+        hdr: undefined
+    };
+}
+
+function vs_http_should_refresh_first(_job)
+{
+    if (_job == undefined) return false;
+    if (variable_struct_exists(_job, "is_refresh") && _job.is_refresh) return false;
+    if (_job.after == "oauth_refresh_inline") return false;
+    if (!vs_online_token_stale()) return false;
+    return (_job.authed == true);
+}
+
+function vs_http_retry_ms(_text)
+{
+    if (_text != undefined && _text != "")
+    {
+        try
+        {
+            var j = json_parse(_text);
+            if (is_struct(j) && variable_struct_exists(j, "retryAfter"))
+            {
+                var sec = real(j.retryAfter);
+                if (sec > 0) return min(sec * 1000, 120000);
+            }
+        }
+        catch (_e) { }
+    }
+    if (async_load != -1 && ds_map_exists(async_load, "response_headers"))
+    {
+        var hdrs = ds_map_find_value(async_load, "response_headers");
+        if (hdrs != undefined)
+        {
+            var ra = ds_map_find_value(hdrs, "Retry-After");
+            if (ra == undefined) ra = ds_map_find_value(hdrs, "retry-after");
+            if (ra != undefined)
+            {
+                var sec2 = real(ra);
+                if (sec2 > 0) return min(sec2 * 1000, 120000);
+            }
+        }
+    }
+    return 60000;
+}
+
+function vs_http_on_held()
+{
+    vs_http_q_init();
+    global.vs_http_hold = false;
+    if (global.vs_http_held != undefined)
+    {
+        array_insert(global.vs_http_q, 0, global.vs_http_held);
+        global.vs_http_held = undefined;
+    }
+    vs_http_pump();
+}
+
 function vs_http_pump()
 {
     vs_http_q_init();
     if (global.vs_http_busy) return;
+    if (global.vs_http_hold) return;
     if (array_length(global.vs_http_q) == 0) return;
+    if (vs_http_should_refresh_first(global.vs_http_q[0]))
+    {
+        show_debug_message("VS Online: refresh access token before next request");
+        array_insert(global.vs_http_q, 0, vs_http_make_refresh_job());
+    }
     global.vs_http_busy = true;
     global.vs_http_cur = global.vs_http_q[0];
     array_delete(global.vs_http_q, 0, 1);
@@ -259,6 +402,7 @@ function vs_http_start_current()
     }
     var hdr = vs_http_headers_create(job.headers);
     job.hdr = hdr;
+    job.url = vs_http_job_url(job);
     job.rid = http_request(job.url, job.method, hdr, job.body);
     if (job.rid == undefined || job.rid < 0)
     {
@@ -350,6 +494,34 @@ function vs_http_complete(_job, _ok, _text, _status)
         ds_map_destroy(_job.hdr);
         _job.hdr = undefined;
     }
+    if (!_ok && _status == 429 && _job.retries < 1)
+    {
+        _job.retries += 1;
+        var waitMs = vs_http_retry_ms(_text);
+        var frames = max(1, round(waitMs * 60 / 1000));
+        show_debug_message("VS Online: HTTP 429 backoff ms=" + string(waitMs) + " " + string(_job.method) + " " + string(_job.url));
+        global.vs_http_busy = false;
+        global.vs_http_cur = undefined;
+        global.vs_http_hold = true;
+        global.vs_http_held = _job;
+        call_later(frames, time_source_units_frames, vs_http_on_held);
+        return;
+    }
+    if (!_ok && _status == 401 && _job.authed && _job.retries < 1 && !_job.is_refresh)
+    {
+        var cfg = vs_online_get_config();
+        if (variable_struct_exists(cfg, "refresh_token") && cfg.refresh_token != "")
+        {
+            _job.retries += 1;
+            show_debug_message("VS Online: HTTP 401 — refresh and retry " + string(_job.method) + " " + string(_job.path));
+            global.vs_http_busy = false;
+            global.vs_http_cur = undefined;
+            array_insert(global.vs_http_q, 0, _job);
+            array_insert(global.vs_http_q, 0, vs_http_make_refresh_job());
+            vs_http_pump();
+            return;
+        }
+    }
     global.vs_http_busy = false;
     global.vs_http_cur = undefined;
     vs_http_finish(_job, _ok, _text, _status);
@@ -369,6 +541,25 @@ function vs_http_finish(_job, _ok, _text, _status)
     }
     var after = _job.after;
     var cb = _job.on_done;
+    if (after == "oauth_refresh_inline")
+    {
+        if (_ok && data != undefined && variable_struct_exists(data, "access_token"))
+        {
+            vs_online_apply_oauth_tokens(data);
+        }
+        else if (vs_http_status_auth_dead(_status, data))
+        {
+            var cfgR = vs_online_get_config();
+            show_debug_message("VS Online: inline refresh rejected http=" + string(_status));
+            cfgR.refresh_token = "";
+            vs_online_save_config();
+        }
+        else
+        {
+            show_debug_message("VS Online: inline refresh fail http=" + string(_status));
+        }
+        return;
+    }
     if (after == "create_player")
     {
         if (_ok && data != undefined)
@@ -399,13 +590,7 @@ function vs_http_finish(_job, _ok, _text, _status)
 // GET a JSON object; _on_done(ok, data, status). _authed appends ?token=.
 function vs_online_get_json(_path, _authed, _on_done, _timeout)
 {
-    var cfg = vs_online_get_config();
-    var url = vs_online_server_url() + _path;
-    if (_authed && variable_struct_exists(cfg, "token") && cfg.token != "")
-    {
-        url += (string_pos("?", url) > 0 ? "&" : "?") + "token=" + vs_online_url_encode(cfg.token);
-    }
-    vs_http_request_ex(url, "GET", { Accept: "application/json" }, "", _on_done, true, "", "", _timeout);
+    vs_http_request_path(_path, _authed, "GET", { Accept: "application/json" }, "", _on_done, true, "", _timeout);
 }
 
 // POST a JSON body; _on_done(ok, data, status).
@@ -421,14 +606,8 @@ function vs_online_post_json_ex(_path, _bodyStruct, _on_done, _after)
 
 function vs_online_post_raw(_path, _bodyStr, _on_done, _after)
 {
-    var cfg = vs_online_get_config();
-    var url = vs_online_server_url() + _path;
-    if (variable_struct_exists(cfg, "token") && cfg.token != "")
-    {
-        url += (string_pos("?", url) > 0 ? "&" : "?") + "token=" + vs_online_url_encode(cfg.token);
-    }
     var after = (_after == undefined) ? "" : _after;
-    vs_http_request_ex(url, "POST", "Content-Type: application/json\r\n", _bodyStr, _on_done, true, after, "");
+    vs_http_request_path(_path, true, "POST", "Content-Type: application/json\r\n", _bodyStr, _on_done, true, after, "");
 }
 
 function vs_online_json_esc(_s)
@@ -582,18 +761,27 @@ function vs_online_apply_oauth_tokens(_data)
     {
         cfg.refresh_token = _data.refresh_token;
     }
+    var exp = 86400;
+    if (variable_struct_exists(_data, "expires_in"))
+    {
+        exp = real(_data.expires_in);
+    }
+    if (exp < 120) exp = 120;
+    global.vs_token_expires_at = current_time + (exp - 120) * 1000;
     vs_online_save_config();
+}
+
+function vs_online_token_stale()
+{
+    var cfg = vs_online_get_config();
+    if (!variable_struct_exists(cfg, "refresh_token") || cfg.refresh_token == "") return false;
+    if (!variable_global_exists("vs_token_expires_at")) return true;
+    return current_time >= global.vs_token_expires_at;
 }
 
 function vs_online_refresh_me(_on_done)
 {
-    var cfg = vs_online_get_config();
-    var url = vs_online_server_url() + "/api/v1/players/me";
-    if (variable_struct_exists(cfg, "token") && cfg.token != "")
-    {
-        url += "?token=" + vs_online_url_encode(cfg.token);
-    }
-    vs_http_request_ex(url, "GET", { Accept: "application/json" }, "", _on_done, true, "refresh_me", "");
+    vs_http_request_path("/api/v1/players/me", true, "GET", { Accept: "application/json" }, "", _on_done, true, "refresh_me", "");
 }
 
 function vs_online_ensure_identity(_on_done)
@@ -780,10 +968,7 @@ function vs_online_unlock_achievement(_name)
 function vs_online_clear_achievement(_name)
 {
     if (!vs_online_is_account()) return;
-    var cfg = vs_online_get_config();
-    var url = vs_online_server_url() + "/api/v1/players/me/achievements/" + vs_online_url_encode(_name)
-            + "?token=" + vs_online_url_encode(cfg.token);
-    vs_http_request_ex(url, "DELETE", {}, "", undefined, false, "", "");
+    vs_http_request_path("/api/v1/players/me/achievements/" + vs_online_url_encode(_name), true, "DELETE", {}, "", undefined, false, "", "");
 }
 
 // --- per-chart leaderboards (/charts/scores) -------------------------------
@@ -844,15 +1029,6 @@ function vs_online_upload_score_done(_ok, _data, _status)
     }
     var why = vs_online_upload_score_why(_data, _status);
     vs_online_score_log("POST result ok=0 " + why);
-    var job = variable_global_exists("vs_score_up") ? global.vs_score_up : undefined;
-    if (job != undefined && !job.legacy && _status == 400)
-    {
-        job.legacy = true;
-        var body = vs_online_score_body_json(job.chartId, job.difficulty, job.sha1, job.pts, false);
-        vs_online_score_log("POST retry legacy body=" + body);
-        vs_online_post_raw("/api/v1/charts/scores", body, vs_online_upload_score_done, "");
-        return;
-    }
     vs_online_show_score_error(why);
 }
 
@@ -1171,7 +1347,7 @@ function vs_online_lb_download(_inst, _friends)
     {
         return;
     }
-    var diffs = ["OPENING", "MIDDLE", "FINALE", "ENCORE"];
+    var diffs = ["OPENING", "MIDDLE", "FINALE", "ENCORE", "PRELUDE"];
     var di = _inst.difficulty;
     if (di < 0 || di >= array_length(diffs)) return;
     var diffName = diffs[di];
@@ -1284,6 +1460,7 @@ function vs_online_rating_diff_index(_name)
     if (d == "middle") return 2;
     if (d == "finale") return 3;
     if (d == "encore" || d == "backstage") return 4;
+    if (d == "prelude") return 5;
     return 1;
 }
 

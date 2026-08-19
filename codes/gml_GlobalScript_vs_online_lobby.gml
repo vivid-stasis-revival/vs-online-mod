@@ -71,6 +71,38 @@ function vs_lobby_has_code()
         && string(o_st_handle.lobbyCode) != "";
 }
 
+function vs_online_song_id_from_chart(_chart)
+{
+    if (_chart == undefined || _chart == "") return -1;
+    if (!variable_global_exists("song_list")) return -1;
+    var i = 0;
+    repeat (array_length(global.song_list))
+    {
+        var s = global.song_list[i];
+        if (s != undefined && variable_struct_exists(s, "chart_id") && s.chart_id == _chart)
+        {
+            return i;
+        }
+        i++;
+    }
+    return -1;
+}
+
+function vs_online_song_from_id(_songId)
+{
+    if (!variable_global_exists("song_list")) return undefined;
+    if (!is_real(_songId) || _songId < 0 || _songId >= array_length(global.song_list))
+    {
+        return undefined;
+    }
+    return global.song_list[_songId];
+}
+
+function vs_online_missing_song()
+{
+    return { name: "Missing chart", chart_id: "", is_missing: true };
+}
+
 // --- steam_* shims (used via codepatches so the WP UI reads server state) ---
 
 function vs_lobby_lobby_id()

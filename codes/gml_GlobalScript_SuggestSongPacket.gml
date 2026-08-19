@@ -12,7 +12,7 @@ function SuggestSongPacket(arg0) : BasePacket(arg0, false, 3, 1) constructor
     {
         var obj = {};
         obj.difficulty = buffer_read(arg0, buffer_s8);
-        obj.songId = get_song_id_from_chart(buffer_read(arg0, buffer_string));
+        obj.songId = vs_online_song_id_from_chart(buffer_read(arg0, buffer_string));
         buffer_delete(arg0);
         return obj;
     };
@@ -21,6 +21,11 @@ function SuggestSongPacket(arg0) : BasePacket(arg0, false, 3, 1) constructor
     {
         if (vs_lobby_is_owner())
         {
+            if (arg0.songId < 0)
+            {
+                vs_lobby_log("suggest recv missing chart from=" + string(arg1));
+                return;
+            }
             vs_lobby_log("suggest recv songId=" + string(arg0.songId)
                 + " diff=" + string(arg0.difficulty)
                 + " from=" + string(arg1)

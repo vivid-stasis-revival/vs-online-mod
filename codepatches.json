@@ -209,6 +209,54 @@
         "Value": "                if (vs_member_get_score(arg1) > vs_member_get_score(arg0))",
         "Type": 1
     },
+    {
+        "Entry": "gml_Object_obj_multiplayer_lobby_Draw_64",
+        "Find": "        var song = global.song_list[nextSong.songId];",
+        "Value": "        var song = vs_online_song_from_id(nextSong.songId);\n        if (song == undefined) song = vs_online_missing_song();",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_Object_obj_multiplayer_lobby_Draw_64",
+        "Find": "        var song = global.song_list[lastSong.songId];",
+        "Value": "        var song = vs_online_song_from_id(lastSong.songId);\n        if (song == undefined) song = vs_online_missing_song();",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_Object_obj_multiplayer_lobby_Create_0",
+        "Find": "        song: global.song_list[s.songId],",
+        "Value": "        song: vs_online_song_from_id(s.songId) ?? vs_online_missing_song(),",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_Object_o_songselect_leaderboard_Create_0",
+        "Find": "diff_names = [\"OPENING\", \"MIDDLE\", \"FINALE\", \"ENCORE\"];",
+        "Value": "diff_names = [\"OPENING\", \"MIDDLE\", \"FINALE\", \"ENCORE\", \"PRELUDE\"];",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_Object_obj_ratingWindow_Draw_64",
+        "Find": "                    const = song.difficulty_constant_4;\n                    break;\n            }\n            draw_text_o(x + 185, y + 26 + (i * 9), string_format(const, 1, 1));\n            draw_set_color(c_white);\n            draw_text_o(x + 10, y + 26 + (i * 9), string((page * 10) + i + 1));",
+        "Value": "                    const = song.difficulty_constant_4;\n                    break;\n                case 5:\n                    draw_set_color(#FFD21A);\n                    const = struct_get_fallback(song, \"difficulty_constant_1\", 0);\n                    break;\n            }\n            draw_text_o(x + 185, y + 26 + (i * 9), string_format(const, 1, 1));\n            draw_set_color(c_white);\n            draw_text_o(x + 10, y + 26 + (i * 9), string((page * 10) + i + 1));",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_Object_obj_ratingWindow_Draw_64",
+        "Find": "                    const = song.difficulty_constant_4;\n                    break;\n            }\n            draw_text_o(x + 185, y + 26 + (i * 9), string_format(const, 1, 1));\n            draw_set_color(c_white);\n            draw_text_o(x + 10, y + 26 + (i * 9), string(i + 1));",
+        "Value": "                    const = song.difficulty_constant_4;\n                    break;\n                case 5:\n                    draw_set_color(#FFD21A);\n                    const = struct_get_fallback(song, \"difficulty_constant_1\", 0);\n                    break;\n            }\n            draw_text_o(x + 185, y + 26 + (i * 9), string_format(const, 1, 1));\n            draw_set_color(c_white);\n            draw_text_o(x + 10, y + 26 + (i * 9), string(i + 1));",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_GlobalScript_generate_rating_image",
+        "Find": "                diff_disp = song.difficulty_display_4;\n                diff_const = song.difficulty_constant_4;\n                break;\n        }\n        if (global.rsw_top30[i].song_id != 0)",
+        "Value": "                diff_disp = song.difficulty_display_4;\n                diff_const = song.difficulty_constant_4;\n                break;\n            case 5:\n                diff_color = 1753599;\n                diff_name = \"Prelude\";\n                diff_disp = struct_get_fallback(song, \"difficulty_display_1\", \"PRELUDE\");\n                diff_const = struct_get_fallback(song, \"difficulty_constant_1\", 0);\n                diff_img = 0;\n                break;\n        }\n        if (global.rsw_top30[i].song_id != 0)",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_GlobalScript_generate_rating_image",
+        "Find": "                diff_disp = song.difficulty_display_4;\n                diff_const = song.difficulty_constant_4;\n                break;\n        }\n        if (global.rsw_ex_top10[i].song_id != 0)",
+        "Value": "                diff_disp = song.difficulty_display_4;\n                diff_const = song.difficulty_constant_4;\n                break;\n            case 5:\n                diff_color = 1753599;\n                diff_name = \"Prelude\";\n                diff_disp = struct_get_fallback(song, \"difficulty_display_1\", \"PRELUDE\");\n                diff_const = struct_get_fallback(song, \"difficulty_constant_1\", 0);\n                diff_img = 0;\n                break;\n        }\n        if (global.rsw_ex_top10[i].song_id != 0)",
+        "Type": 1
+    },
 
     {
         "Entry": "gml_Object_o_st_handle_Create_0",
@@ -628,6 +676,12 @@
         "Type": 0
     },
     {
+        "Entry": "gml_GlobalScript_StartGamePacket",
+        "Find": "                start_song(song.songId, song.difficulty, ",
+        "Value": "                if (vs_online_song_from_id(song.songId) == undefined) { if (vs_online_is_custom()) vs_lobby_log(\"start_game skip missing songId=\" + string(song.songId)); }\n                else start_song(song.songId, song.difficulty, ",
+        "Type": 1
+    },
+    {
         "Entry": "gml_GlobalScript_SendPlayerInfoPacket",
         "Find": "return buffer;",
         "Value": "buffer_write(buffer, buffer_bool, true);return buffer;",
@@ -883,7 +937,7 @@
     {
         "Entry": "gml_GlobalScript_AddSongPacket",
         "Find": "buffer_delete(arg0);",
-        "Value": "try{obj.songId = get_song_id_from_chart(buffer_read(arg0, buffer_string));}catch (ex){}buffer_delete(arg0);",
+        "Value": "try{obj.songId = vs_online_song_id_from_chart(buffer_read(arg0, buffer_string));}catch (ex){}buffer_delete(arg0);",
         "Type": 1
     },
     {
@@ -901,7 +955,7 @@
     {
         "Entry": "gml_GlobalScript_ShadowSongPacket",
         "Find": "buffer_delete(arg0);",
-        "Value": "try{obj.songId = get_song_id_from_chart(buffer_read(arg0, buffer_string));}catch (ex){}buffer_delete(arg0);",
+        "Value": "try{obj.songId = vs_online_song_id_from_chart(buffer_read(arg0, buffer_string));}catch (ex){}buffer_delete(arg0);",
         "Type": 1
     },
     {
@@ -943,7 +997,7 @@
     {
         "Entry": "gml_GlobalScript_start_song",
         "Find": "var song = global.song_list[arg0];",
-        "Value": "var song = global.song_list[arg0];global.currentSongInfo=song;",
+        "Value": "var song = vs_online_song_from_id(arg0);\nif (song == undefined) { show_debug_message(\"VS Online: start_song skip missing idx=\" + string(arg0)); return; }\nglobal.currentSongInfo=song;",
         "Type": 0
     },
     {
