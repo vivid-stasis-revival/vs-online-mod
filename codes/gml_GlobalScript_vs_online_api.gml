@@ -401,13 +401,29 @@ function vs_online_post_json(_path, _bodyStruct, _on_done)
 
 function vs_online_post_json_ex(_path, _bodyStruct, _on_done, _after)
 {
+    vs_online_post_raw(_path, json_stringify(_bodyStruct), _on_done, _after);
+}
+
+function vs_online_post_raw(_path, _bodyStr, _on_done, _after)
+{
     var cfg = vs_online_get_config();
     var url = vs_online_server_url() + _path;
     if (variable_struct_exists(cfg, "token") && cfg.token != "")
     {
         url += (string_pos("?", url) > 0 ? "&" : "?") + "token=" + vs_online_url_encode(cfg.token);
     }
-    vs_http_request_ex(url, "POST", "Content-Type: application/json\r\n", json_stringify(_bodyStruct), _on_done, true, _after, "");
+    var after = (_after == undefined) ? "" : _after;
+    vs_http_request_ex(url, "POST", "Content-Type: application/json\r\n", _bodyStr, _on_done, true, after, "");
+}
+
+function vs_online_json_esc(_s)
+{
+    var t = string(_s);
+    t = string_replace_all(t, "\\", "\\\\");
+    t = string_replace_all(t, "\"", "\\\"");
+    t = string_replace_all(t, chr(13), "\\r");
+    t = string_replace_all(t, chr(10), "\\n");
+    return t;
 }
 
 // --- identity --------------------------------------------------------------
@@ -731,30 +747,60 @@ function vs_online_score_play_flags()
         + " notes=" + string(notes);
 }
 
-function vs_online_upload_score_done(_ok, _data, _status)
+function vs_online_upload_score_why(_data, _status)
 {
-    vs_online_score_log("POST result ok=" + string(_ok) + " http=" + string(_status));
+    if (is_struct(_data) && variable_struct_exists(_data, "message"))
+    {
+        return string(_data.message) + " (http " + string(_status) + ")";
+    }
+    if (is_string(_data) && _data != "")
+    {
+        return _data + " (http " + string(_status) + ")";
+    }
+    return "http " + string(_status);
 }
 
-function vs_online_upload_score(_chartId, _difficulty, _sha1, _score, _data)
+function vs_online_upload_score_done(_ok, _data, _status)
+{
+    if (_ok)
+    {
+        vs_online_score_log("POST result ok=1 http=" + string(_status));
+        return;
+    }
+    var why = vs_online_upload_score_why(_data, _status);
+    vs_online_score_log("POST result ok=0 " + why);
+    vs_online_show_score_error(why);
+}
+
+function vs_online_score_body_json(_chartId, _difficulty, _sha1, _pts)
+{
+    // Never put the identifier `score` in a struct / json_stringify: it is a
+    // GameMaker builtin global, and vsml drops or corrupts that key. The API
+    // field name still has to be the string "score".
+    var sha = string_lower(string_replace_all(string(_sha1), " ", ""));
+    var pts = floor(real(_pts));
+    if (pts < 0) pts = 0;
+    return "{\"chartId\":\"" + vs_online_json_esc(_chartId)
+        + "\",\"difficulty\":\"" + vs_online_json_esc(vs_online_diff_api(_difficulty))
+        + "\",\"sha1\":\"" + vs_online_json_esc(sha)
+        + "\",\"score\":" + string(pts) + "}";
+}
+
+function vs_online_upload_score(_chartId, _difficulty, _sha1, _pts, _data)
 {
     if (!vs_online_is_account())
     {
         vs_online_score_log("skip no account chart=" + string(_chartId) + " diff=" + string(_difficulty) + " " + vs_online_score_play_flags());
         return;
     }
-    var body = { chartId: _chartId, difficulty: vs_online_diff_api(_difficulty), sha1: _sha1 };
-    variable_struct_set(body, "score", _score);
-    if (_data != undefined && _data != "")
-    {
-        body.data = _data;
-    }
+    var body = vs_online_score_body_json(_chartId, _difficulty, _sha1, _pts);
     vs_online_score_log("POST /charts/scores chart=" + string(_chartId)
         + " diff=" + string(vs_online_diff_api(_difficulty))
         + " sha=" + string_copy(string(_sha1), 1, 8)
-        + " pts=" + string(_score)
+        + " pts=" + string(floor(real(_pts)))
+        + " body=" + body
         + " " + vs_online_score_play_flags());
-    vs_online_post_json("/api/v1/charts/scores", body, vs_online_upload_score_done);
+    vs_online_post_raw("/api/v1/charts/scores", body, vs_online_upload_score_done, "");
 }
 
 function vs_online_upload_chart(_songIndex, _difficulty, _score)

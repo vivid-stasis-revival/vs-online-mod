@@ -891,5 +891,11 @@
         "Find": "                    next_room = global.room_after_song.quit;",
         "Value": "                    next_room = global.room_after_song.quit; if (vs_online_is_custom()) vs_online_score_log(\"pause quit no results/upload\");",
         "Type": 1
+    },
+    {
+        "Entry": "gml_Object_o_2023results_Step_0",
+        "Find": "var asc = showing_song_results ? acc_score : (acc_score / array_length(global.current_course.songs));",
+        "Value": "if (instance_exists(vs_online_error)) exit;\nvar asc = showing_song_results ? acc_score : (acc_score / array_length(global.current_course.songs));",
+        "Type": 1
     }
 ]

@@ -591,11 +591,70 @@ function vs_online_show_error(_on_retry)
 
 function vs_online_error_setup(_on_retry)
 {
+    kind = "connect";
+    title = "Cannot Connect to Server";
+    buttons = ["Retry", "Disable Custom Server"];
     on_retry = _on_retry;
     server_url = vs_online_server_url();
     message = "The custom server could not be reached.\n" +
         server_url + "\n" +
         "Retry, or switch back to Steam.";
+}
+
+function vs_online_show_score_error(_why)
+{
+    if (instance_exists(vs_online_error))
+    {
+        return;
+    }
+    var e = instance_create_depth(0, 0, -10000, vs_online_error);
+    with (e)
+    {
+        kind = "score";
+        title = "Score Upload Failed";
+        buttons = ["取消", "重置"];
+        on_retry = undefined;
+        retrying = false;
+        selected = 0;
+        server_url = vs_online_server_url();
+        message = string(_why) + "\n取消 = stay on results.\n重置 = retry this chart.";
+    }
+}
+
+function vs_online_diff_index(_diff)
+{
+    var d = string_upper(string(_diff));
+    if (d == "OPENING") return 0;
+    if (d == "MIDDLE") return 1;
+    if (d == "FINALE") return 2;
+    if (d == "ENCORE") return 3;
+    if (d == "PRELUDE") return 4;
+    return 0;
+}
+
+function vs_online_score_reset_song()
+{
+    if (!variable_global_exists("song_id_last")) return;
+    var idx = global.song_id_last;
+    var di = vs_online_diff_index(variable_global_exists("df_load") ? global.df_load : "OPENING");
+    var dec = variable_global_exists("decrypt_mode") ? global.decrypt_mode : {};
+    var clear_r = scene_songselect_old;
+    var fail_r = undefined;
+    var quit_r = undefined;
+    if (variable_global_exists("room_after_song") && is_struct(global.room_after_song))
+    {
+        clear_r = global.room_after_song.clear;
+        fail_r = global.room_after_song.fail;
+        quit_r = global.room_after_song.quit;
+    }
+    audio_stop_all();
+    start_song(idx, di,
+    {
+        decrypt_style: dec,
+        clear_room: clear_r,
+        fail_room: fail_r,
+        quit_room: quit_r
+    });
 }
 
 function vs_online_error_break(_text, _maxw)
@@ -738,20 +797,26 @@ function vs_online_error_step()
         return;
     }
 
-    if (keyboard_check_pressed(vk_up) || keyboard_check_pressed(vk_left) || keyboard_check_pressed(vk_tab))
+    if (keyboard_check_pressed(vk_up) || keyboard_check_pressed(vk_left) || keyboard_check_pressed(vk_tab) || input_check_pressed(11))
     {
         selected = (selected + 1) % array_length(buttons);
         play_se(sfx_songsel_cursor);
     }
-    else if (keyboard_check_pressed(vk_down) || keyboard_check_pressed(vk_right))
+    else if (keyboard_check_pressed(vk_down) || keyboard_check_pressed(vk_right) || input_check_pressed(12))
     {
         selected = (selected + array_length(buttons) - 1) % array_length(buttons);
         play_se(sfx_songsel_cursor);
     }
-    else if (keyboard_check_pressed(vk_enter) || keyboard_check_pressed(vk_space))
+    else if (keyboard_check_pressed(vk_enter) || keyboard_check_pressed(vk_space) || input_check_pressed(4))
     {
         play_se(sfx_songsel_select);
-        if (selected == 0)
+        if (kind == "score")
+        {
+            var doReset = (selected == 1);
+            instance_destroy();
+            if (doReset) vs_online_score_reset_song();
+        }
+        else if (selected == 0)
         {
             retrying = true;
             message = "Retrying...";
@@ -763,7 +828,7 @@ function vs_online_error_step()
             instance_destroy();
         }
     }
-    else if (keyboard_check_pressed(vk_escape))
+    else if (keyboard_check_pressed(vk_escape) || input_check_pressed(5))
     {
         instance_destroy();
     }
