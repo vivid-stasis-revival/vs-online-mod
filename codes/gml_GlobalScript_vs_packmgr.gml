@@ -1,8 +1,9 @@
 // ============================================================================
 // vs_packmgr.gml — local pack subscriptions (chartId lists, loose songs).
 //
-// A pack is NOT a nested folder. Songs stay in Custom Songs/<chart_id>/.
-// Local state is working_directory/vsonline.packs.json:
+// Download still writes Custom Songs/<chart_id>/. CSM only treats a folder as
+// a pack when it has songpack_info.json, so CustomSongReader materializes
+// subscribed packs from working_directory/vsonline.packs.json:
 //   [{ id, name, version, songs: [{ id, chartId, kind, name }] }]
 // kind 0 = song, 2 = shatter. Unsub removes the list only — never the files.
 // ============================================================================
@@ -97,6 +98,100 @@ function vs_packmgr_unsub(_packId)
         i++;
     }
     vs_packmgr_save(out);
+}
+
+function vs_packmgr_chart_pack_map()
+{
+    var out = {};
+    var list = vs_packmgr_load();
+    var i = 0;
+    repeat (array_length(list))
+    {
+        var e = list[i];
+        if (e != undefined && variable_struct_exists(e, "songs") && is_array(e.songs))
+        {
+            var pname = variable_struct_exists(e, "name") ? string(e.name) : "";
+            if (pname == "" && variable_struct_exists(e, "id")) pname = string(e.id);
+            var j = 0;
+            repeat (array_length(e.songs))
+            {
+                var s = e.songs[j];
+                if (s != undefined && variable_struct_exists(s, "chartId"))
+                {
+                    var cid = string_lower(string(s.chartId));
+                    if (cid != "" && pname != "" && !variable_struct_exists(out, cid))
+                        variable_struct_set(out, cid, pname);
+                }
+                j++;
+            }
+        }
+        i++;
+    }
+    return out;
+}
+
+function vs_packmgr_chart_pack_name(_chartId)
+{
+    var cid = string_lower(string(_chartId));
+    if (cid == "") return "";
+    var map = vs_packmgr_chart_pack_map();
+    if (variable_struct_exists(map, cid)) return variable_struct_get(map, cid);
+    return "";
+}
+
+// Push subscribed online packs into global.custom_song_packs (before All
+// Custom Songs). Returns { chartIdLower: true } for members that landed in a
+// pack so the catch-all list can skip them.
+function vs_packmgr_csm_append()
+{
+    var owned = {};
+    if (!variable_global_exists("custom_song_packs") || !variable_global_exists("song_list"))
+        return owned;
+    var list = vs_packmgr_load();
+    var i = 0;
+    repeat (array_length(list))
+    {
+        var e = list[i];
+        if (e != undefined && variable_struct_exists(e, "id") && variable_struct_exists(e, "songs") && is_array(e.songs))
+        {
+            var songs = [];
+            var j = 0;
+            repeat (array_length(e.songs))
+            {
+                var m = e.songs[j];
+                var kind = (m != undefined && variable_struct_exists(m, "kind")) ? m.kind : 0;
+                if (m != undefined && kind != 2 && variable_struct_exists(m, "chartId"))
+                {
+                    var cid = string(m.chartId);
+                    var sid = vs_csm_song_index(cid);
+                    if (sid >= 0)
+                    {
+                        array_push(songs, sid);
+                        variable_struct_set(owned, string_lower(cid), true);
+                        var scid = string_lower(string(struct_get_fallback(global.song_list[sid], "chart_id", "")));
+                        if (scid != "") variable_struct_set(owned, scid, true);
+                    }
+                }
+                j++;
+            }
+            if (array_length(songs) > 0)
+            {
+                var pname = variable_struct_exists(e, "name") ? string(e.name) : string(e.id);
+                if (pname == "") pname = string(e.id);
+                array_push(global.custom_song_packs,
+                {
+                    name: pname,
+                    songs: songs,
+                    color1: 8388479,
+                    color2: 16776960,
+                    description: "Online pack.",
+                    vs_pack_id: string(e.id)
+                });
+            }
+        }
+        i++;
+    }
+    return owned;
 }
 
 function vs_packmgr_chart_refs(_chartId)
