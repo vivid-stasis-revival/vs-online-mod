@@ -48,6 +48,8 @@ function vs_online_url_encode(_s)
 function vs_online_diff_api(_diff)
 {
     var d = string_lower(string(_diff));
+    // BACKSTAGE is a skin on ENCORE, not a sixth chart. Scores/sha always use encore.
+    if (d == "backstage") return "encore";
     if (d == "opening" || d == "middle" || d == "finale" || d == "encore" || d == "prelude")
     {
         return d;
@@ -61,7 +63,7 @@ function vs_online_chart_file_diff(_diff)
     if (low == "opening") return "OPENING";
     if (low == "middle") return "MIDDLE";
     if (low == "finale") return "FINALE";
-    if (low == "encore") return "ENCORE";
+    if (low == "encore" || low == "backstage") return "ENCORE";
     if (low == "prelude") return "PRELUDE";
     return string(_diff);
 }

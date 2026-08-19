@@ -1573,11 +1573,11 @@ function vs_dlbr_pick_detail_diff()
         detail_diff_i = 0;
         return;
     }
-    var want = string_lower(string(detail_diff));
+    var want = string(detail_diff);
     var i = 0;
     repeat (n)
     {
-        if (string_lower(string(diffs[i])) == want)
+        if (vs_dlbr_diff_same(diffs[i], want))
         {
             detail_diff_i = i;
             detail_diff = string(diffs[i]);
@@ -1609,12 +1609,12 @@ function vs_dlbr_active_chart()
     if (detail == undefined) return undefined;
     if (variable_struct_exists(detail, "charts") && is_array(detail.charts))
     {
-        var want = string_lower(string(detail_diff));
+        var want = string(detail_diff);
         var i = 0;
         repeat (array_length(detail.charts))
         {
             var chd = detail.charts[i];
-            if (chd != undefined && variable_struct_exists(chd, "difficulty") && string_lower(string(chd.difficulty)) == want)
+            if (chd != undefined && variable_struct_exists(chd, "difficulty") && vs_dlbr_diff_same(chd.difficulty, want))
             {
                 return chd;
             }
@@ -1854,6 +1854,60 @@ function vs_dlbr_step_detail()
     else vs_dlbr_media_keys();
 }
 
+function vs_dlbr_diff_same(_a, _b)
+{
+    var x = string_lower(string(_a));
+    var y = string_lower(string(_b));
+    if (x == y) return true;
+    if ((x == "encore" || x == "backstage") && (y == "encore" || y == "backstage")) return true;
+    return false;
+}
+
+function vs_dlbr_visible_backstage(_song)
+{
+    if (_song == undefined) return false;
+    var enc = undefined;
+    if (variable_struct_exists(_song, "encData") && is_struct(_song.encData)) enc = _song.encData;
+    else if (variable_struct_exists(_song, "enc_data") && is_struct(_song.enc_data)) enc = _song.enc_data;
+    if (enc == undefined) return false;
+    if (variable_struct_exists(enc, "hideBackstage") && vs_dlbr_json_true(enc.hideBackstage)) return false;
+    if (variable_struct_exists(enc, "hide_backstage") && vs_dlbr_json_true(enc.hide_backstage)) return false;
+    return true;
+}
+
+function vs_dlbr_json_true(_v)
+{
+    if (_v == undefined) return false;
+    if (_v == true) return true;
+    if (is_real(_v) && _v != 0) return true;
+    if (is_string(_v) && (_v == "true" || _v == "1")) return true;
+    return false;
+}
+
+function vs_dlbr_const_placeholder(_v)
+{
+    if (_v == undefined) return true;
+    if (is_real(_v) && _v == 0) return true;
+    var s = string(_v);
+    return (s == "" || s == "0" || s == "0.0");
+}
+
+function vs_dlbr_chart_level(_chd)
+{
+    if (_chd == undefined) return "";
+    var num = "";
+    if (variable_struct_exists(_chd, "difficultyDisplay") && string(_chd.difficultyDisplay) != "")
+    {
+        num = string(_chd.difficultyDisplay);
+    }
+    if (vs_dlbr_const_placeholder(num) && variable_struct_exists(_chd, "difficultyConstant"))
+    {
+        num = string(_chd.difficultyConstant);
+    }
+    if (vs_dlbr_const_placeholder(num)) return "";
+    return num;
+}
+
 function vs_dlbr_diff_color(_d)
 {
     var k = string_lower(string(_d));
@@ -1861,6 +1915,7 @@ function vs_dlbr_diff_color(_d)
     if (k == "middle") return make_color_rgb(252, 184, 43);
     if (k == "finale") return make_color_rgb(241, 75, 107);
     if (k == "encore") return make_color_rgb(176, 107, 240);
+    if (k == "backstage") return 7209215;
     return make_color_rgb(145, 151, 164);
 }
 
@@ -2090,7 +2145,8 @@ function vs_dlbr_draw_detail()
         else if (detail != undefined)
         {
             var cx = px + 6;
-            var want = string_lower(string(detail_diff));
+            var want = string(detail_diff);
+            var visBs = vs_dlbr_visible_backstage(detail);
             if (variable_struct_exists(detail, "charts") && is_array(detail.charts) && array_length(detail.charts) > 0)
             {
                 var charts = detail.charts;
@@ -2099,10 +2155,12 @@ function vs_dlbr_draw_detail()
                 {
                     var chd = charts[i];
                     var diff = (chd != undefined && variable_struct_exists(chd, "difficulty")) ? string(chd.difficulty) : "";
-                    var pill = string_upper(diff);
-                    if (chd != undefined && variable_struct_exists(chd, "difficultyDisplay") && chd.difficultyDisplay != "") pill += " " + string(chd.difficultyDisplay);
-                    else if (chd != undefined && variable_struct_exists(chd, "difficultyConstant")) pill += " " + string(chd.difficultyConstant);
-                    var nx = vs_dlbr_draw_pill(cx, dy, pill, diff, right, string_lower(diff) == want);
+                    var wire = string_lower(diff);
+                    var pill = (visBs && wire == "encore") ? "BACKSTAGE" : string_upper(diff);
+                    var lv = vs_dlbr_chart_level(chd);
+                    if (lv != "") pill += " " + lv;
+                    var col = (visBs && wire == "encore") ? "backstage" : diff;
+                    var nx = vs_dlbr_draw_pill(cx, dy, pill, col, right, vs_dlbr_diff_same(diff, want));
                     if (nx < 0) break;
                     cx = nx;
                     i++;
@@ -2115,7 +2173,9 @@ function vs_dlbr_draw_detail()
                 repeat (array_length(detail.diffs))
                 {
                     var dlab = string(detail.diffs[i]);
-                    var nx2 = vs_dlbr_draw_pill(cx, dy, dlab, dlab, right, string_lower(dlab) == want);
+                    var show = (visBs && string_lower(dlab) == "encore") ? "BACKSTAGE" : dlab;
+                    var col2 = (visBs && string_lower(dlab) == "encore") ? "backstage" : dlab;
+                    var nx2 = vs_dlbr_draw_pill(cx, dy, show, col2, right, vs_dlbr_diff_same(dlab, want));
                     if (nx2 < 0) break;
                     cx = nx2;
                     i++;
@@ -2125,9 +2185,18 @@ function vs_dlbr_draw_detail()
             else if (variable_struct_exists(detail, "difficultyName"))
             {
                 var slab = string(detail.difficultyName);
-                if (variable_struct_exists(detail, "difficultyNumber") && detail.difficultyNumber != "") slab += " " + string(detail.difficultyNumber);
+                var col3 = slab;
+                if (visBs && string_lower(slab) == "encore")
+                {
+                    slab = "BACKSTAGE";
+                    col3 = "backstage";
+                }
+                if (variable_struct_exists(detail, "difficultyNumber") && !vs_dlbr_const_placeholder(detail.difficultyNumber))
+                {
+                    slab += " " + string(detail.difficultyNumber);
+                }
                 slab = vs_dlbr_clip_text(slab, right - px - 14);
-                vs_dlbr_draw_pill(px + 6, dy, slab, slab, right, true);
+                vs_dlbr_draw_pill(px + 6, dy, slab, col3, right, true);
                 dy += 12;
             }
 
