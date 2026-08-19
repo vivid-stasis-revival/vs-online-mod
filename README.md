@@ -15,14 +15,16 @@
 
 ```json
 {
-  "server": "https://online.vividstasis.cn"
+  "server": "https://online-api.vividstasis.cn",
+  "frontend": "https://online.vividstasis.cn"
 }
 ```
 
 字段：
 | 字段 | 说明 |
 |---|---|
-| `server` | REST base URL（必填，可以是 `https://`） |
+| `server` | REST / API base URL（必填；默认 `https://online-api.vividstasis.cn`） |
+| `frontend` | 账号站 / 设备流页面（默认 `https://online.vividstasis.cn`） |
 | `ws` | 大厅 WebSocket 地址（可选；不写则 `https://主机` → `wss://主机`，`http://` → `ws://`） |
 | `playerId` / `token` | 服务器身份（mod 自动写入） |
 | `refresh_token` | OAuth2 设备流刷新令牌（30 天，启动时自动旋转刷新） |

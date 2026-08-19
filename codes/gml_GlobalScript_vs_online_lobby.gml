@@ -420,6 +420,8 @@ function vs_lobby_fmt(_data)
     var n = 0;
     if (variable_struct_exists(_data, "members") && is_array(_data.members)) n = array_length(_data.members);
     var why = "";
+    if (variable_struct_exists(_data, "type")) why += " type=" + string(_data.type);
+    if (variable_struct_exists(_data, "reason")) why += " reason=" + string(_data.reason);
     if (variable_struct_exists(_data, "message")) why += " err=" + string(_data.message);
     if (variable_struct_exists(_data, "error")) why += " error=" + string(_data.error);
     if (variable_struct_exists(_data, "created")) why += " created=" + string(_data.created);
@@ -447,6 +449,74 @@ function vs_lobby_pkt_quiet(_type)
 {
     var n = vs_lobby_pkt_name(_type);
     return (n == "UpdateScore" || n == "SendSticker");
+}
+
+// Host copies queue / player info / score to everyone who is Connected.
+// member_joined fires at REST join (guest WS usually still down), so this is
+// also called when the host first sees the joiner's welcome SendPlayerInfo.
+function vs_lobby_host_sync(_why)
+{
+    if (!vs_lobby_is_owner()) return;
+    if (!instance_exists(o_st_handle)) return;
+    vs_lobby_log("host sync " + string(_why) + " queue/info/score");
+    send_packet(SendQueuePacket);
+    send_packet(SendPlayerInfoPacket);
+    if (o_st_handle.currentMember != undefined)
+    {
+        send_packet(UpdateScorePacket,
+        {
+            score_: vs_member_get_score(o_st_handle.currentMember),
+            flag: o_st_handle.currentMember.scoreFlag
+        });
+    }
+    else
+    {
+        vs_lobby_log("host sync skip score no currentMember");
+    }
+}
+
+// Matchmake into an existing room does not emit member_joined. A packet from
+// an unknown sender gets a stub so official receive() does not crash; GET
+// /members then fills name/avatar/host from the server roster.
+function vs_lobby_ensure_sender(_senderId)
+{
+    if (!instance_exists(o_st_handle)) return false;
+    if (_senderId == undefined || string(_senderId) == "") return false;
+    if (o_st_handle.getMember(_senderId) != undefined) return false;
+    vs_lobby_log("ensure sender stub id=" + string(_senderId));
+    array_push(o_st_handle.lobbyMembers, vs_lobby_build_member({
+        playerId: _senderId,
+        name: "",
+        ready: 0,
+        scoreFlag: 1,
+        host: false,
+        order: array_length(o_st_handle.lobbyMembers)
+    }));
+    vs_lobby_fetch_members("unknown sender");
+    return true;
+}
+
+function vs_lobby_fetch_members(_why)
+{
+    if (!instance_exists(o_st_handle) || o_st_handle.lobbyCode == undefined) return;
+    var code = string(o_st_handle.lobbyCode);
+    if (code == "") return;
+    vs_lobby_log("GET /members " + string(_why) + " code=" + code);
+    vs_online_get_json("/api/v1/lobbies/" + code + "/members", true, vs_lobby_fetch_members_done);
+}
+
+function vs_lobby_fetch_members_done(_ok, _data, _status)
+{
+    vs_lobby_log("GET /members result " + vs_lobby_http_why(_ok, _data, _status));
+    if (!_ok || _data == undefined || !variable_struct_exists(_data, "members")) return;
+    if (!is_array(_data.members)) return;
+    if (!instance_exists(o_st_handle)) return;
+    vs_lobby_apply_roster(_data.members);
+    o_st_handle.currentMember = o_st_handle.getMember(vs_online_player_id());
+    if (o_st_handle.vs_hostId != undefined)
+    {
+        vs_lobby_refresh_host_flags(o_st_handle.vs_hostId);
+    }
 }
 
 function vs_lobby_http_why(_ok, _data, _status)
@@ -719,12 +789,19 @@ function vs_online_on_ws_frame(_op, _payload)
                 + " type=" + vs_lobby_pkt_name(pkt)
                 + " bytes=" + string(buffer_get_size(_payload)));
         }
+        vs_lobby_ensure_sender(senderId);
         // payload position is now exactly at the packet type byte.
         var got = receive_packet(_payload, senderId);
         // packet.read already deletes the buffer on a known type.
         if (got == undefined && !vs_lobby_pkt_quiet(pkt))
         {
             vs_lobby_log("recv unhandled from=" + senderId + " type=" + vs_lobby_pkt_name(pkt));
+        }
+        if ((pkt == 60 || pkt == SendPlayerInfoPacket)
+            && vs_lobby_is_owner()
+            && senderId != vs_online_player_id())
+        {
+            vs_lobby_host_sync("recv SendPlayerInfo from=" + senderId);
         }
     }
     else if (_op == 1) // text = JSON control message
@@ -805,25 +882,9 @@ function vs_lobby_handle_control(_j)
                 }
                 vs_lobby_log("member_joined id=" + mid + " name=" + mname
                     + " n=" + string(array_length(o_st_handle.lobbyMembers))
+                    + " connected=" + string(variable_struct_exists(_j.member, "connected") ? _j.member.connected : "?")
                     + " owner=" + string(vs_lobby_is_owner()));
-                if (vs_lobby_is_owner())
-                {
-                    vs_lobby_log("member_joined host sync queue/info/score");
-                    send_packet(SendQueuePacket);
-                    send_packet(SendPlayerInfoPacket);
-                    if (o_st_handle.currentMember != undefined)
-                    {
-                        send_packet(UpdateScorePacket,
-                        {
-                            score_: vs_member_get_score(o_st_handle.currentMember),
-                            flag: o_st_handle.currentMember.scoreFlag
-                        });
-                    }
-                    else
-                    {
-                        vs_lobby_log("member_joined host skip score no currentMember");
-                    }
-                }
+                vs_lobby_host_sync("member_joined");
             }
             else
             {
@@ -855,7 +916,8 @@ function vs_lobby_handle_control(_j)
             }
             break;
         case "kicked":
-            vs_lobby_log("kicked " + vs_lobby_flags());
+            vs_lobby_log("kicked reason=" + (variable_struct_exists(_j, "reason") ? string(_j.reason) : "")
+                + " " + vs_lobby_flags());
             vs_lobby_reset();
             show_message("You were kicked from the lobby.\n\n你已被踢出房间。");
             if (instance_exists(obj_multiplayer_lobby))
@@ -864,7 +926,8 @@ function vs_lobby_handle_control(_j)
             }
             break;
         case "lobby_closed":
-            vs_lobby_log("lobby_closed " + vs_lobby_flags());
+            vs_lobby_log("lobby_closed reason=" + (variable_struct_exists(_j, "reason") ? string(_j.reason) : "")
+                + " " + vs_lobby_flags());
             vs_lobby_reset();
             show_message("The lobby was closed.\n\n房间已关闭。");
             if (instance_exists(obj_multiplayer_lobby))
