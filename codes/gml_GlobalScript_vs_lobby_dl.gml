@@ -6,13 +6,14 @@ function vs_lobby_dl_st()
 {
     if (!variable_global_exists("vs_lobby_dl"))
     {
-        global.vs_lobby_dl = { open: false, ask: false, wait: false, looking: false, checking: false, need_upd: false, chartId: "", serverId: "", seq: 0, err: "", qseq: [] };
+        global.vs_lobby_dl = { open: false, ask: false, wait: false, looking: false, checking: false, need_upd: false, chartId: "", serverId: "", seq: 0, err: "", qseq: [], checkedId: "" };
     }
     if (!variable_struct_exists(global.vs_lobby_dl, "qseq") || !is_array(global.vs_lobby_dl.qseq))
     {
         global.vs_lobby_dl.qseq = [];
     }
     if (!variable_struct_exists(global.vs_lobby_dl, "wait")) global.vs_lobby_dl.wait = false;
+    if (!variable_struct_exists(global.vs_lobby_dl, "checkedId")) global.vs_lobby_dl.checkedId = "";
     return global.vs_lobby_dl;
 }
 
@@ -118,6 +119,10 @@ function vs_lobby_dl_on_queue()
     {
         vs_lobby_dl_cancel();
     }
+    if (cid == "" || string(st.checkedId) != string(cid))
+    {
+        st.checkedId = "";
+    }
     vs_lobby_dl_arm_check();
 }
 
@@ -140,13 +145,15 @@ function vs_lobby_dl_arm_check()
 {
     if (!vs_online_is_custom()) return;
     var st = vs_lobby_dl_st();
-    if (st.open && !st.wait) return;
-    st.need_upd = false;
-    st.checking = false;
-    st.serverId = "";
+    if (st.open && !st.wait && !st.ask) return;
     var cid = vs_lobby_queued_chart_id();
     if (cid == "" || vs_lobby_local_missing()) return;
     if (!vs_dlmgr_tracked(cid) || !vs_songstore_has_chart(cid)) return;
+    if (st.checking && string(st.chartId) == string(cid)) return;
+    if (string(st.checkedId) == string(cid)) return;
+    st.need_upd = false;
+    st.checking = false;
+    st.serverId = "";
     st.seq += 1;
     st.chartId = cid;
     st.checking = true;
@@ -163,6 +170,7 @@ function vs_lobby_dl_on_check_lookup(_seq, _ok, _data)
     if (sid == "")
     {
         st.checking = false;
+        st.checkedId = st.chartId;
         vs_lobby_log("dl check skip not on server chart=" + st.chartId);
         return;
     }
@@ -183,6 +191,7 @@ function vs_lobby_dl_on_check_detail(_seq, _ok, _data)
         n = array_length(vs_songstore_diff(_data.files, st.chartId));
     }
     st.need_upd = n > 0;
+    st.checkedId = st.chartId;
     vs_lobby_log("dl check chart=" + st.chartId + (st.need_upd ? (" UPDATE files=" + string(n)) : " current"));
     send_packet(SendPlayerInfoPacket);
     if (st.need_upd) vs_lobby_dl_unready();
@@ -241,6 +250,8 @@ function vs_lobby_dl_accept()
     if (st.checking && string(st.chartId) == string(cid))
     {
         st.open = true;
+        st.ask = false;
+        st.wait = false;
         vs_lobby_dl_seed_popup("Checking", vs_chartmeta_label(cid));
         return;
     }
@@ -264,12 +275,6 @@ function vs_lobby_dl_prompt_ex(_ask)
     var st = vs_lobby_dl_st();
     if (st.open && !st.ask && !st.wait && (cid == "" || string(st.chartId) == string(cid)))
     {
-        return true;
-    }
-    if (st.checking && string(st.chartId) == string(cid))
-    {
-        if (_ask) vs_lobby_dl_show_ask(cid);
-        else vs_lobby_dl_accept();
         return true;
     }
     if (!vs_lobby_local_need_dl()) return false;
@@ -420,10 +425,12 @@ function vs_lobby_dl_on_done(_ok)
     vs_localcharts_refresh();
     vs_lobby_resolve_queued_songs();
     st.need_upd = false;
+    st.checkedId = "";
     send_packet(SendPlayerInfoPacket);
     vs_lobby_log("dl ok chart=" + st.chartId + " songId=" + string(vs_online_song_id_from_chart(st.chartId)));
     vs_lobby_dl_close();
     play_se(sfx_songsel_beginsong);
+    vs_lobby_dl_arm_check();
 }
 
 function vs_lobby_dl_step()
@@ -542,12 +549,42 @@ function vs_lobby_dl_draw_wait()
     draw_set_color(c_white);
 }
 
+function vs_lobby_dl_draw_checking()
+{
+    var cw = display_get_gui_width();
+    var ch = display_get_gui_height();
+    var pw = min(220, max(80, cw - 8));
+    var ph = min(78, max(48, ch - 8));
+    var px = (cw - pw) / 2;
+    var py = (ch - ph) / 2;
+    draw_set_alpha(0.55);
+    draw_set_color(c_black);
+    draw_rectangle(0, 0, cw, ch, false);
+    draw_set_alpha(1);
+    draw_set_color(c_black);
+    draw_rectangle(px - 2, py - 2, px + pw + 2, py + ph + 2, false);
+    draw_set_color(c_white);
+    draw_rectangle(px, py, px + pw, py + ph, true);
+    draw_set_font(fnt_monacovs);
+    draw_set_halign(fa_center);
+    draw_set_color(c_aqua);
+    draw_text(px + pw / 2, py + 8, vs_dlbr_clip_text("Checking", pw - 12));
+    draw_set_font(global.default_font);
+    draw_set_color(c_white);
+    vs_draw_clip(px + pw / 2, py + 28, vs_lobby_dl_ask_name(), pw - 12);
+    draw_set_color(c_yellow);
+    draw_text(px + pw / 2, py + 52, vs_dlbr_clip_text("ESCAPE", pw - 12));
+    draw_set_halign(fa_left);
+    draw_set_color(c_white);
+}
+
 function vs_lobby_dl_draw()
 {
     if (!vs_lobby_dl_open()) return;
     var st = vs_lobby_dl_st();
     if (st.wait) vs_lobby_dl_draw_wait();
     else if (st.ask) vs_lobby_dl_draw_ask();
+    else if (st.checking && !vs_dlmgr_is_busy()) vs_lobby_dl_draw_checking();
     else vs_dlbr_draw_dl_popup();
 }
 

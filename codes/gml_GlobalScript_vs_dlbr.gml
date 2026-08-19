@@ -1115,7 +1115,7 @@ function vs_dlbr_draw_dl_popup()
         var n = array_length(st.need);
         var cur = st.idx + 1;
         if (cur > n) cur = n;
-        files = "File " + string(cur) + "/" + string(n);
+        files = (n <= 0) ? "Preparing..." : ("File " + string(cur) + "/" + string(n));
         fname = string(st.fileName);
         frac = vs_dlmgr_prog_frac();
         if (st.cancel) title = "Cancelling...";
