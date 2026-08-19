@@ -456,6 +456,7 @@ function vs_http_on_async()
     // missed codepatch line cannot leave http_get_file waiting forever.
     vs_songstore_on_http();
     vs_media_on_http();
+    vs_online_avatar_on_http();
     var job = global.vs_http_cur;
     if (job == undefined)
     {

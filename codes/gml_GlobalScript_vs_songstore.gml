@@ -382,6 +382,11 @@ function vs_songstore_abs_url(_url)
     var p = string_pos(marker, u);
     if (p <= 0)
     {
+        marker = "/avatars/";
+        p = string_pos(marker, u);
+    }
+    if (p <= 0)
+    {
         marker = "/api/";
         p = string_pos(marker, u);
     }

@@ -222,8 +222,42 @@ function vs_online_avatar_cache()
         global.vs_avatar_busy = false;
         global.vs_avatar_cur = "";
         global.vs_avatar_req = -1;
+        global.vs_avatar_got = 0;
+        global.vs_avatar_total = 0;
+        global.vs_avatar_dest = "";
+        global.vs_avatar_pending = {};
+        global.vs_avatar_fail = {};
     }
     return global.vs_avatar_spr;
+}
+
+function vs_online_avatar_rel(_playerId)
+{
+    return "vs_avatars/" + string(_playerId) + ".png";
+}
+
+function vs_online_avatar_file(_playerId)
+{
+    var rel = vs_online_avatar_rel(_playerId);
+    if (file_exists(rel)) return rel;
+    var abs = vs_songstore_install_path(rel);
+    if (file_exists(abs)) return abs;
+    return "";
+}
+
+function vs_online_avatar_load_file(_playerId)
+{
+    var p = vs_online_avatar_file(_playerId);
+    if (p == "") return undefined;
+    var spr = sprite_add(p, 1, false, false, 0, 0);
+    if (spr == -1 || !sprite_exists(spr)) return undefined;
+    variable_struct_set(vs_online_avatar_cache(), _playerId, spr);
+    return spr;
+}
+
+function vs_online_avatar_abs_url(_url)
+{
+    return vs_songstore_abs_url(_url);
 }
 
 function vs_online_my_avatar()
@@ -233,9 +267,11 @@ function vs_online_my_avatar()
     var av = vs_online_avatar_sprite(name);
     var pid = (variable_struct_exists(cfg, "playerId")) ? cfg.playerId : "";
     var url = (variable_struct_exists(cfg, "avatar")) ? cfg.avatar : "";
+    if ((url == undefined || url == "") && pid != "")
+        url = vs_online_server_url() + "/avatars/" + pid + ".png";
     if (url != "" && pid != "")
     {
-        var fetched = vs_online_avatar_ensure(pid, vs_songstore_abs_url(url));
+        var fetched = vs_online_avatar_ensure(pid, vs_online_avatar_abs_url(url));
         if (fetched != undefined) av = fetched;
     }
     return av;
@@ -246,15 +282,16 @@ function vs_online_avatar_ensure(_playerId, _url)
     if (_playerId == undefined || _playerId == "" || _url == undefined || _url == "") return undefined;
     var cache = vs_online_avatar_cache();
     if (variable_struct_exists(cache, _playerId))
-    {
         return variable_struct_get(cache, _playerId);
-    }
-    var i = 0;
-    repeat (array_length(global.vs_avatar_q))
-    {
-        if (global.vs_avatar_q[i].id == _playerId) return undefined;
-        i++;
-    }
+    var loaded = vs_online_avatar_load_file(_playerId);
+    if (loaded != undefined) return loaded;
+    if (variable_struct_exists(global.vs_avatar_fail, _playerId)
+        && variable_struct_get(global.vs_avatar_fail, _playerId) == true)
+        return undefined;
+    if (variable_struct_exists(global.vs_avatar_pending, _playerId)
+        && variable_struct_get(global.vs_avatar_pending, _playerId) == true)
+        return undefined;
+    variable_struct_set(global.vs_avatar_pending, _playerId, true);
     array_push(global.vs_avatar_q, { id: _playerId, url: _url });
     vs_online_avatar_pump();
     return undefined;
@@ -269,49 +306,70 @@ function vs_online_avatar_pump()
     array_delete(global.vs_avatar_q, 0, 1);
     global.vs_avatar_busy = true;
     global.vs_avatar_cur = job.id;
+    global.vs_avatar_got = 0;
+    global.vs_avatar_total = 0;
     if (!directory_exists("vs_avatars")) directory_create("vs_avatars");
-    var dest = "vs_avatars/" + job.id + ".png";
+    var dest = vs_online_avatar_rel(job.id);
+    global.vs_avatar_dest = dest;
     global.vs_avatar_req = http_get_file(job.url, dest);
-    __CoroutineBegin(function()
+    if (global.vs_avatar_req == undefined || global.vs_avatar_req < 0)
     {
-        __CoroutineAwaitAsync("http", vs_online_avatar_http);
-    });
-    __CoroutineEnd();
+        show_debug_message("VS Online: avatar http_get_file failed " + string(job.url));
+        vs_online_avatar_finish(false);
+    }
 }
 
-function vs_online_avatar_http()
+// Same HTTP event as jackets/previews: wait until the file is actually on
+// disk. The old coroutine handler treated the first progress packet (status=1)
+// as failure, so settings always kept the hash-jacket fallback.
+function vs_online_avatar_on_http()
 {
-    if (async_load == -1)
-    {
-        vs_online_avatar_finish(false);
-        return true;
-    }
-    if (ds_map_find_value(async_load, "id") != global.vs_avatar_req) return false;
-    var httpSt = ds_map_find_value(async_load, "http_status");
-    var st = ds_map_find_value(async_load, "status");
-    vs_online_avatar_finish(httpSt == 200 || st == 0);
-    return true;
+    vs_online_avatar_cache();
+    if (!global.vs_avatar_busy || global.vs_avatar_req < 0) return;
+    if (async_load == -1) return;
+    var rid = ds_map_find_value(async_load, "id");
+    if (rid == undefined || string(rid) != string(global.vs_avatar_req)) return;
+    var gmStatus = vs_http_num(ds_map_find_value(async_load, "status"), -1);
+    var got = vs_http_num(ds_map_find_value(async_load, "sizeDownloaded"), -1);
+    var tot = vs_http_num(ds_map_find_value(async_load, "contentLength"), -1);
+    if (got >= 0) global.vs_avatar_got = got;
+    if (tot >= 0) global.vs_avatar_total = tot;
+    var doneProg = (global.vs_avatar_total > 0 && global.vs_avatar_got >= global.vs_avatar_total);
+    if (gmStatus == 1 && !doneProg) return;
+    var httpStatus = vs_http_num(ds_map_find_value(async_load, "http_status"), -1);
+    var httpOk = (httpStatus < 0 || (httpStatus >= 200 && httpStatus < 300));
+    var dest = global.vs_avatar_dest;
+    var here = (dest != "" && (file_exists(dest) || file_exists(vs_songstore_install_path(dest))));
+    var ok = httpOk && ((gmStatus >= 0) || doneProg || here);
+    show_debug_message("VS Online: avatar done pid=" + string(global.vs_avatar_cur)
+        + " ok=" + string(ok) + " http=" + string(httpStatus) + " st=" + string(gmStatus));
+    vs_online_avatar_finish(ok);
 }
 
 function vs_online_avatar_finish(_ok)
 {
     var pid = global.vs_avatar_cur;
-    var dest = "vs_avatars/" + pid + ".png";
-    if (_ok && file_exists(dest))
+    if (_ok)
     {
-        var spr = sprite_add(dest, 1, false, false, 0, 0);
-        if (spr != -1)
+        var spr = vs_online_avatar_load_file(pid);
+        if (spr != undefined)
         {
-            variable_struct_set(vs_online_avatar_cache(), pid, spr);
             if (instance_exists(o_st_handle))
             {
                 var m = o_st_handle.getMember(pid);
                 if (m != undefined) m.avatar = spr;
             }
         }
+        else _ok = false;
+    }
+    if (pid != "")
+    {
+        variable_struct_set(global.vs_avatar_pending, pid, false);
+        if (!_ok) variable_struct_set(global.vs_avatar_fail, pid, true);
     }
     global.vs_avatar_busy = false;
     global.vs_avatar_cur = "";
+    global.vs_avatar_req = -1;
     vs_online_avatar_pump();
 }
 
@@ -324,7 +382,7 @@ function vs_lobby_build_member(_mv)
     var av = vs_online_avatar_sprite(_mv.name);
     if (hasAvatar)
     {
-        var fetched = vs_online_avatar_ensure(_mv.playerId, _mv.avatar);
+        var fetched = vs_online_avatar_ensure(_mv.playerId, vs_online_avatar_abs_url(_mv.avatar));
         if (fetched != undefined) av = fetched;
     }
     var m =

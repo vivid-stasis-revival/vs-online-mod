@@ -47,6 +47,11 @@ function vs_auth_on_me(_ok2, _data2)
     message = "Signed in, but profile refresh failed.";
 }
 
+function vs_auth_on_avatar_me(_ok, _data)
+{
+    vs_online_my_avatar();
+}
+
 function vs_auth_flow_polled(_ok, _data, _status)
 {
     if (_ok && _data != undefined && variable_struct_exists(_data, "access_token"))
@@ -188,6 +193,7 @@ function vs_auth_setup()
     }
     else
     {
+        vs_online_refresh_me(vs_auth_on_avatar_me);
         vs_online_my_avatar();
     }
 }
