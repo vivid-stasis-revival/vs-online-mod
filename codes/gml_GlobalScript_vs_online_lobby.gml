@@ -1661,6 +1661,7 @@ function vs_lobby_handle_control(_j)
                 vs_lobby_refresh_host_flags(_j.hostId);
                 vs_lobby_log("host_changed host=" + string(_j.hostId) + " owner=" + string(vs_lobby_is_owner()));
                 if (!vs_lobby_is_owner()) vs_lobby_ops_end();
+                vs_lobby_refresh_ui();
             }
             else
             {
