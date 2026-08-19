@@ -196,6 +196,8 @@ class FakeHost:
         self.reported: Dict[str, bool] = {}
         self._countdown_task: Optional[asyncio.Task] = None
         self._score_task: Optional[asyncio.Task] = None
+        self._emote_task: Optional[asyncio.Task] = None
+        self._sticker_i = 0
         self.my_score = 0.0
         self.my_flag = 1
 
@@ -228,11 +230,41 @@ class FakeHost:
             )
             self.members[pid] = cur
 
+    def has_guest(self) -> bool:
+        return any(pid != self.me and m.get("connected") is True for pid, m in self.members.items())
+
+    def in_lobby_idle(self) -> bool:
+        if self.playing:
+            return False
+        if self._countdown_task and not self._countdown_task.done():
+            return False
+        return True
+
     async def send(self, data: bytes, why: str) -> None:
-        quiet = data and data[0] in (t.PKT_UPDATE_SCORE, t.PKT_SEND_STICKER)
+        quiet = data and data[0] == t.PKT_UPDATE_SCORE
         if not quiet:
             log(f"SEND {why} {decode_pkt(data)}")
         await self.sess.send_bin(data)
+
+    async def send_sticker(self, n: Optional[int] = None, why: str = "idle") -> None:
+        if n is None:
+            n = self._sticker_i % 12
+            self._sticker_i += 1
+        await self.send(pkt_sticker(n & 0xFF), f"SendSticker {why} id={n}")
+
+    def ensure_emotes(self) -> None:
+        if self._emote_task and not self._emote_task.done():
+            return
+        self._emote_task = asyncio.create_task(self._run_lobby_emotes())
+
+    async def _run_lobby_emotes(self) -> None:
+        try:
+            while True:
+                await asyncio.sleep(3.2)
+                if self.in_lobby_idle() and self.has_guest():
+                    await self.send_sticker(why="loop")
+        except asyncio.CancelledError:
+            return
 
     async def host_sync(self, why: str) -> None:
         if self.host_id != self.me:
@@ -385,6 +417,8 @@ class FakeHost:
             )
             if connected is True and mid != self.me:
                 await self.host_sync("member_joined connected")
+                self.ensure_emotes()
+                await self.send_sticker(why="welcome")
             else:
                 log("skip host_sync (REST join, WS not up yet)")
             return
@@ -405,7 +439,7 @@ class FakeHost:
         log(f"ctrl {kind} {json.dumps(msg, ensure_ascii=False)[:240]}")
 
     async def handle_bin(self, sender: str, inner: bytes) -> None:
-        quiet = inner[:1] == bytes([t.PKT_UPDATE_SCORE]) or inner[:1] == bytes([t.PKT_SEND_STICKER])
+        quiet = inner[:1] == bytes([t.PKT_UPDATE_SCORE])
         if not quiet:
             log(f"RECV from={sender} {decode_pkt(inner)}")
         if not inner:
@@ -419,6 +453,11 @@ class FakeHost:
             await self.on_report(sender, inner)
         elif typ == t.PKT_SEND_PLAYER_INFO:
             await self.on_player_info(sender)
+        elif typ == t.PKT_SEND_STICKER and sender != self.me and len(inner) > 1:
+            reply = (inner[1] + 1) % 12
+            await asyncio.sleep(0.4)
+            if self.in_lobby_idle():
+                await self.send_sticker(reply, why=f"reply to {sender[:8]}")
         elif typ == t.PKT_UPDATE_SCORE and len(inner) >= 6:
             pts, flag = struct.unpack_from("<fB", inner, 1)
             if sender in self.members:
@@ -482,7 +521,7 @@ async def run(base: str, join_code: str, public: bool) -> int:
     print(f"  Name:       {client.name}", flush=True)
     print("=" * 60, flush=True)
     print("Join: game Custom Server → same API → paste the lobby code.", flush=True)
-    print("Then pick a song (guest sends SuggestSong; host AddSong + countdown).", flush=True)
+    print("Host sends stickers in the lobby; pick a song to start (SuggestSong).", flush=True)
     print("", flush=True)
 
     sess = await t.connect_gm_ws(url)
