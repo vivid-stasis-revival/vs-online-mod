@@ -445,6 +445,45 @@ function vs_lobby_local_autoplay()
     return variable_global_exists("op_autoplay") && global.op_autoplay;
 }
 
+function vs_lobby_confirm_opt_is_autoplay(_opt)
+{
+    if (!is_struct(_opt)) return false;
+    if (variable_struct_exists(_opt, "name") && _opt.name == "Autoplay") return true;
+    if (variable_struct_exists(_opt, "prop") && is_array(_opt.prop) && array_length(_opt.prop) >= 2)
+    {
+        if (_opt.prop[1] == "op_autoplay") return true;
+    }
+    return false;
+}
+
+// Collapse duplicate Autoplay rows from stacked mods (BugFix + this one).
+// Add one in Worldcross if nobody else already did.
+function vs_lobby_confirm_ensure_autoplay()
+{
+    if (!variable_instance_exists(id, "options") || !is_array(options)) return;
+    var found = false;
+    var i = 0;
+    repeat (array_length(options))
+    {
+        if (!vs_lobby_confirm_opt_is_autoplay(options[i]))
+        {
+            i++;
+            continue;
+        }
+        if (found)
+        {
+            array_delete(options, i, 1);
+            continue;
+        }
+        found = true;
+        i++;
+    }
+    if (!found && variable_global_exists("multiplayerLobby") && global.multiplayerLobby)
+    {
+        array_push(options, { name: "Autoplay", type: 0, choices: ["OFF", "ON"], prop: [global, "op_autoplay"], key: ["system", "config", "autoplay", 0] });
+    }
+}
+
 function vs_lobby_has_queued_song()
 {
     if (!instance_exists(o_st_handle)) return false;

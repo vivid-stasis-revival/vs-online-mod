@@ -827,6 +827,12 @@
         "Type": 0
     },
     {
+        "Entry": "gml_Object_o_songselect_newconfirm_Other_10",
+        "Find": "if (diff_opt != undefined)",
+        "Value": "vs_lobby_confirm_ensure_autoplay();\nif (diff_opt != undefined)",
+        "Type": 1
+    },
+    {
         "Entry": "gml_GlobalScript_StartCountdownPacket",
         "Find": "play_se(asset_get_index(@@string@@(\"sfx_count{0}\", arg0)));",
         "Value": "if (vs_online_is_custom()) vs_lobby_log(\"countdown n=\" + string(arg0)); play_se(vs_online_countdown_sound(arg0));",
