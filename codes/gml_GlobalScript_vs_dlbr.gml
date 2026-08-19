@@ -1856,10 +1856,10 @@ function vs_dlbr_step_detail()
 
 function vs_dlbr_diff_same(_a, _b)
 {
-    var x = string_lower(string(_a));
-    var y = string_lower(string(_b));
-    if (x == y) return true;
-    if ((x == "encore" || x == "backstage") && (y == "encore" || y == "backstage")) return true;
+    var da = string_lower(string(_a));
+    var db = string_lower(string(_b));
+    if (da == db) return true;
+    if ((da == "encore" || da == "backstage") && (db == "encore" || db == "backstage")) return true;
     return false;
 }
 
