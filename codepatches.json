@@ -363,13 +363,13 @@
         "Entry": "gml_Object_o_newmenu_Step_0",
         "Find": "if (is_active)",
         "Value": "if (instance_exists(vs_downloader_browser)) exit;\nif (is_active)",
-        "Type": 0
+        "Type": 1
     },
     {
         "Entry": "gml_Object_o_newmainbutton_Draw_64",
         "Find": "draw_set_alpha(image_alpha);",
         "Value": "if (instance_exists(vs_downloader_browser)) exit;\ndraw_set_alpha(image_alpha);",
-        "Type": 0
+        "Type": 1
     },
     {
         "Entry": "gml_Object_obj_pre_init_Create_0",
@@ -597,12 +597,6 @@
         "Type": 1
     },
     {
-        "Entry": "gml_GlobalScript_StartGamePacket",
-        "Find": "song.difficulty",
-        "Value": "global.songselect_difficulty",
-        "Type": 0
-    },
-    {
         "Entry": "gml_Object_obj_multiplayer_lobby_Create_0",
         "Find": "steam_lobby_list_add_string_filter(\"code\", string_upper(keyboard_string), 0);",
         "Value": "if (!input_check(10)) steam_lobby_list_add_string_filter(\"code\", string_upper(keyboard_string), 0); joining = 1;",
@@ -714,9 +708,9 @@
     },
     {
         "Entry": "gml_Object_o_score_updater_Create_0",
-        "Find": "score:",
-        "Value": "score_:",
-        "Type": 0
+        "Find": "score: global.currentscore,",
+        "Value": "score_: global.currentscore,",
+        "Type": 1
     },
     {
         "Entry": "gml_Object_o_score_updater_Step_0",
@@ -794,7 +788,7 @@
         "Entry": "gml_Object_obj_multiplayer_lobby_Create_0",
         "Find": "            else if (array_length(o_st_handle.songQueue) > 0)\n            {\n                confirmReadyMenu();\n            }",
         "Value": "            else if (array_length(o_st_handle.songQueue) > 0)\n            {\n                if (vs_lobby_dl_prompt()) break;\n                confirmReadyMenu();\n            }",
-        "Type": 0
+        "Type": 1
     },
     {
         "Entry": "gml_Object_obj_multiplayer_lobby_Create_0",
@@ -857,21 +851,21 @@
     },
     {
         "Entry": "gml_GlobalScript_SendPlayerInfoPacket",
-        "Find": "return buffer;",
-        "Value": "buffer_write(buffer, buffer_bool, true);buffer_write(buffer, buffer_s8, vs_lobby_local_play_diff());buffer_write(buffer, buffer_u8, vs_lobby_local_autoplay() ? 1 : 0);buffer_write(buffer, buffer_u8, vs_lobby_local_need_dl() ? 1 : 0);return buffer;",
-        "Type": 0
+        "Find": "        buffer_write(buffer, buffer_u8, global.highest_class);\n        return buffer;",
+        "Value": "        buffer_write(buffer, buffer_u8, global.highest_class);\n        buffer_write(buffer, buffer_bool, true);buffer_write(buffer, buffer_s8, vs_lobby_local_play_diff());buffer_write(buffer, buffer_u8, vs_lobby_local_autoplay() ? 1 : 0);buffer_write(buffer, buffer_u8, vs_lobby_local_need_dl() ? 1 : 0);return buffer;",
+        "Type": 1
     },
     {
         "Entry": "gml_GlobalScript_SendPlayerInfoPacket",
-        "Find": "BasePacket(arg0, false, 3)",
-        "Value": "BasePacket(arg0, false, 3, 1)",
-        "Type": 0
+        "Find": "function SendPlayerInfoPacket(arg0) : BasePacket(arg0, false, 3) constructor",
+        "Value": "function SendPlayerInfoPacket(arg0) : BasePacket(arg0, false, 3, 1) constructor",
+        "Type": 1
     },
     {
         "Entry": "gml_GlobalScript_SendPlayerInfoPacket",
-        "Find": "buffer_delete(arg0);",
-        "Value": "try{obj.has_bwp = buffer_read(arg0, buffer_bool);}catch(e){obj.has_bwp = false;}try{obj.play_diff = buffer_read(arg0, buffer_s8);}catch(e){obj.play_diff = -1;}try{obj.autoplay = buffer_read(arg0, buffer_u8);}catch(e){obj.autoplay = 0;}try{obj.need_dl = buffer_read(arg0, buffer_u8);}catch(e){obj.need_dl = 0;}buffer_delete(arg0);",
-        "Type": 0
+        "Find": "        obj.class = buffer_read(arg0, buffer_u8);\n        buffer_delete(arg0);",
+        "Value": "        obj.class = buffer_read(arg0, buffer_u8);\n        try{obj.has_bwp = buffer_read(arg0, buffer_bool);}catch(e){obj.has_bwp = false;}try{obj.play_diff = buffer_read(arg0, buffer_s8);}catch(e){obj.play_diff = -1;}try{obj.autoplay = buffer_read(arg0, buffer_u8);}catch(e){obj.autoplay = 0;}try{obj.need_dl = buffer_read(arg0, buffer_u8);}catch(e){obj.need_dl = 0;}buffer_delete(arg0);",
+        "Type": 1
     },
     {
         "Entry": "gml_GlobalScript_SendPlayerInfoPacket",
