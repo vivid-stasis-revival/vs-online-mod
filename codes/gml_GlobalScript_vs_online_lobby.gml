@@ -1627,50 +1627,59 @@ function vs_lobby_leave()
     vs_lobby_reset();
 }
 
-function vs_lobby_count_busy()
+function vs_lobby_count_st()
 {
-    return variable_global_exists("vs_lobby_count_busy") && global.vs_lobby_count_busy;
-}
-
-function vs_lobby_count_waiting()
-{
-    return variable_global_exists("vs_lobby_count_wait") && global.vs_lobby_count_wait;
+    // Keep flag names off the function namespace. `global.vs_lobby_count_busy`
+    // was the script itself (always truthy), so GET /lobbies never ran.
+    if (!variable_global_exists("vs_lobby_cnt"))
+    {
+        global.vs_lobby_cnt = { inflight: false, wait: false };
+    }
+    return global.vs_lobby_cnt;
 }
 
 function vs_lobby_count_schedule()
 {
-    if (vs_lobby_count_waiting()) return;
+    var st = vs_lobby_count_st();
+    if (st.wait) return;
     if (!instance_exists(obj_multiplayer_lobby)) return;
     if (!vs_online_is_custom()) return;
-    global.vs_lobby_count_wait = true;
+    st.wait = true;
     call_later(60 * 5, time_source_units_frames, vs_lobby_count_on_timer);
 }
 
 function vs_lobby_count_on_timer()
 {
-    global.vs_lobby_count_wait = false;
+    vs_lobby_count_st().wait = false;
     vs_lobby_refresh_count();
 }
 
 function vs_lobby_refresh_count()
 {
     if (!instance_exists(obj_multiplayer_lobby) || !vs_online_is_custom()) return;
-    if (vs_lobby_has_code() || !vs_online_is_account() || vs_lobby_count_busy())
+    var st = vs_lobby_count_st();
+    if (vs_lobby_has_code() || st.inflight)
     {
         vs_lobby_count_schedule();
         return;
     }
-    global.vs_lobby_count_busy = true;
+    st.inflight = true;
     vs_online_get_json("/api/v1/lobbies", false, vs_lobby_count_done);
 }
 
 function vs_lobby_count_done(_ok, _data, _status)
 {
-    global.vs_lobby_count_busy = false;
-    if (_ok && _data != undefined && variable_struct_exists(_data, "lobbies") && is_array(_data.lobbies)
-        && instance_exists(obj_multiplayer_lobby))
+    vs_lobby_count_st().inflight = false;
+    var n = 0;
+    var got = false;
+    if (_ok && _data != undefined && variable_struct_exists(_data, "lobbies") && is_array(_data.lobbies))
     {
-        obj_multiplayer_lobby.lobbyCount = array_length(_data.lobbies);
+        n = array_length(_data.lobbies);
+        got = true;
+    }
+    if (got && instance_exists(obj_multiplayer_lobby))
+    {
+        obj_multiplayer_lobby.lobbyCount = n;
     }
     vs_lobby_count_schedule();
 }
