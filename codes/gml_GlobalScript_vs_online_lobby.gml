@@ -197,6 +197,19 @@ function vs_member_set_score(_m, _v)
     variable_struct_set(_m, "score_", _v);
 }
 
+function vs_member_get_flag(_m)
+{
+    if (_m == undefined) return 1;
+    if (variable_struct_exists(_m, "scoreFlag")) return variable_struct_get(_m, "scoreFlag");
+    return 1;
+}
+
+function vs_member_set_flag(_m, _v)
+{
+    if (_m == undefined) return;
+    variable_struct_set(_m, "scoreFlag", _v);
+}
+
 // --- member struct ---------------------------------------------------------
 
 // Deterministic avatar fallback: hash(name) -> a jacket from global.song_list.
@@ -390,7 +403,6 @@ function vs_lobby_build_member(_mv)
         id: _mv.playerId,
         name: variable_struct_exists(_mv, "name") ? _mv.name : "",
         ready: variable_struct_exists(_mv, "ready") ? _mv.ready : 0,
-        scoreFlag: variable_struct_exists(_mv, "scoreFlag") ? _mv.scoreFlag : 1,
         avatar: av,
         reportedScore: true,
         host: variable_struct_exists(_mv, "host") ? _mv.host : false,
@@ -415,6 +427,9 @@ function vs_lobby_build_member(_mv)
     };
     var sc = variable_struct_exists(_mv, "score") ? variable_struct_get(_mv, "score") : 0;
     vs_member_set_score(m, sc);
+    var fl = 1;
+    if (variable_struct_exists(_mv, "scoreFlag")) fl = variable_struct_get(_mv, "scoreFlag");
+    vs_member_set_flag(m, fl);
     return m;
 }
 
@@ -446,7 +461,7 @@ function vs_lobby_apply_roster(_members)
             if (oldSc != 0)
             {
                 vs_member_set_score(m, oldSc);
-                if (variable_struct_exists(old, "scoreFlag")) m.scoreFlag = old.scoreFlag;
+                if (variable_struct_exists(old, "scoreFlag")) vs_member_set_flag(m, vs_member_get_flag(old));
             }
         }
         arr[i] = m;
@@ -632,7 +647,7 @@ function vs_lobby_host_sync(_why)
         send_packet(UpdateScorePacket,
         {
             score_: vs_member_get_score(o_st_handle.currentMember),
-            flag: o_st_handle.currentMember.scoreFlag
+            flag: vs_member_get_flag(o_st_handle.currentMember)
         });
     }
     else
@@ -654,7 +669,6 @@ function vs_lobby_ensure_sender(_senderId)
         playerId: _senderId,
         name: "",
         ready: 0,
-        scoreFlag: 1,
         host: false,
         order: array_length(o_st_handle.lobbyMembers)
     }));

@@ -6,7 +6,6 @@ addMember = function(arg0)
         id: arg0,
         name: name,
         ready: 0,
-        scoreFlag: UnknownEnum.Value_1,
         avatar: getAvatarData(arg0),
         reportedScore: true,
         host: arg0 == steam_lobby_get_owner_id(),
@@ -28,6 +27,7 @@ addMember = function(arg0)
         }
     };
     vs_member_set_score(member, 0);
+    vs_member_set_flag(member, UnknownEnum.Value_1);
     array_push(lobbyMembers, member);
 };
 addMember_deprecated = function(arg0)

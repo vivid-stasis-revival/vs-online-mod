@@ -194,7 +194,7 @@
     {
         "Entry": "gml_GlobalScript_SendQueuePacket",
         "Find": "            buffer_write(buffer, buffer_u8, member.ready);",
-        "Value": "            buffer_write(buffer, buffer_u8, member.ready);\n            if (vs_online_is_custom()) { buffer_write(buffer, buffer_f32, vs_member_get_score(member)); buffer_write(buffer, buffer_u8, member.scoreFlag); }",
+        "Value": "            buffer_write(buffer, buffer_u8, member.ready);\n            if (vs_online_is_custom()) { buffer_write(buffer, buffer_f32, vs_member_get_score(member)); buffer_write(buffer, buffer_u8, vs_member_get_flag(member)); }",
         "Type": 0
     },
     {
@@ -206,7 +206,7 @@
     {
         "Entry": "gml_GlobalScript_SendQueuePacket",
         "Find": "            member.ready = status;",
-        "Value": "            member.ready = status;\n            if (vs_online_is_custom()) { vs_member_set_score(member, _sc); member.scoreFlag = _fl; }",
+        "Value": "            member.ready = status;\n            if (vs_online_is_custom()) { vs_member_set_score(member, _sc); vs_member_set_flag(member, _fl); }",
         "Type": 0
     },
     {
@@ -648,8 +648,8 @@
     },
     {
         "Entry": "gml_Object_o_st_handle_Other_69",
-        "Find": "score:",
-        "Value": "score_:",
+        "Find": "            send_packet(UpdateScorePacket, \n            {\n                score: o_st_handle.currentMember.score,\n                flag: o_st_handle.currentMember.scoreFlag\n            });",
+        "Value": "            send_packet(UpdateScorePacket, \n            {\n                score_: vs_member_get_score(o_st_handle.currentMember),\n                flag: vs_member_get_flag(o_st_handle.currentMember)\n            });",
         "Type": 0
     },
     {
@@ -677,21 +677,15 @@
         "Type": 0
     },
     {
-        "Entry": "gml_Object_o_st_handle_Other_69",
-        "Find": "o_st_handle.currentMember.score",
-        "Value": "vs_member_get_score(o_st_handle.currentMember)",
-        "Type": 0
-    },
-    {
         "Entry": "gml_GlobalScript_UpdateScorePacket",
-        "Find": "member.score = arg0.score;",
-        "Value": "vs_member_set_score(member, arg0.score);",
+        "Find": "        member.score = arg0.score;\n        member.scoreFlag = arg0.flag;",
+        "Value": "        vs_member_set_score(member, arg0.score);\n        vs_member_set_flag(member, arg0.flag);",
         "Type": 0
     },
     {
         "Entry": "gml_GlobalScript_ReportScorePacket",
-        "Find": "member.score = arg0.score;",
-        "Value": "vs_member_set_score(member, arg0.score);",
+        "Find": "        member.score = arg0.score;\n        member.scoreFlag = arg0.flag;",
+        "Value": "        vs_member_set_score(member, arg0.score);\n        vs_member_set_flag(member, arg0.flag);",
         "Type": 0
     },
     {
@@ -793,6 +787,12 @@
         "Entry": "gml_Object_obj_multiplayer_lobby_Draw_64",
         "Find": "if (member.score != 0)",
         "Value": "if (vs_member_get_score(member) != 0)",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_Object_obj_multiplayer_lobby_Draw_64",
+        "Find": "switch (member.scoreFlag)",
+        "Value": "switch (vs_member_get_flag(member))",
         "Type": 0
     },
     {
