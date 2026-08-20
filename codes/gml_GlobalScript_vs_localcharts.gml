@@ -61,6 +61,7 @@ function vs_localcharts_read_pack(_dir)
 // Returns undefined when the folder has no playable chart.
 function vs_localcharts_read_info(_dir, _pack)
 {
+    if (file_exists(_dir + "shatterinfo.json")) return undefined;
     if (!file_exists(_dir + "info.json")) return undefined;
 
     var raw = "";
@@ -170,21 +171,7 @@ function vs_localcharts_scan()
         {
             var e = entries[i];
             var key = string_lower(e.name);
-            if (file_exists(e.dir + "info.json"))
-            {
-                if (variable_struct_exists(seen, key)) continue;
-                var s = vs_localcharts_read_info(e.dir, "Unpacked");
-                if (s != undefined)
-                {
-                    variable_struct_set(seen, key, true);
-                    if (s.chart_id != "") variable_struct_set(seen, string_lower(s.chart_id), true);
-                    var pk0 = string_lower(string(s.chart_id));
-                    if (s.pack == "Unpacked" && pk0 != "" && variable_struct_exists(pmap, pk0))
-                        s.pack = variable_struct_get(pmap, pk0);
-                    array_push(out, s);
-                }
-            }
-            else if (file_exists(e.dir + "shatterinfo.json"))
+            if (file_exists(e.dir + "shatterinfo.json"))
             {
                 if (variable_struct_exists(seen, key)) continue;
                 var sh = vs_localcharts_read_shatter(e.dir, "Shatter");
@@ -196,6 +183,20 @@ function vs_localcharts_scan()
                     if (sh.pack == "Shatter" && pk1 != "" && variable_struct_exists(pmap, pk1))
                         sh.pack = variable_struct_get(pmap, pk1);
                     array_push(out, sh);
+                }
+            }
+            else if (file_exists(e.dir + "info.json"))
+            {
+                if (variable_struct_exists(seen, key)) continue;
+                var s = vs_localcharts_read_info(e.dir, "Unpacked");
+                if (s != undefined)
+                {
+                    variable_struct_set(seen, key, true);
+                    if (s.chart_id != "") variable_struct_set(seen, string_lower(s.chart_id), true);
+                    var pk0 = string_lower(string(s.chart_id));
+                    if (s.pack == "Unpacked" && pk0 != "" && variable_struct_exists(pmap, pk0))
+                        s.pack = variable_struct_get(pmap, pk0);
+                    array_push(out, s);
                 }
             }
             else if (file_exists(e.dir + "songpack_info.json"))
@@ -215,18 +216,7 @@ function vs_localcharts_scan()
         {
             var pp = children[j].dir;
             var ck = string_lower(vs_localcharts_folder_name(packs[i]) + "/" + children[j].name);
-            if (file_exists(pp + "info.json"))
-            {
-                if (variable_struct_exists(seen, ck)) continue;
-                var s2 = vs_localcharts_read_info(pp, pk.name);
-                if (s2 != undefined)
-                {
-                    variable_struct_set(seen, ck, true);
-                    if (s2.chart_id != "") variable_struct_set(seen, string_lower(s2.chart_id), true);
-                    array_push(out, s2);
-                }
-            }
-            else if (file_exists(pp + "shatterinfo.json"))
+            if (file_exists(pp + "shatterinfo.json"))
             {
                 if (variable_struct_exists(seen, ck)) continue;
                 var sh2 = vs_localcharts_read_shatter(pp, pk.name);
@@ -235,6 +225,17 @@ function vs_localcharts_scan()
                     variable_struct_set(seen, ck, true);
                     if (sh2.chart_id != "") variable_struct_set(seen, string_lower(sh2.chart_id), true);
                     array_push(out, sh2);
+                }
+            }
+            else if (file_exists(pp + "info.json"))
+            {
+                if (variable_struct_exists(seen, ck)) continue;
+                var s2 = vs_localcharts_read_info(pp, pk.name);
+                if (s2 != undefined)
+                {
+                    variable_struct_set(seen, ck, true);
+                    if (s2.chart_id != "") variable_struct_set(seen, string_lower(s2.chart_id), true);
+                    array_push(out, s2);
                 }
             }
         }
