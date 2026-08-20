@@ -463,12 +463,6 @@
         "Type": 0
     },
     {
-        "Entry": "gml_GlobalScript_get_rating_completion_value",
-        "Find": "var song = global.song_list[s];",
-        "Value": "var song = global.song_list[s]; if(struct_exists(song,\"is_custom\")) continue;",
-        "Type": 1
-    },
-    {
         "Entry": "gml_GlobalScript_rating_functions",
         "Find": "function get_rating_value(arg0, arg1, arg2)\n{\n    arg1 = round(arg1 * 10) / 10;",
         "Value": "function get_rating_value(arg0, arg1, arg2)\n{\n    if (!is_real(arg0) || arg0 != arg0) arg0 = 0;\n    if (!is_real(arg1) || arg1 != arg1) arg1 = 0;\n    if (!is_real(arg2) || arg2 != arg2) arg2 = 0;\n    arg1 = round(arg1 * 10) / 10;",
