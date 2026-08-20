@@ -640,13 +640,13 @@
     {
         "Entry": "gml_Object_obj_multiplayer_lobby_Create_0",
         "Find": "var s = o_st_handle.songQueue[0];",
-        "Value": "var q = vs_lobby_queue_confirm_song(); if (q == undefined) return; var s = o_st_handle.songQueue[0]; var song = struct_copy(q.song); if (!vs_lobby_song_has_diff(song, 3)) song.has_encore = false;",
+        "Value": "var q = vs_lobby_queue_confirm_song(); if (q == undefined) return; var s = o_st_handle.songQueue[0]; var song = struct_copy(q.song); if (!vs_lobby_song_has_diff(song, 3)) song.has_encore = false; if (variable_struct_exists(song, \"enc_data\")) song.allowed_difficulties = (s.difficulty == 3) ? [3] : [0, 1, 2];",
         "Type": 0
     },
     {
         "Entry": "gml_Object_obj_multiplayer_lobby_Create_0",
         "Find": "select_difficulties: false",
-        "Value": "select_difficulties: true",
+        "Value": "select_difficulties: !(variable_struct_exists(song, \"enc_data\") && s.difficulty == 3)",
         "Type": 0
     },
     {
@@ -658,7 +658,7 @@
     {
         "Entry": "gml_Object_obj_multiplayer_lobby_Create_0",
         "Find": "is_active = false;",
-        "Value": "global.songselect_difficulty = difficulties[selected_difficulty].id;is_active = false;",
+        "Value": "global.songselect_difficulty = difficulties[selected_difficulty].id; if (instance_exists(o_st_handle) && is_array(o_st_handle.songQueue) && array_length(o_st_handle.songQueue) > 0) o_st_handle.songQueue[0].difficulty = global.songselect_difficulty; is_active = false;",
         "Type": 1
     },
     {

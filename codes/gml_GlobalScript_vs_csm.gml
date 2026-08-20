@@ -273,6 +273,23 @@ function vs_csm_add_jacket(_dir, _src)
 
 function vs_csm_ensure_unlock(_song)
 {
+    // Downloaded / custom charts must not inherit story unlocks from info.json
+    // templates (type 0 + per_difficulty leaves only OPENING unlocked, which
+    // froze WP Options on the lowest diff).
+    if (_song != undefined && variable_struct_exists(_song, "is_custom") && _song.is_custom)
+    {
+        _song.unlock =
+        {
+            song_id: _song.song_id,
+            type: 0,
+            enc_type: 0,
+            per_difficulty: false,
+            hidden: false,
+            hint: "",
+            enc_hint: ""
+        };
+        return;
+    }
     if (!variable_struct_exists(_song, "unlock") || !is_struct(_song.unlock))
     {
         _song.unlock =

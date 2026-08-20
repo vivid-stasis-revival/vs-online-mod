@@ -357,6 +357,16 @@ function vs_lobby_unlock_pad()
     {
         array_push(global.unlocked_songs, [true, true, true, true]);
     }
+    var i = 0;
+    repeat (n)
+    {
+        var s = global.song_list[i];
+        if (s != undefined && variable_struct_exists(s, "is_custom") && s.is_custom)
+        {
+            global.unlocked_songs[i] = [true, true, true, true];
+        }
+        i++;
+    }
 }
 
 function vs_lobby_unlock_pad_id(_id)
@@ -373,29 +383,8 @@ function vs_lobby_song_has_diff(_song, _d)
 {
     if (_song == undefined) return false;
     if (!is_real(_d) || _d < 0 || _d > 3) return false;
-    if (variable_struct_exists(_song, "allowed_difficulties") && is_array(_song.allowed_difficulties))
-    {
-        var found = false;
-        var ai = 0;
-        repeat (array_length(_song.allowed_difficulties))
-        {
-            if (_song.allowed_difficulties[ai] == _d)
-            {
-                found = true;
-                break;
-            }
-            ai++;
-        }
-        if (!found) return false;
-    }
-    var dir = struct_get_fallback(_song, "chart_load_dir", struct_get_fallback(_song, "chart_path", ""));
-    var custom = (variable_struct_exists(_song, "is_custom") && _song.is_custom)
-        || (is_string(dir) && string_pos("Custom Songs", dir) > 0);
-    if (custom && string(dir) != "")
-    {
-        var names = ["OPENING", "MIDDLE", "FINALE", "ENCORE"];
-        return vs_csm_chart_file_exists(dir, names[_d]);
-    }
+    // Do not use chart-file probes here. WP Options/Ready used to clamp the
+    // queue to the first existing .vsc, which froze every song on OPENING.
     if (_d == 3)
     {
         var he = struct_get_fallback(_song, "has_encore", false);
@@ -414,7 +403,7 @@ function vs_lobby_clamp_diff(_song, _d)
         if (vs_lobby_song_has_diff(_song, i)) return i;
         i++;
     }
-    return 0;
+    return d;
 }
 
 function vs_lobby_fix_queue_diff()
@@ -434,7 +423,7 @@ function vs_lobby_fix_queue_diff()
     {
         d = global.songselect_difficulty;
     }
-    d = vs_lobby_clamp_diff(song, d);
+    if (!vs_lobby_song_has_diff(song, d)) d = vs_lobby_clamp_diff(song, d);
     s.difficulty = d;
     global.songselect_difficulty = d;
 }
@@ -452,7 +441,13 @@ function vs_lobby_queue_confirm_song()
     if (song == undefined) return undefined;
     vs_lobby_unlock_pad_id(struct_get_fallback(song, "song_id", s.songId));
     if (!vs_lobby_song_has_diff(song, 3)) song.has_encore = false;
-    var d = vs_lobby_clamp_diff(song, variable_struct_exists(s, "difficulty") ? s.difficulty : 0);
+    var d = 0;
+    if (variable_struct_exists(s, "difficulty") && is_real(s.difficulty)) d = s.difficulty;
+    else if (variable_global_exists("songselect_difficulty") && is_real(global.songselect_difficulty))
+    {
+        d = global.songselect_difficulty;
+    }
+    if (!vs_lobby_song_has_diff(song, d)) d = vs_lobby_clamp_diff(song, d);
     s.difficulty = d;
     global.songselect_difficulty = d;
     return { song: song, difficulty: d };
