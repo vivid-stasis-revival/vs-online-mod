@@ -225,6 +225,24 @@ function vs_http_file_settle(_gmStatus, _httpStatus, _fileReady, _doneProg)
     return 1;
 }
 
+function vs_http_looks_json(_text)
+{
+    if (_text == undefined) return false;
+    var s = string(_text);
+    var n = string_length(s);
+    var i = 1;
+    repeat (n)
+    {
+        var c = string_char_at(s, i);
+        if (c != " " && c != "\n" && c != "\r" && c != "\t")
+        {
+            return (c == "{" || c == "[");
+        }
+        i++;
+    }
+    return false;
+}
+
 function vs_http_file_here(_rel)
 {
     if (_rel == undefined || _rel == "") return false;
@@ -569,6 +587,12 @@ function vs_http_on_async()
         {
             return false;
         }
+        // status=1 result is often "0" / byte count, not the JSON body.
+        // Completing here made oauth device_authorization FAIL at http=200.
+        if (job.json && !vs_http_looks_json(text))
+        {
+            return false;
+        }
     }
     var ok = false;
     if (httpStatus >= 200 && httpStatus < 300)
@@ -647,6 +671,12 @@ function vs_http_finish(_job, _ok, _text, _status)
         if (_text != undefined && _text != "")
         {
             try { data = json_parse(_text); } catch (_e) { }
+            if (data == undefined || (!is_struct(data) && !is_array(data)))
+            {
+                show_debug_message("VS Online: JSON parse fail http=" + string(_status)
+                    + " text=" + string_copy(string(_text), 1, 120));
+                data = undefined;
+            }
         }
     }
     var after = _job.after;
@@ -814,7 +844,15 @@ function vs_online_oauth_start_done(_ok, _data, _status)
         array_delete(global.vs_oauth_start_q, 0, 1);
     }
     if (cb == undefined) return;
-    cb(_ok && _data != undefined && variable_struct_exists(_data, "device_code"), _data, _status);
+    var ready = _ok && _data != undefined && is_struct(_data) && variable_struct_exists(_data, "device_code");
+    if (!ready)
+    {
+        var why = "no device_code";
+        if (!_ok) why = "http not ok";
+        else if (_data == undefined) why = "json missing";
+        show_debug_message("VS Online: oauth start fail " + why + " http=" + string(_status));
+    }
+    cb(ready, _data, _status);
 }
 
 function vs_online_oauth_poll(_deviceCode, _on_done)
