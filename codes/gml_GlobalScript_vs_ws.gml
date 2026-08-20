@@ -362,11 +362,12 @@ function vs_ws_send_text(_str)
     {
         return;
     }
-    var buf = buffer_create(string_length(_str) + 1, buffer_fixed, 1);
+    var nbytes = string_byte_length(_str);
+    var buf = buffer_create(nbytes + 1, buffer_fixed, 1);
     buffer_write(buf, buffer_string, _str);
     // 3-arg network_send_raw (vsml arity); default on WS sockets is binary.
     // Control JSON from this client is unused; server text frames still arrive
-    // via message_type on receive.
-    network_send_raw(ws.socket, buf, string_length(_str));
+    // via message_type on receive. Send UTF-8 byte count, not character count.
+    network_send_raw(ws.socket, buf, nbytes);
     buffer_delete(buf);
 }

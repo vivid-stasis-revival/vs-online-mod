@@ -2024,14 +2024,7 @@ function vs_online_on_ws_frame(_op, _payload)
             vs_online_on_ws_frame(2, _payload);
             return;
         }
-        var text = "";
-        var count = buffer_get_size(_payload);
-        var k = 0;
-        repeat (count)
-        {
-            text += chr(buffer_read(_payload, buffer_u8));
-            k++;
-        }
+        var text = vs_utf8_from_buffer(_payload);
         buffer_delete(_payload);
         var json = undefined;
         try { json = json_parse(text); }
