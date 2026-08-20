@@ -825,8 +825,17 @@ function vs_online_show_score_error(_why)
         retrying = false;
         selected = 0;
         server_url = vs_online_server_url();
-        message = string(_why) + "\n取消 = stay on results.\n重置 = retry this chart.";
+        message = string(_why) + "\n取消 = stay on results.\n重置 = retry upload.";
     }
+}
+
+function vs_online_score_retry_upload()
+{
+    if (!variable_global_exists("vs_score_up") || !is_struct(global.vs_score_up)) return;
+    var u = global.vs_score_up;
+    if (!variable_struct_exists(u, "chartId") || string(u.chartId) == "") return;
+    vs_online_score_log("retry upload chart=" + string(u.chartId) + " pts=" + string(u.pts));
+    vs_online_upload_score(u.chartId, u.difficulty, u.sha1, u.pts, "");
 }
 
 function vs_online_diff_index(_diff)
@@ -838,39 +847,6 @@ function vs_online_diff_index(_diff)
     if (d == "ENCORE") return 3;
     if (d == "PRELUDE") return 4;
     return 0;
-}
-
-function vs_online_score_reset_song()
-{
-    if (!variable_global_exists("song_id_last")) return;
-    var idx = global.song_id_last;
-    var di = vs_online_diff_index(variable_global_exists("df_load") ? global.df_load : "OPENING");
-    var dec = variable_global_exists("decrypt_mode") ? global.decrypt_mode : {};
-    var clear_r = scene_songselect_old;
-    var fail_r = undefined;
-    var quit_r = undefined;
-    if (variable_global_exists("room_after_song") && is_struct(global.room_after_song))
-    {
-        clear_r = global.room_after_song.clear;
-        fail_r = global.room_after_song.fail;
-        quit_r = global.room_after_song.quit;
-    }
-    audio_stop_all();
-    var opts =
-    {
-        decrypt_style: dec,
-        clear_room: clear_r,
-        fail_room: fail_r,
-        quit_room: quit_r
-    };
-    if (variable_global_exists("song_shatter") && global.song_shatter)
-    {
-        var shIdx = vs_online_shatter_index(idx);
-        if (shIdx < 0) shIdx = idx;
-        start_song_shatter(shIdx, opts);
-        return;
-    }
-    start_song(idx, di, opts);
 }
 
 function vs_online_error_break(_text, _maxw)
@@ -1030,7 +1006,7 @@ function vs_online_error_step()
         {
             var doReset = (selected == 1);
             instance_destroy();
-            if (doReset) vs_online_score_reset_song();
+            if (doReset) vs_online_score_retry_upload();
         }
         else if (selected == 0)
         {
