@@ -556,13 +556,39 @@ function vs_packmgr_slot()
             need: 0,
             failed: false,
             cancel: false,
+            err: "",
             mode: "",
             info: { name: "", description: "", color1: 0, color2: 0 }
         };
     }
     if (!variable_struct_exists(global.vs_pack_job, "info"))
         global.vs_pack_job.info = { name: "", description: "", color1: 0, color2: 0 };
+    if (!variable_struct_exists(global.vs_pack_job, "err"))
+        global.vs_pack_job.err = "";
     return global.vs_pack_job;
+}
+
+function vs_packmgr_install_active()
+{
+    if (!variable_global_exists("vs_pack_job")) return undefined;
+    var st = global.vs_pack_job;
+    if (st.mode != "install") return undefined;
+    return st;
+}
+
+function vs_packmgr_prog_frac()
+{
+    var st = vs_packmgr_install_active();
+    if (st == undefined) return vs_dlmgr_prog_frac();
+    var n = array_length(st.queue);
+    if (n <= 0) return vs_dlmgr_prog_frac();
+    var idx = st.idx;
+    if (idx < 0) idx = 0;
+    if (idx >= n) return 1;
+    var p = (idx + vs_dlmgr_prog_frac()) / n;
+    if (p < 0) p = 0;
+    if (p > 1) p = 1;
+    return p;
 }
 
 function vs_packmgr_check(_packId, _on_done)
@@ -672,6 +698,7 @@ function vs_packmgr_install(_packId, _on_done)
     st.idx = 0;
     st.failed = false;
     st.cancel = false;
+    st.err = "";
     st.queue = [];
     vs_online_get_json("/api/v1/packs/" + st.packId, false, vs_packmgr_install_got);
 }
@@ -686,6 +713,7 @@ function vs_packmgr_install_got(_ok, _data, _status)
     }
     if (!_ok || _data == undefined)
     {
+        st.err = "could not load pack";
         vs_packmgr_install_finish(false);
         return;
     }
@@ -714,6 +742,10 @@ function vs_packmgr_install_next()
     }
     var m = st.queue[st.idx];
     vs_dlmgr_download(m.id, m.chartId, m.kind, vs_packmgr_install_one);
+    if (m != undefined && variable_struct_exists(m, "name") && string(m.name) != "")
+    {
+        global.vs_dlmgr_dl.name = string(m.name);
+    }
 }
 
 function vs_packmgr_install_one(_ok)
@@ -725,7 +757,18 @@ function vs_packmgr_install_one(_ok)
         vs_packmgr_install_finish(false);
         return;
     }
-    if (!_ok) st.failed = true;
+    if (!_ok)
+    {
+        st.failed = true;
+        if (variable_global_exists("vs_dlmgr_dl") && variable_struct_exists(global.vs_dlmgr_dl, "err") && global.vs_dlmgr_dl.err != "")
+        {
+            st.err = string(global.vs_dlmgr_dl.err);
+        }
+        else if (st.err == "")
+        {
+            st.err = "chart download failed";
+        }
+    }
     st.idx++;
     vs_packmgr_install_next();
 }

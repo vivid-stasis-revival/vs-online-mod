@@ -342,7 +342,7 @@ function vs_songstore_fetch(_kind, _id, _on_done)
         {
             var cb = global.vs_store_detail_cb.on_done;
             global.vs_store_detail_cb.on_done = undefined;
-            if (cb != undefined) { cb(_ok, _data); }
+            if (cb != undefined) { cb(_ok, _data, _status); }
         });
 }
 
@@ -544,7 +544,7 @@ function vs_songstore_dl_init()
         global.vs_dl_q = [];
         global.vs_dl_busy = false;
         global.vs_dl_scheduled = false;
-        global.vs_dl_state = { rid: -1, gen: 0, url: "", localPath: "", tmpPath: "vsonline_dl.bin", on_done: undefined, got: 0, total: 0, placing: false, placeTries: 0 };
+        global.vs_dl_state = { rid: -1, gen: 0, url: "", localPath: "", tmpPath: "vsonline_dl.bin", on_done: undefined, got: 0, total: 0, httpStatus: -1, placing: false, placeTries: 0 };
         vs_songstore_sweep_tmp();
     }
 }
@@ -609,6 +609,7 @@ function vs_songstore_dl_pump()
     global.vs_dl_state.on_done = job.on_done;
     global.vs_dl_state.got = 0;
     global.vs_dl_state.total = 0;
+    global.vs_dl_state.httpStatus = -1;
     global.vs_dl_state.placing = false;
     global.vs_dl_state.placeTries = 0;
     global.vs_dl_state.gen = global.vs_dl_gen;
@@ -711,6 +712,12 @@ function vs_songstore_dl_on_place()
     if (!global.vs_dl_busy) return;
     var st = global.vs_dl_state;
     if (!st.placing) return;
+    if (variable_struct_exists(st, "httpStatus") && st.httpStatus >= 400)
+    {
+        vs_songstore_set_err("http " + string(st.httpStatus) + " for " + string(st.url));
+        vs_songstore_dl_finish(false);
+        return;
+    }
     if (vs_songstore_tmp_src(st.tmpPath) != "")
     {
         vs_songstore_log("tmp ready " + string(st.localPath));
@@ -748,6 +755,7 @@ function vs_songstore_on_http()
     var doneProg = (st.total > 0 && st.got >= st.total);
     var tmpHere = (vs_songstore_tmp_src(st.tmpPath) != "");
     var httpStatus = vs_http_num(ds_map_find_value(async_load, "http_status"), -1);
+    if (httpStatus >= 0) st.httpStatus = httpStatus;
     if (variable_global_exists("vs_dlmgr_dl") && global.vs_dlmgr_dl.cancel)
     {
         vs_songstore_dl_finish(false);
@@ -756,6 +764,12 @@ function vs_songstore_on_http()
     var settle = vs_http_file_settle(gmStatus, httpStatus, tmpHere, doneProg);
     if (settle == 0)
     {
+        if (httpStatus >= 400)
+        {
+            vs_songstore_set_err("http " + string(httpStatus) + " for " + string(st.url));
+            vs_songstore_dl_finish(false);
+            return;
+        }
         if (doneProg || gmStatus == 0) vs_songstore_dl_wait_tmp();
         return;
     }
