@@ -345,6 +345,9 @@ function vs_localcharts_refresh()
     catch (_e2) { show_debug_message("VS LocalCharts: pack rebuild failed -> " + string(_e2)); }
     try { load_highscores(); }
     catch (_e3) { show_debug_message("VS LocalCharts: highscore reload failed -> " + string(_e3)); }
+    try { process_song_unlocks(); }
+    catch (_e4) { show_debug_message("VS LocalCharts: unlock rebuild failed -> " + string(_e4)); }
+    vs_lobby_unlock_pad();
 }
 
 // Jump into the song select with a chart focused (used from both the download
