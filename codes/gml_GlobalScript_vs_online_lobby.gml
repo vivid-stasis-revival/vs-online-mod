@@ -477,6 +477,136 @@ function vs_lobby_suggest_q()
     return o_st_handle.suggestQueue;
 }
 
+function vs_lobby_suggest_clear()
+{
+    if (!instance_exists(o_st_handle)) return;
+    o_st_handle.suggestQueue = [];
+}
+
+function vs_lobby_suggest_item_name(_s)
+{
+    if (_s == undefined) return "";
+    var song = undefined;
+    if (variable_struct_exists(_s, "songId")) song = vs_online_song_from_id(_s.songId);
+    if (song != undefined)
+    {
+        var d = variable_struct_exists(_s, "difficulty") ? _s.difficulty : 0;
+        var nm = song_get_info(song, "name", d);
+        if (nm != undefined && string(nm) != "") return string(nm);
+        if (variable_struct_exists(song, "name") && string(song.name) != "") return string(song.name);
+    }
+    var cid = "";
+    if (variable_struct_exists(_s, "chart_id")) cid = string(_s.chart_id);
+    return vs_chartmeta_label(cid);
+}
+
+function vs_lobby_suggest_push(_s, _from)
+{
+    if (_s == undefined) return;
+    var cid = vs_online_queue_chart_id(_s);
+    if (cid == "")
+    {
+        vs_lobby_suggest_clear();
+        vs_lobby_log("suggest clear from=" + string(_from));
+        return;
+    }
+    vs_chartmeta_want(cid);
+    var sid = vs_online_song_id_from_chart(cid);
+    if (!instance_exists(o_st_handle)) return;
+    o_st_handle.suggestQueue =
+    [{
+        member: _from,
+        songId: sid,
+        difficulty: variable_struct_exists(_s, "difficulty") ? _s.difficulty : 0,
+        chart_id: cid
+    }];
+    vs_lobby_log("suggest recv chart=" + cid + " from=" + string(_from) + " songId=" + string(sid));
+}
+
+function vs_lobby_suggest_accept()
+{
+    var q = vs_lobby_suggest_q();
+    if (array_length(q) <= 0) return;
+    var item = q[0];
+    array_delete(q, 0, 1);
+    play_se(sfx_songsel_beginsong);
+    vs_lobby_log("suggest accept chart=" + vs_online_queue_chart_id(item)
+        + " songId=" + string(item.songId));
+    send_packet(AddSongPacket, item);
+}
+
+function vs_lobby_suggest_ignore()
+{
+    var q = vs_lobby_suggest_q();
+    if (array_length(q) <= 0) return;
+    play_se(sfx_songsel_select);
+    vs_lobby_log("suggest ignore chart=" + vs_online_queue_chart_id(q[0]));
+    vs_lobby_suggest_clear();
+    send_packet(SuggestSongPacket, { songId: -1, difficulty: -1, chart_id: "" });
+}
+
+function vs_lobby_suggest_step()
+{
+    if (!vs_online_is_custom()) return false;
+    if (!vs_lobby_is_owner()) return false;
+    var q = vs_lobby_suggest_q();
+    if (array_length(q) <= 0) return false;
+    if (input_check_pressed(4) || keyboard_check_pressed(vk_enter))
+    {
+        vs_lobby_suggest_accept();
+    }
+    else if (input_check_pressed(5) || keyboard_check_pressed(vk_escape))
+    {
+        vs_lobby_suggest_ignore();
+    }
+    return true;
+}
+
+function vs_lobby_suggest_draw()
+{
+    if (!vs_online_is_custom()) return;
+    if (vs_lobby_lobby_id() <= 0) return;
+    var q = vs_lobby_suggest_q();
+    if (array_length(q) <= 0) return;
+    var s = q[0];
+    var member = (s != undefined && variable_struct_exists(s, "member")) ? vs_lobby_find_member(s.member) : undefined;
+    var who = (member != undefined && variable_struct_exists(member, "name")) ? string(member.name) : "player";
+    var title = "Suggest";
+    var nm = vs_lobby_suggest_item_name(s);
+    var dlab = vs_lobby_diff_short(variable_struct_exists(s, "difficulty") ? s.difficulty : -1);
+    var body = nm;
+    if (dlab != "") body = nm + "  " + dlab;
+    var sub = who;
+    if (s != undefined && variable_struct_exists(s, "songId") && vs_online_song_from_id(s.songId) == undefined)
+    {
+        sub = who + "  (not local)";
+    }
+    var hint = vs_lobby_is_owner() ? "CONFIRM / ESCAPE" : "waiting for host";
+    var cw = display_get_gui_width();
+    var ch = display_get_gui_height();
+    var pw = min(220, max(120, cw - 8));
+    var ph = 56;
+    var px = 4;
+    var py = ch - ph - 4;
+    draw_set_alpha(1);
+    draw_set_color(c_black);
+    draw_rectangle(px - 2, py - 2, px + pw + 2, py + ph + 2, false);
+    draw_set_color(c_white);
+    draw_rectangle(px, py, px + pw, py + ph, true);
+    draw_set_font(fnt_monacovs);
+    draw_set_halign(fa_left);
+    draw_set_color(c_aqua);
+    draw_text(px + 6, py + 4, vs_dlbr_clip_text(title, pw - 12));
+    draw_set_font(global.default_font);
+    draw_set_color(c_white);
+    draw_text(px + 6, py + 16, vs_dlbr_clip_text(body, pw - 12));
+    draw_set_color(c_gray);
+    draw_text(px + 6, py + 28, vs_dlbr_clip_text(sub, pw - 12));
+    draw_set_color(c_yellow);
+    draw_text(px + 6, py + 42, vs_dlbr_clip_text(hint, pw - 12));
+    draw_set_color(c_white);
+}
+
 function vs_lobby_is_owner()
 {
     if (vs_online_is_custom())

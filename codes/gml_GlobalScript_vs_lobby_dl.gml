@@ -119,6 +119,7 @@ function vs_lobby_dl_cancel()
 
 function vs_lobby_dl_on_queue()
 {
+    vs_lobby_suggest_clear();
     var st = vs_lobby_dl_st();
     vs_lobby_resolve_queued_songs();
     var cid = vs_lobby_queued_chart_id();
