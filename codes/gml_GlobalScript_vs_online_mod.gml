@@ -835,6 +835,12 @@ function vs_online_probe_timeout()
 // `self._fn` read and crash).
 function vs_online_with_conn(_fn)
 {
+    var src = "";
+    if (variable_global_exists("vs_with_conn_src"))
+    {
+        src = string(global.vs_with_conn_src);
+        global.vs_with_conn_src = "";
+    }
     if (!vs_online_is_custom())
     {
         _fn();
@@ -857,8 +863,14 @@ function vs_online_with_conn(_fn)
     if (!variable_global_exists("vs_with_conn_q"))
     {
         global.vs_with_conn_q = [];
+        global.vs_with_conn_tag = [];
+    }
+    if (!variable_global_exists("vs_with_conn_tag") || !is_array(global.vs_with_conn_tag))
+    {
+        global.vs_with_conn_tag = [];
     }
     array_push(global.vs_with_conn_q, _fn);
+    array_push(global.vs_with_conn_tag, src);
     if (array_length(global.vs_with_conn_q) == 1)
     {
         vs_online_probe(vs_online_with_conn_probed);
@@ -868,21 +880,34 @@ function vs_online_with_conn(_fn)
 function vs_online_with_conn_probed(_ok)
 {
     var q = [];
+    var tags = [];
     if (variable_global_exists("vs_with_conn_q"))
     {
         q = global.vs_with_conn_q;
         global.vs_with_conn_q = [];
     }
+    if (variable_global_exists("vs_with_conn_tag") && is_array(global.vs_with_conn_tag))
+    {
+        tags = global.vs_with_conn_tag;
+        global.vs_with_conn_tag = [];
+    }
     var i = 0;
+    var abortedDlbr = false;
     repeat (array_length(q))
     {
         if (q[i] == undefined) { i++; continue; }
         if (_ok) { q[i](); }
+        else if (i < array_length(tags) && tags[i] == "dlbr")
+        {
+            if (!abortedDlbr)
+            {
+                vs_online_with_conn_abort();
+                abortedDlbr = true;
+            }
+        }
         else { vs_online_show_error(q[i]); }
         i++;
     }
-    // Keep lobby/downloader callbacks so Retry can still use them. Abort only
-    // when the player dismisses the dialog without retrying.
 }
 
 function vs_online_with_conn_abort()

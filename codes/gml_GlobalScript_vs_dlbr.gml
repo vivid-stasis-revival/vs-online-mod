@@ -5,8 +5,58 @@
 // in one CodeImportGroup so vs_* names resolve as global functions.
 // ============================================================================
 
+function vs_dlbr_session_now()
+{
+    if (!variable_global_exists("vs_dlbr_session")) global.vs_dlbr_session = 0;
+    return global.vs_dlbr_session;
+}
+
+function vs_dlbr_session_bump()
+{
+    global.vs_dlbr_session = vs_dlbr_session_now() + 1;
+    return global.vs_dlbr_session;
+}
+
+function vs_dlbr_self_ok()
+{
+    if (!instance_exists(id)) return false;
+    if (!instance_exists(vs_downloader_browser)) return false;
+    if (id != vs_downloader_browser.id) return false;
+    if (variable_instance_exists(id, "session") && session != vs_dlbr_session_now()) return false;
+    return true;
+}
+
+function vs_dlbr_drop_pending()
+{
+    if (variable_global_exists("vs_dlmgr_cb") && is_struct(global.vs_dlmgr_cb))
+    {
+        global.vs_dlmgr_cb.on_done = undefined;
+    }
+    if (variable_global_exists("vs_dlmgr_check_cb") && is_struct(global.vs_dlmgr_check_cb))
+    {
+        global.vs_dlmgr_check_cb.on_done = undefined;
+    }
+}
+
+function vs_dlbr_dismiss_connect_error()
+{
+    if (!instance_exists(vs_online_error)) return;
+    with (vs_online_error)
+    {
+        if (kind == "connect")
+        {
+            vs_online_with_conn_abort();
+            instance_destroy();
+        }
+    }
+}
+
 function vs_dlbr_open_from_menu()
 {
+    if (instance_exists(vs_downloader_browser))
+    {
+        with (vs_downloader_browser) instance_destroy();
+    }
     global.vs_dlbr_from_lobby = false;
     vs_dlbr_open_browser();
 }
@@ -14,13 +64,19 @@ function vs_dlbr_open_from_menu()
 function vs_dlbr_open_from_lobby()
 {
     if (!vs_online_is_custom()) return;
-    vs_dlbr_open_browser();
+    if (instance_exists(vs_downloader_browser))
+    {
+        with (vs_downloader_browser) instance_destroy();
+    }
     global.vs_dlbr_from_lobby = true;
+    vs_dlbr_open_browser();
     vs_media_pause_lobby();
 }
 
 function vs_dlbr_open_browser()
 {
+    vs_dlbr_session_bump();
+    vs_media_cancel();
     if (instance_exists(vs_downloader_browser))
     {
         with (vs_downloader_browser) instance_destroy();
@@ -33,6 +89,7 @@ function vs_dlbr_open_browser()
             do_step = method(id, vs_dlbr_step);
             do_draw = method(id, vs_dlbr_draw);
             do_destroy = method(id, vs_dlbr_on_close);
+            session = vs_dlbr_session_now();
             vs_dlbr_fetch_page();
         }
     }
@@ -331,15 +388,11 @@ function vs_dlbr_fetch_page()
         ? ((catalog == 3) ? "Loading packs..." : "Loading charts...")
         : "Search: \"" + query + "\" ...");
     vs_dlmgr_list(query, page, catalog, method(self, vs_dlbr_on_list));
-    if (instance_exists(vs_online_error))
-    {
-        loading = false;
-        vs_dlbr_set_status("Server unreachable.");
-    }
 }
 
 function vs_dlbr_on_list(_ok, _data)
 {
+    if (!vs_dlbr_self_ok()) return;
     loading = false;
     if (_ok && _data != undefined)
     {
@@ -368,6 +421,9 @@ function vs_dlbr_on_list(_ok, _data)
         total = 0;
         maxpage = 1;
         rows_all = [];
+        vs_dlbr_apply_filter();
+        vs_dlbr_set_status("Could not reach the server. Press R to retry, ESC to close.");
+        return;
     }
     vs_dlbr_apply_filter();
     vs_dlbr_selected_refresh();
@@ -393,6 +449,7 @@ function vs_dlbr_check_row_index(_ai)
 
 function vs_dlbr_on_pack_check(_ok, _need)
 {
+    if (!vs_dlbr_self_ok()) return;
     checking = false;
     var n = array_length(rows_all);
     var i = 0;
@@ -436,6 +493,7 @@ function vs_dlbr_on_pack_check(_ok, _need)
 
 function vs_dlbr_on_check(_ok, _need)
 {
+    if (!vs_dlbr_self_ok()) return;
     checking = false;
     var n = array_length(rows_all);
     var i = 0;
@@ -547,6 +605,7 @@ function vs_dlbr_start_download(_r)
 
 function vs_dlbr_on_download(_ok)
 {
+    if (!vs_dlbr_self_ok()) return;
     updating = false;
     vs_dlbr_close_detail();
     var cancelled = (variable_global_exists("vs_dlmgr_dl") && global.vs_dlmgr_dl.cancel)
@@ -637,6 +696,7 @@ function vs_dlbr_batch_next()
 
 function vs_dlbr_on_batch(_ok)
 {
+    if (!vs_dlbr_self_ok()) return;
     if ((variable_global_exists("vs_dlmgr_dl") && global.vs_dlmgr_dl.cancel)
         || (variable_global_exists("vs_pack_job") && global.vs_pack_job.cancel))
     {
@@ -858,21 +918,19 @@ function vs_dlbr_reload_data()
 function vs_dlbr_step()
 {
     vs_media_poll();
+    started++;
+    if (keyboard_check_pressed(vk_escape) && !searching && !updating && !detail_open)
+    {
+        instance_destroy();
+        return;
+    }
     if (instance_exists(vs_online_error))
     {
         if (loading)
         {
             loading = false;
-            vs_dlbr_set_status("Server unreachable.");
+            vs_dlbr_set_status("Could not reach the server. Press R to retry, ESC to close.");
         }
-        return;
-    }
-
-    started++;
-    if (keyboard_check_pressed(vk_escape) && !searching && !updating && !detail_open)
-    {
-        vs_media_stop_preview();
-        instance_destroy();
         return;
     }
     if (started < 8) return;
@@ -1229,7 +1287,11 @@ function vs_dlbr_draw_dl_popup()
 
 function vs_dlbr_on_close()
 {
+    vs_dlbr_session_bump();
+    vs_dlbr_drop_pending();
+    vs_media_cancel();
     vs_media_stop_preview();
+    vs_dlbr_dismiss_connect_error();
     var fromLobby = variable_global_exists("vs_dlbr_from_lobby") && global.vs_dlbr_from_lobby;
     global.vs_dlbr_from_lobby = false;
     if (fromLobby)
