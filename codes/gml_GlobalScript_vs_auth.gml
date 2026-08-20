@@ -49,7 +49,12 @@ function vs_auth_flow_started(_ok, _data, _status)
         message = "Could not start device flow. Is the server reachable?";
         var why = "json missing";
         if (_data != undefined) why = "no device_code";
-        vs_auth_note("device_authorization FAIL http=" + string(_status) + " " + why + " api=" + vs_online_server_url());
+        var preview = "";
+        if (variable_global_exists("vs_http_last_text") && string(global.vs_http_last_text) != "")
+        {
+            preview = " body=" + string_copy(string(global.vs_http_last_text), 1, 80);
+        }
+        vs_auth_note("device_authorization FAIL http=" + string(_status) + " " + why + " api=" + vs_online_server_url() + preview);
     }
 }
 
