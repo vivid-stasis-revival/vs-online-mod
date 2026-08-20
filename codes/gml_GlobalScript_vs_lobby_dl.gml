@@ -697,6 +697,34 @@ function vs_lobby_dl_menu_apply(_acts)
     }
 }
 
+function vs_lobby_dlbr_menu_apply(_acts)
+{
+    if (_acts == undefined || !is_array(_acts)) return;
+    var want = vs_online_is_custom();
+    var have = vs_lobby_dl_menu_find(_acts, "opendownloader");
+    if (want)
+    {
+        if (have >= 0) return;
+        var slot = vs_lobby_dl_menu_find(_acts, "choosesong");
+        if (slot >= 0) slot += 1;
+        else
+        {
+            slot = vs_lobby_dl_menu_find(_acts, "leavelobby");
+            if (slot < 0) slot = array_length(_acts);
+        }
+        vs_lobby_menu_insert(_acts, slot, "Downloader", "opendownloader");
+        return;
+    }
+    if (have >= 0)
+    {
+        array_delete(_acts, have, 1);
+        if (instance_exists(obj_multiplayer_lobby) && obj_multiplayer_lobby.cursor_pos >= array_length(_acts))
+        {
+            obj_multiplayer_lobby.cursor_pos = max(0, array_length(_acts) - 1);
+        }
+    }
+}
+
 function vs_lobby_dl_menu_sync()
 {
     if (!instance_exists(obj_multiplayer_lobby)) return;
@@ -704,5 +732,7 @@ function vs_lobby_dl_menu_sync()
     {
         vs_lobby_dl_menu_apply(menu_actions_player);
         vs_lobby_dl_menu_apply(menu_actions_host);
+        vs_lobby_dlbr_menu_apply(menu_actions_player);
+        vs_lobby_dlbr_menu_apply(menu_actions_host);
     }
 }

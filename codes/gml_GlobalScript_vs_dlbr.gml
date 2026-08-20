@@ -7,6 +7,20 @@
 
 function vs_dlbr_open_from_menu()
 {
+    global.vs_dlbr_from_lobby = false;
+    vs_dlbr_open_browser();
+}
+
+function vs_dlbr_open_from_lobby()
+{
+    if (!vs_online_is_custom()) return;
+    vs_dlbr_open_browser();
+    global.vs_dlbr_from_lobby = true;
+    vs_media_pause_lobby();
+}
+
+function vs_dlbr_open_browser()
+{
     if (instance_exists(vs_downloader_browser))
     {
         with (vs_downloader_browser) instance_destroy();
@@ -744,6 +758,11 @@ function vs_dlbr_reload_local()
 function vs_dlbr_jump_chart(_chartId, _kind, _name)
 {
     if (_chartId == undefined || _chartId == "") return;
+    if (variable_global_exists("vs_dlbr_from_lobby") && global.vs_dlbr_from_lobby)
+    {
+        vs_dlbr_set_status("Stay in the lobby. Close Downloader to go back.");
+        return;
+    }
     vs_localcharts_refresh();
     if (_kind == 2)
     {
@@ -1211,6 +1230,13 @@ function vs_dlbr_draw_dl_popup()
 function vs_dlbr_on_close()
 {
     vs_media_stop_preview();
+    var fromLobby = variable_global_exists("vs_dlbr_from_lobby") && global.vs_dlbr_from_lobby;
+    global.vs_dlbr_from_lobby = false;
+    if (fromLobby)
+    {
+        vs_media_resume_lobby();
+        return;
+    }
     global.vs_dlbr_need_menu = true;
     call_later(1, time_source_units_frames, vs_dlbr_restore_menu);
 }
