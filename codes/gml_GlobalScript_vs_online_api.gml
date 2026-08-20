@@ -266,6 +266,26 @@ function vs_http_looks_json(_text)
     return false;
 }
 
+// Windows runners often put http_request bodies in a buffer, or fire
+// status=0 with result "0"/empty before the JSON string arrives.
+function vs_http_async_text()
+{
+    var raw = ds_map_find_value(async_load, "result");
+    if (raw == undefined) return "";
+    if (is_string(raw)) return vs_utf8_fix_string(raw);
+    var kind = typeof(raw);
+    if (kind != "ref" && kind != "number") return "";
+    if (is_real(raw) && raw <= 0) return "";
+    if (!buffer_exists(raw)) return "";
+    var sz = buffer_get_size(raw);
+    if (sz <= 0) return "";
+    var pos = buffer_tell(raw);
+    buffer_seek(raw, buffer_seek_start, 0);
+    var out = vs_utf8_from_buffer(raw);
+    buffer_seek(raw, buffer_seek_start, pos);
+    return out;
+}
+
 function vs_http_file_here(_rel)
 {
     if (_rel == undefined || _rel == "") return false;
@@ -591,7 +611,7 @@ function vs_http_on_async()
     }
     var gmStatus = vs_http_num(ds_map_find_value(async_load, "status"), -1);
     var httpStatus = vs_http_num(ds_map_find_value(async_load, "http_status"), -1);
-    var text = vs_utf8_fix_string(ds_map_find_value(async_load, "result"));
+    var text = vs_http_async_text();
     if (gmStatus == 1)
     {
         var cl = vs_http_num(ds_map_find_value(async_load, "contentLength"), -1);
@@ -610,12 +630,12 @@ function vs_http_on_async()
         {
             return false;
         }
-        // status=1 result is often "0" / byte count, not the JSON body.
-        // Completing here made oauth device_authorization FAIL at http=200.
-        if (job.json && !vs_http_looks_json(text))
-        {
-            return false;
-        }
+    }
+    // status=1 result is often "0" / a byte count. Some Windows builds also
+    // fire status=0 with that same stub before the JSON string/buffer.
+    if (job.json && httpStatus >= 200 && httpStatus < 400 && !vs_http_looks_json(text))
+    {
+        if (gmStatus == 1 || text == "" || text == "0") return false;
     }
     var ok = false;
     if (httpStatus >= 200 && httpStatus < 300)
@@ -687,6 +707,7 @@ function vs_http_complete(_job, _ok, _text, _status)
 
 function vs_http_finish(_job, _ok, _text, _status)
 {
+    global.vs_http_last_text = (_text == undefined) ? "" : string(_text);
     var data = _text;
     if (_job.json)
     {
@@ -845,7 +866,10 @@ function vs_online_create_player(_on_done)
 function vs_online_oauth_post(_path, _formBody, _on_done)
 {
     var url = vs_online_server_url() + _path;
-    vs_http_request_ex(url, "POST", "Content-Type: application/x-www-form-urlencoded\r\n", _formBody, _on_done, true, "", "");
+    var hdr = {};
+    variable_struct_set(hdr, "Content-Type", "application/x-www-form-urlencoded");
+    variable_struct_set(hdr, "Accept", "application/json");
+    vs_http_request_ex(url, "POST", hdr, _formBody, _on_done, true, "", "");
 }
 
 function vs_online_oauth_start(_on_done)
