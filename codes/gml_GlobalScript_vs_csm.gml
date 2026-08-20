@@ -917,6 +917,46 @@ function vs_csm_hs_get_shatter(_id, _field)
     return vs_csm_hs_field(global.highscores.shatter[_id], _field);
 }
 
+function vs_csm_hs_row(_id, _diff)
+{
+    if (!variable_global_exists("highscores") || _id == undefined || !is_real(_id) || _id < 0)
+        return undefined;
+    if (_id >= array_length(global.highscores.normal)) return undefined;
+    var di = vs_csm_hs_diff_index(_diff);
+    var rows = global.highscores.normal[_id];
+    if (rows == undefined || !is_array(rows) || di < 0 || di >= array_length(rows)) return undefined;
+    return rows[di];
+}
+
+function vs_csm_hs_store_play(_id, _diff, _score, _ex)
+{
+    var row = vs_csm_hs_row(_id, _diff);
+    if (row == undefined) return;
+    var cur = vs_csm_row_score(row);
+    if (_score > cur) variable_struct_set(row, "score", _score);
+    var g = variable_struct_get(row, "game_score");
+    if (g == undefined || !is_real(g) || _ex > g) variable_struct_set(row, "game_score", _ex);
+    save_highscores();
+}
+
+function vs_csm_hs_store_lamp(_id, _diff, _lamp)
+{
+    var row = vs_csm_hs_row(_id, _diff);
+    if (row == undefined) return;
+    var l = variable_struct_get(row, "lamp");
+    if (l == undefined || !is_real(l) || _lamp > l) variable_struct_set(row, "lamp", _lamp);
+    save_highscores();
+}
+
+function vs_csm_hs_store_combo(_id, _diff, _combo)
+{
+    var row = vs_csm_hs_row(_id, _diff);
+    if (row == undefined) return;
+    var c = variable_struct_get(row, "max_combo");
+    if (c == undefined || !is_real(c) || _combo > c) variable_struct_set(row, "max_combo", _combo);
+    save_highscores();
+}
+
 function vs_csm_scores_merge_start()
 {
     if (!vs_online_is_custom() || !vs_online_is_account()) return;

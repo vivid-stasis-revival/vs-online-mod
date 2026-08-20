@@ -1150,13 +1150,13 @@
     {
         "Entry": "gml_GlobalScript_save_highscores",
         "Find": "    for (var i = 0; i < array_length(global.highscores.normal); i++)\n    {\n        var diff_names = [\"OPENING\", \"MIDDLE\", \"FINALE\", \"ENCORE\", \"PRELUDE\"];",
-        "Value": "    for (var i = 0; i < array_length(global.highscores.normal); i++)\n    {\n        if (vs_online_is_custom() && i < array_length(global.song_list) && struct_exists(global.song_list[i], \"is_custom\")) continue;\n        var diff_names = [\"OPENING\", \"MIDDLE\", \"FINALE\", \"ENCORE\", \"PRELUDE\"];",
+        "Value": "    for (var i = 0; i < array_length(global.highscores.normal); i++)\n    {\n        if (i < array_length(global.song_list) && struct_exists(global.song_list[i], \"is_custom\")) continue;\n        var diff_names = [\"OPENING\", \"MIDDLE\", \"FINALE\", \"ENCORE\", \"PRELUDE\"];",
         "Type": 1
     },
     {
         "Entry": "gml_GlobalScript_save_highscores",
         "Find": "    for (var i = 0; i < array_length(global.highscores.shatter); i++)\n    {\n        var props = [[\"score\", \"\"], [\"game_score\", \"_GAME\"], [\"game_perc\", \"_GAMEPERC\"], [\"max_combo\", \"_MAXCOMBO\"], [\"lamp\", \"_COMBO\"]];",
-        "Value": "    for (var i = 0; i < array_length(global.highscores.shatter); i++)\n    {\n        if (vs_online_is_custom() && i < array_length(global.shatter_list) && struct_exists(global.shatter_list[i], \"is_custom\")) continue;\n        var props = [[\"score\", \"\"], [\"game_score\", \"_GAME\"], [\"game_perc\", \"_GAMEPERC\"], [\"max_combo\", \"_MAXCOMBO\"], [\"lamp\", \"_COMBO\"]];",
+        "Value": "    for (var i = 0; i < array_length(global.highscores.shatter); i++)\n    {\n        if (i < array_length(global.shatter_list) && struct_exists(global.shatter_list[i], \"is_custom\")) continue;\n        var props = [[\"score\", \"\"], [\"game_score\", \"_GAME\"], [\"game_perc\", \"_GAMEPERC\"], [\"max_combo\", \"_MAXCOMBO\"], [\"lamp\", \"_COMBO\"]];",
         "Type": 1
     },
     {
@@ -1193,6 +1193,48 @@
         "Entry": "gml_Object_o_songselect_top_Draw_64",
         "Find": "highscore = get_value_from_highscore_table(song.song_id, diffCHART, 0);\nhighgamescore = get_value_from_highscore_table(song.song_id, diffCHART, 1);\nhighscore = string_repeat(\"0\", 7 - string_length(string(round(highscore)))) + string(round(highscore));\nhighscore = string_insert(\",\", highscore, 2);\nhighscore = string_insert(\",\", highscore, 6);\ncomborecord = get_combo_from_highscore_table(song.song_id, diffCHART);",
         "Value": "if (variable_struct_exists(song, \"is_custom\"))\n{\n    highscore = shatter ? vs_csm_hs_get_shatter(song.song_id, 0) : vs_csm_hs_get(song.song_id, diffCHART, 0);\n    highgamescore = shatter ? vs_csm_hs_get_shatter(song.song_id, 1) : vs_csm_hs_get(song.song_id, diffCHART, 1);\n    comborecord = shatter ? vs_csm_hs_get_shatter(song.song_id, 3) : vs_csm_hs_get(song.song_id, diffCHART, 3);\n}\nelse\n{\n    highscore = get_value_from_highscore_table(song.song_id, diffCHART, 0);\n    highgamescore = get_value_from_highscore_table(song.song_id, diffCHART, 1);\n    comborecord = get_combo_from_highscore_table(song.song_id, diffCHART);\n}\nhighscore = string_repeat(\"0\", 7 - string_length(string(round(highscore)))) + string(round(highscore));\nhighscore = string_insert(\",\", highscore, 2);\nhighscore = string_insert(\",\", highscore, 6);",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_Object_obj_results_Create_0",
+        "Find": "global.lasthighscore = get_value_from_highscore_table(global.song_id_last, global.df_load, 0);\nglobal.lastgamescore = get_value_from_highscore_table(global.song_id_last, global.df_load, 1);",
+        "Value": "if (vs_csm_song_is_custom(global.song_id_last))\n{\n    global.lasthighscore = vs_csm_hs_get(global.song_id_last, global.df_load, 0);\n    global.lastgamescore = vs_csm_hs_get(global.song_id_last, global.df_load, 1);\n}\nelse\n{\n    global.lasthighscore = get_value_from_highscore_table(global.song_id_last, global.df_load, 0);\n    global.lastgamescore = get_value_from_highscore_table(global.song_id_last, global.df_load, 1);\n}",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_Object_obj_results_Create_0",
+        "Find": "        add_value_to_highscore_table(global.song_id_last, global.df_load, global.currentscore, global.gamescore);",
+        "Value": "        if (vs_csm_song_is_custom(global.song_id_last)) vs_csm_hs_store_play(global.song_id_last, global.df_load, global.currentscore, global.gamescore); else add_value_to_highscore_table(global.song_id_last, global.df_load, global.currentscore, global.gamescore);",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_Object_obj_results_Create_0",
+        "Find": "add_value_to_combo_table(global.song_id_last, global.df_load, global.maxcombo);",
+        "Value": "if (vs_csm_song_is_custom(global.song_id_last)) vs_csm_hs_store_combo(global.song_id_last, global.df_load, global.maxcombo); else add_value_to_combo_table(global.song_id_last, global.df_load, global.maxcombo);",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_Object_obj_results_Create_0",
+        "Find": "            ini_write_real(string(global.song_id_last), global.df_load + \"_COMBO\", 2);",
+        "Value": "            if (vs_csm_song_is_custom(global.song_id_last)) vs_csm_hs_store_lamp(global.song_id_last, global.df_load, 2); else ini_write_real(string(global.song_id_last), global.df_load + \"_COMBO\", 2);",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_Object_obj_results_Create_0",
+        "Find": "            ini_write_real(string(global.song_id_last), global.df_load + \"_COMBO\", 1);",
+        "Value": "            if (vs_csm_song_is_custom(global.song_id_last)) vs_csm_hs_store_lamp(global.song_id_last, global.df_load, 1); else ini_write_real(string(global.song_id_last), global.df_load + \"_COMBO\", 1);",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_Object_obj_resultsOld_Create_0",
+        "Find": "global.lasthighscore = get_value_from_highscore_table(global.song_id_last, global.df_load, 0);\nglobal.lastgamescore = get_value_from_highscore_table(global.song_id_last, global.df_load, 1);",
+        "Value": "if (vs_csm_song_is_custom(global.song_id_last))\n{\n    global.lasthighscore = vs_csm_hs_get(global.song_id_last, global.df_load, 0);\n    global.lastgamescore = vs_csm_hs_get(global.song_id_last, global.df_load, 1);\n}\nelse\n{\n    global.lasthighscore = get_value_from_highscore_table(global.song_id_last, global.df_load, 0);\n    global.lastgamescore = get_value_from_highscore_table(global.song_id_last, global.df_load, 1);\n}",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_Object_obj_resultsOld_Create_0",
+        "Find": "        add_value_to_highscore_table(global.song_id_last, global.df_load, global.currentscore, global.gamescore);",
+        "Value": "        if (vs_csm_song_is_custom(global.song_id_last)) vs_csm_hs_store_play(global.song_id_last, global.df_load, global.currentscore, global.gamescore); else add_value_to_highscore_table(global.song_id_last, global.df_load, global.currentscore, global.gamescore);",
         "Type": 1
     },
     {
