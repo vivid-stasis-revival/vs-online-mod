@@ -278,7 +278,7 @@
     {
         "Entry": "gml_Object_obj_multiplayer_lobby_Create_0",
         "Find": "        song: global.song_list[s.songId],",
-        "Value": "        song: vs_online_song_from_id(s.songId) ?? vs_online_missing_song(vs_online_queue_chart_id(s)),",
+        "Value": "        song: song,",
         "Type": 1
     },
     {
@@ -605,7 +605,7 @@
     {
         "Entry": "gml_Object_obj_multiplayer_lobby_Create_0",
         "Find": "var s = o_st_handle.songQueue[0];",
-        "Value": "var s = o_st_handle.songQueue[0];var song = struct_copy(vs_online_song_from_id(s.songId) ?? vs_online_missing_song(vs_online_queue_chart_id(s)));",
+        "Value": "var q = vs_lobby_queue_confirm_song(); if (q == undefined) return; var s = o_st_handle.songQueue[0]; var song = struct_copy(q.song); if (!vs_lobby_song_has_diff(song, 3)) song.has_encore = false;",
         "Type": 0
     },
     {
@@ -846,8 +846,20 @@
     },
     {
         "Entry": "gml_Object_o_songselect_newconfirm_Create_0",
+        "Find": "var has_encore = !betweenspace_mode && song.has_encore && struct_get_fallback(song, \"show_encore\", true) && (global.unlocked_songs[song.song_id][3]",
+        "Value": "vs_lobby_unlock_pad_id(variable_struct_exists(song, \"song_id\") ? song.song_id : -1);var has_encore = !betweenspace_mode && song.has_encore && struct_get_fallback(song, \"show_encore\", true) && (is_real(song.song_id) && song.song_id >= 0 && array_length(global.unlocked_songs) > song.song_id && global.unlocked_songs[song.song_id][3]",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_Object_o_songselect_newconfirm_Create_0",
         "Find": "var max_d = has_encore ? 4 : 3;",
-        "Value": "has_encore |= song.has_encore && global.multiplayerLobby;var max_d = has_encore ? 4 : 3;",
+        "Value": "if (global.multiplayerLobby) has_encore = vs_lobby_song_has_diff(song, 3);var max_d = has_encore ? 4 : 3;",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_Object_o_songselect_newconfirm_Create_0",
+        "Find": "unlocked: global.unlocked_songs[song.song_id][d]",
+        "Value": "unlocked: (is_real(song.song_id) && song.song_id >= 0 && array_length(global.unlocked_songs) > song.song_id) ? global.unlocked_songs[song.song_id][d] : true",
         "Type": 0
     },
     {

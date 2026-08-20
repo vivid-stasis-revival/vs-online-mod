@@ -305,6 +305,7 @@ function vs_lobby_resolve_queued_songs()
     }
     vs_lobby_resolve_song_ref(o_st_handle.previousSong);
     vs_lobby_resolve_song_ref(o_st_handle.shadowSong);
+    vs_lobby_fix_queue_diff();
 }
 
 function vs_lobby_resolve_song_ref(_s)
@@ -316,6 +317,125 @@ function vs_lobby_resolve_song_ref(_s)
     var sid = vs_online_song_id_from_chart(cid);
     if (sid >= 0) _s.songId = sid;
     else vs_chartmeta_want(cid);
+}
+
+// After a lobby download, song_list grows but process_song_unlocks may not
+// have run yet. Ready/Options then indexes unlocked_songs[song.song_id] and
+// crashes (index == length). Pad so confirm Create is always in range.
+function vs_lobby_unlock_pad()
+{
+    if (!variable_global_exists("unlocked_songs") || !is_array(global.unlocked_songs))
+    {
+        global.unlocked_songs = [];
+    }
+    var n = 0;
+    if (variable_global_exists("song_list") && is_array(global.song_list))
+    {
+        n = array_length(global.song_list);
+    }
+    while (array_length(global.unlocked_songs) < n)
+    {
+        array_push(global.unlocked_songs, [true, true, true, true]);
+    }
+}
+
+function vs_lobby_unlock_pad_id(_id)
+{
+    vs_lobby_unlock_pad();
+    if (!is_real(_id) || _id < 0) return;
+    while (array_length(global.unlocked_songs) <= _id)
+    {
+        array_push(global.unlocked_songs, [true, true, true, true]);
+    }
+}
+
+function vs_lobby_song_has_diff(_song, _d)
+{
+    if (_song == undefined) return false;
+    if (!is_real(_d) || _d < 0 || _d > 3) return false;
+    if (variable_struct_exists(_song, "allowed_difficulties") && is_array(_song.allowed_difficulties))
+    {
+        var found = false;
+        var ai = 0;
+        repeat (array_length(_song.allowed_difficulties))
+        {
+            if (_song.allowed_difficulties[ai] == _d)
+            {
+                found = true;
+                break;
+            }
+            ai++;
+        }
+        if (!found) return false;
+    }
+    var dir = struct_get_fallback(_song, "chart_load_dir", struct_get_fallback(_song, "chart_path", ""));
+    var custom = (variable_struct_exists(_song, "is_custom") && _song.is_custom)
+        || (is_string(dir) && string_pos("Custom Songs", dir) > 0);
+    if (custom && string(dir) != "")
+    {
+        var names = ["OPENING", "MIDDLE", "FINALE", "ENCORE"];
+        return vs_csm_chart_file_exists(dir, names[_d]);
+    }
+    if (_d == 3)
+    {
+        var he = struct_get_fallback(_song, "has_encore", false);
+        return (he == true || he == 1 || he == "1.0");
+    }
+    return true;
+}
+
+function vs_lobby_clamp_diff(_song, _d)
+{
+    var d = is_real(_d) ? floor(_d) : 0;
+    if (vs_lobby_song_has_diff(_song, d)) return d;
+    var i = 0;
+    repeat (4)
+    {
+        if (vs_lobby_song_has_diff(_song, i)) return i;
+        i++;
+    }
+    return 0;
+}
+
+function vs_lobby_fix_queue_diff()
+{
+    if (!instance_exists(o_st_handle)) return;
+    if (!is_array(o_st_handle.songQueue) || array_length(o_st_handle.songQueue) <= 0) return;
+    var s = o_st_handle.songQueue[0];
+    if (s == undefined) return;
+    var song = undefined;
+    if (variable_struct_exists(s, "songId")) song = vs_online_song_from_id(s.songId);
+    if (song == undefined) return;
+    vs_lobby_unlock_pad_id(struct_get_fallback(song, "song_id", s.songId));
+    if (!vs_lobby_song_has_diff(song, 3)) song.has_encore = false;
+    var d = 0;
+    if (variable_struct_exists(s, "difficulty") && is_real(s.difficulty)) d = s.difficulty;
+    else if (variable_global_exists("songselect_difficulty") && is_real(global.songselect_difficulty))
+    {
+        d = global.songselect_difficulty;
+    }
+    d = vs_lobby_clamp_diff(song, d);
+    s.difficulty = d;
+    global.songselect_difficulty = d;
+}
+
+function vs_lobby_queue_confirm_song()
+{
+    vs_lobby_resolve_queued_songs();
+    vs_lobby_unlock_pad();
+    if (!instance_exists(o_st_handle)) return undefined;
+    if (!is_array(o_st_handle.songQueue) || array_length(o_st_handle.songQueue) <= 0) return undefined;
+    var s = o_st_handle.songQueue[0];
+    if (s == undefined) return undefined;
+    var song = undefined;
+    if (variable_struct_exists(s, "songId")) song = vs_online_song_from_id(s.songId);
+    if (song == undefined) return undefined;
+    vs_lobby_unlock_pad_id(struct_get_fallback(song, "song_id", s.songId));
+    if (!vs_lobby_song_has_diff(song, 3)) song.has_encore = false;
+    var d = vs_lobby_clamp_diff(song, variable_struct_exists(s, "difficulty") ? s.difficulty : 0);
+    s.difficulty = d;
+    global.songselect_difficulty = d;
+    return { song: song, difficulty: d };
 }
 
 // --- steam_* shims (used via codepatches so the WP UI reads server state) ---
@@ -427,19 +547,16 @@ function vs_member_set_flag(_m, _v)
 
 function vs_lobby_local_play_diff()
 {
-    if (variable_global_exists("songselect_difficulty") && global.songselect_difficulty != undefined)
-    {
-        return global.songselect_difficulty;
-    }
-    if (variable_global_exists("df_load") && global.df_load != undefined && string(global.df_load) != "")
-    {
-        return vs_online_diff_index(global.df_load);
-    }
+    vs_lobby_fix_queue_diff();
     if (!instance_exists(o_st_handle)) return -1;
     if (!is_array(o_st_handle.songQueue) || array_length(o_st_handle.songQueue) <= 0) return -1;
     var s = o_st_handle.songQueue[0];
     if (s == undefined) return -1;
     if (variable_struct_exists(s, "difficulty")) return s.difficulty;
+    if (variable_global_exists("songselect_difficulty") && global.songselect_difficulty != undefined)
+    {
+        return global.songselect_difficulty;
+    }
     return -1;
 }
 
