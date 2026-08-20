@@ -332,6 +332,12 @@
     },
     {
         "Entry": "gml_Object_o_st_handle_Create_0",
+        "Find": "        if (member.id == arg0)",
+        "Value": "        if (member.id == arg0 || (vs_online_is_custom() && string(member.id) == string(arg0)))",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_Object_o_st_handle_Create_0",
         "Find": "lobbyId = undefined;\nlobbyCode = undefined;\ncurrentMember = undefined;",
         "Value": "lobbyId = undefined;\nlobbyCode = undefined;\nvs_hostId = undefined;\nsuggestQueue = [];\ncurrentMember = undefined;",
         "Type": 1

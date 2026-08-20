@@ -1446,10 +1446,21 @@ function vs_lobby_spi_unmark(_id)
     variable_struct_set(vs_lobby_spi_st(), k, false);
 }
 
-function vs_lobby_host_sync(_why)
+function vs_lobby_host_sync(_why, _from)
 {
     if (!vs_lobby_is_owner()) return;
     if (!instance_exists(o_st_handle)) return;
+    if (_from == undefined) _from = "";
+    var fromId = string(_from);
+    if (fromId != "")
+    {
+        if (!vs_lobby_spi_need_sync(fromId))
+        {
+            vs_lobby_log("host sync skip " + string(_why) + " already from=" + fromId);
+            return;
+        }
+        vs_lobby_spi_mark(fromId);
+    }
     vs_lobby_log("host sync " + string(_why) + " queue/info/score");
     send_packet(SendQueuePacket);
     send_packet(SendPlayerInfoPacket);
@@ -1467,6 +1478,27 @@ function vs_lobby_host_sync(_why)
     }
 }
 
+function vs_lobby_find_member(_id)
+{
+    if (!instance_exists(o_st_handle)) return undefined;
+    var want = string(_id);
+    if (want == "") return undefined;
+    var i = 0;
+    repeat (array_length(o_st_handle.lobbyMembers))
+    {
+        var m = o_st_handle.lobbyMembers[i];
+        if (m != undefined && string(m.id) == want) return m;
+        i++;
+    }
+    return undefined;
+}
+
+function vs_lobby_fetch_clear()
+{
+    global.vs_lobby_mem_http = false;
+    global.vs_lobby_mem_again = false;
+}
+
 // Matchmake into an existing room now emits member_joined (same as join).
 // A packet from an unknown sender still gets a stub so official receive()
 // does not crash; GET /members then fills name/avatar/host from the server roster.
@@ -1474,7 +1506,7 @@ function vs_lobby_ensure_sender(_senderId)
 {
     if (!instance_exists(o_st_handle)) return false;
     if (_senderId == undefined || string(_senderId) == "") return false;
-    if (o_st_handle.getMember(_senderId) != undefined) return false;
+    if (vs_lobby_find_member(_senderId) != undefined) return false;
     vs_lobby_log("ensure sender stub id=" + string(_senderId));
     array_push(o_st_handle.lobbyMembers, vs_lobby_build_member({
         playerId: _senderId,
@@ -1484,10 +1516,7 @@ function vs_lobby_ensure_sender(_senderId)
         order: array_length(o_st_handle.lobbyMembers)
     }));
     vs_lobby_fetch_members("unknown sender");
-    if (vs_lobby_is_owner())
-    {
-        vs_lobby_host_sync("ensure sender");
-    }
+    vs_lobby_host_sync("ensure sender", _senderId);
     return true;
 }
 
@@ -1496,6 +1525,14 @@ function vs_lobby_fetch_members(_why)
     if (!instance_exists(o_st_handle) || o_st_handle.lobbyCode == undefined) return;
     var code = string(o_st_handle.lobbyCode);
     if (code == "") return;
+    if (variable_global_exists("vs_lobby_mem_http") && global.vs_lobby_mem_http == true)
+    {
+        global.vs_lobby_mem_again = true;
+        vs_lobby_log("GET /members defer " + string(_why));
+        return;
+    }
+    global.vs_lobby_mem_http = true;
+    global.vs_lobby_mem_again = false;
     vs_lobby_log("GET /members " + string(_why) + " code=" + code);
     vs_online_get_json("/api/v1/lobbies/" + code + "/members", true, vs_lobby_fetch_members_done);
 }
@@ -1503,17 +1540,21 @@ function vs_lobby_fetch_members(_why)
 function vs_lobby_fetch_members_done(_ok, _data, _status)
 {
     vs_lobby_log("GET /members result " + vs_lobby_http_why(_ok, _data, _status));
-    if (!_ok || _data == undefined || !variable_struct_exists(_data, "members")) return;
-    if (!is_array(_data.members)) return;
-    if (!instance_exists(o_st_handle)) return;
-    vs_lobby_apply_roster(_data.members);
-    o_st_handle.currentMember = o_st_handle.getMember(vs_online_player_id());
-    var hid = vs_lobby_get_host_id();
-    if (hid != "")
+    global.vs_lobby_mem_http = false;
+    var again = variable_global_exists("vs_lobby_mem_again") && global.vs_lobby_mem_again == true;
+    global.vs_lobby_mem_again = false;
+    if (_ok && _data != undefined && variable_struct_exists(_data, "members") && is_array(_data.members) && instance_exists(o_st_handle) && vs_lobby_has_code())
     {
-        vs_lobby_refresh_host_flags(hid);
+        vs_lobby_apply_roster(_data.members);
+        o_st_handle.currentMember = vs_lobby_find_member(vs_online_player_id());
+        var hid = vs_lobby_get_host_id();
+        if (hid != "")
+        {
+            vs_lobby_refresh_host_flags(hid);
+        }
+        vs_lobby_refresh_ui();
     }
-    vs_lobby_refresh_ui();
+    if (again && vs_lobby_has_code()) vs_lobby_fetch_members("deferred");
 }
 
 function vs_lobby_http_why(_ok, _data, _status)
@@ -1920,6 +1961,7 @@ function vs_lobby_reset()
     vs_lobby_ops_end();
     vs_lobby_dl_cancel();
     vs_lobby_send_q_clear();
+    vs_lobby_fetch_clear();
     vs_lobby_spi_unmark("");
     vs_ws_close();
     if (instance_exists(o_st_handle))
@@ -2045,11 +2087,7 @@ function vs_online_on_ws_frame(_op, _payload)
             && vs_lobby_is_owner()
             && senderId != vs_online_player_id())
         {
-            if (vs_lobby_spi_need_sync(senderId))
-            {
-                vs_lobby_spi_mark(senderId);
-                vs_lobby_host_sync("recv SendPlayerInfo from=" + senderId);
-            }
+            vs_lobby_host_sync("recv SendPlayerInfo from=" + senderId, senderId);
             vs_lobby_refresh_ui();
         }
     }
@@ -2133,8 +2171,9 @@ function vs_lobby_handle_control(_j)
                 // the WS-attach notify (connected:true) before SendQueue.
                 if (connected && mid != vs_online_player_id())
                 {
-                    vs_lobby_spi_mark(mid);
-                    vs_lobby_host_sync("member_joined");
+                    // Reconnect must sync again; SPI one-shot would skip otherwise.
+                    vs_lobby_spi_unmark(mid);
+                    vs_lobby_host_sync("member_joined", mid);
                 }
                 else
                 {
