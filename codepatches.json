@@ -163,8 +163,8 @@
 
     {
         "Entry": "gml_Object_obj_multiplayer_waiting_room_Step_0",
-        "Find": "steam_lobby_is_owner()",
-        "Value": "vs_lobby_is_owner()",
+        "Find": "if (steam_lobby_is_owner() && !transition)",
+        "Value": "if (vs_online_is_custom()) vs_lobby_wait_step();\nif (vs_lobby_is_owner() && !transition)",
         "Type": 0
     },
     {
@@ -182,13 +182,19 @@
     {
         "Entry": "gml_Object_obj_multiplayer_waiting_room_Create_0",
         "Find": "send_packet(ReportScorePacket, ",
-        "Value": "if (vs_online_is_custom()) vs_lobby_log(\"report_score pts=\" + string(global.currentscore) + \" flag=\" + string(flag)); send_packet(ReportScorePacket, ",
+        "Value": "if (vs_online_is_custom()) { vs_lobby_wait_begin(); vs_lobby_log(\"report_score pts=\" + string(global.currentscore) + \" flag=\" + string(flag)); } send_packet(ReportScorePacket, ",
         "Type": 1
     },
     {
         "Entry": "gml_Object_obj_multiplayer_waiting_room_Create_0",
         "Find": "    score: global.currentscore,",
         "Value": "    score_: global.currentscore,",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_Object_obj_multiplayer_waiting_room_Draw_0",
+        "Find": "draw_text(10, 10, \"Waiting for results...\");",
+        "Value": "if (vs_online_is_custom()) vs_lobby_wait_draw(); else draw_text(10, 10, \"Waiting for results...\");",
         "Type": 0
     },
     {
@@ -884,6 +890,12 @@
         "Entry": "gml_Object_o_score_updater_Draw_64",
         "Value": "if (variable_global_exists(\"op_bwp_hide_leaderboard\") && global.op_bwp_hide_leaderboard == 1) exit;",
         "Type": 2
+    },
+    {
+        "Entry": "gml_GlobalScript_StartGamePacket",
+        "Find": "                members[i].reportedScore = false;",
+        "Value": "                if (vs_online_is_custom() && !vs_lobby_member_connected(members[i])) members[i].reportedScore = true; else members[i].reportedScore = false;",
+        "Type": 0
     },
     {
         "Entry": "gml_GlobalScript_StartGamePacket",
