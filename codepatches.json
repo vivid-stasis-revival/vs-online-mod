@@ -200,7 +200,7 @@
     {
         "Entry": "gml_GlobalScript_SendQueuePacket",
         "Find": "        o_st_handle.songQueue = arg0;",
-        "Value": "        o_st_handle.songQueue = arg0; vs_lobby_dl_on_queue(); send_packet(SendPlayerInfoPacket); if (vs_online_is_custom()) vs_lobby_log(\"queue recv n=\" + string(array_length(arg0)));",
+        "Value": "        o_st_handle.songQueue = arg0; vs_lobby_dl_on_queue(); if (vs_online_is_custom()) vs_lobby_log(\"queue recv n=\" + string(array_length(arg0)));",
         "Type": 1
     },
     {

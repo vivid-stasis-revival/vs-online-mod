@@ -1253,6 +1253,7 @@ function vs_lobby_remove_member(_id)
         if (o_st_handle.lobbyMembers[i].id != undefined && string(o_st_handle.lobbyMembers[i].id) == string(_id))
         {
             array_delete(o_st_handle.lobbyMembers, i, 1);
+            vs_lobby_spi_unmark(_id);
             break;
         }
         i++;
@@ -1410,6 +1411,41 @@ function vs_lobby_pkt_quiet(_type)
 // REST / matchmake member_joined is too early (guest WS is still down). The
 // server notifies again on WS attach with connected:true; SendPlayerInfo from
 // the joiner is a third fallback.
+function vs_lobby_spi_st()
+{
+    if (!variable_global_exists("vs_lobby_spi_ok") || !is_struct(global.vs_lobby_spi_ok))
+    {
+        global.vs_lobby_spi_ok = {};
+    }
+    return global.vs_lobby_spi_ok;
+}
+
+function vs_lobby_spi_need_sync(_id)
+{
+    var st = vs_lobby_spi_st();
+    var k = string(_id);
+    if (k == "") return false;
+    return !(variable_struct_exists(st, k) && variable_struct_get(st, k));
+}
+
+function vs_lobby_spi_mark(_id)
+{
+    var k = string(_id);
+    if (k == "") return;
+    variable_struct_set(vs_lobby_spi_st(), k, true);
+}
+
+function vs_lobby_spi_unmark(_id)
+{
+    var k = string(_id);
+    if (k == "")
+    {
+        global.vs_lobby_spi_ok = {};
+        return;
+    }
+    variable_struct_set(vs_lobby_spi_st(), k, false);
+}
+
 function vs_lobby_host_sync(_why)
 {
     if (!vs_lobby_is_owner()) return;
@@ -1884,6 +1920,7 @@ function vs_lobby_reset()
     vs_lobby_ops_end();
     vs_lobby_dl_cancel();
     vs_lobby_send_q_clear();
+    vs_lobby_spi_unmark("");
     vs_ws_close();
     if (instance_exists(o_st_handle))
     {
@@ -2008,7 +2045,11 @@ function vs_online_on_ws_frame(_op, _payload)
             && vs_lobby_is_owner()
             && senderId != vs_online_player_id())
         {
-            vs_lobby_host_sync("recv SendPlayerInfo from=" + senderId);
+            if (vs_lobby_spi_need_sync(senderId))
+            {
+                vs_lobby_spi_mark(senderId);
+                vs_lobby_host_sync("recv SendPlayerInfo from=" + senderId);
+            }
             vs_lobby_refresh_ui();
         }
     }
@@ -2092,6 +2133,7 @@ function vs_lobby_handle_control(_j)
                 // the WS-attach notify (connected:true) before SendQueue.
                 if (connected && mid != vs_online_player_id())
                 {
+                    vs_lobby_spi_mark(mid);
                     vs_lobby_host_sync("member_joined");
                 }
                 else
