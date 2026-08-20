@@ -426,9 +426,9 @@ function vs_lobby_dl_on_lookup(_seq, _ok, _data)
         return;
     }
     vs_lobby_log("dl start chart=" + st.chartId + " song=" + sid);
-    var lab = vs_chartmeta_get(st.chartId);
-    if (lab != "" && variable_global_exists("vs_dlmgr_dl")) global.vs_dlmgr_dl.name = lab;
     vs_dlmgr_download(sid, st.chartId, 0, vs_lobby_dl_on_done);
+    var lab = vs_chartmeta_get(st.chartId);
+    if (lab != "") global.vs_dlmgr_dl.name = lab;
 }
 
 function vs_lobby_dl_on_done(_ok)

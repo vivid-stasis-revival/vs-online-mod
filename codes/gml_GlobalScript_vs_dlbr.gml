@@ -557,6 +557,10 @@ function vs_dlbr_on_download(_ok)
         {
             why = " - " + string(global.vs_dlmgr_dl.err);
         }
+        else if (variable_global_exists("vs_pack_job") && variable_struct_exists(global.vs_pack_job, "err") && global.vs_pack_job.err != "")
+        {
+            why = " - " + string(global.vs_pack_job.err);
+        }
         note = "Failed - " + cur_chart + why + " (vsonline.dl.log)";
         vs_dlbr_set_status(note);
         vs_dlbr_fetch_page();
@@ -1109,8 +1113,11 @@ function vs_dlbr_draw_dl_popup()
 {
     var cw = display_get_gui_width();
     var ch = display_get_gui_height();
+    var pack = vs_packmgr_install_active();
+    var packN = (pack != undefined) ? array_length(pack.queue) : 0;
+    var packOn = (packN > 0);
     var pw = min(220, max(80, cw - 8));
-    var ph = min(78, max(48, ch - 8));
+    var ph = packOn ? min(92, max(56, ch - 8)) : min(78, max(48, ch - 8));
     var px = (cw - pw) / 2;
     var py = (ch - ph) / 2;
     draw_set_alpha(0.55);
@@ -1123,20 +1130,42 @@ function vs_dlbr_draw_dl_popup()
     draw_rectangle(px, py, px + pw, py + ph, true);
 
     var title = "Downloading";
+    var charts = "";
     var fname = "";
     var files = "Preparing...";
     var frac = 0;
     if (variable_global_exists("vs_dlmgr_dl"))
     {
         var st = global.vs_dlmgr_dl;
-        if (st.name != "") title = st.name;
+        if (packOn)
+        {
+            title = (pack.name != "") ? pack.name : "Pack";
+            var qcur = pack.idx + 1;
+            if (qcur > packN) qcur = packN;
+            if (qcur < 1) qcur = 1;
+            charts = "Chart " + string(qcur) + "/" + string(packN);
+            if (st.name != "") charts += "  " + string(st.name);
+        }
+        else if (st.name != "") title = st.name;
         var n = array_length(st.need);
         var cur = st.idx + 1;
         if (cur > n) cur = n;
         files = (n <= 0) ? "Preparing..." : ("File " + string(cur) + "/" + string(n));
         fname = string(st.fileName);
-        frac = vs_dlmgr_prog_frac();
-        if (st.cancel) title = "Cancelling...";
+        frac = packOn ? vs_packmgr_prog_frac() : vs_dlmgr_prog_frac();
+        if (st.cancel || (pack != undefined && pack.cancel)) title = "Cancelling...";
+    }
+
+    var line1y = py + 20;
+    var line2y = py + 32;
+    var bary = py + 46;
+    var pcty = py + 58;
+    if (packOn)
+    {
+        line1y = py + 18;
+        line2y = py + 30;
+        bary = py + 54;
+        pcty = py + 66;
     }
 
     draw_set_font(fnt_monacovs);
@@ -1146,12 +1175,22 @@ function vs_dlbr_draw_dl_popup()
     draw_set_font(global.default_font);
     draw_set_halign(fa_left);
     draw_set_color(c_white);
-    draw_text(px + 8, py + 20, vs_dlbr_clip_text(files, pw - 16));
-    draw_set_color(c_gray);
-    draw_text(px + 8, py + 32, vs_dlbr_clip_text(fname, pw - 16));
+    if (packOn)
+    {
+        draw_text(px + 8, line1y, vs_dlbr_clip_text(charts, pw - 16));
+        draw_set_color(c_gray);
+        var fileLine = files;
+        if (fname != "") fileLine += "  " + fname;
+        draw_text(px + 8, line2y, vs_dlbr_clip_text(fileLine, pw - 16));
+    }
+    else
+    {
+        draw_text(px + 8, line1y, vs_dlbr_clip_text(files, pw - 16));
+        draw_set_color(c_gray);
+        draw_text(px + 8, line2y, vs_dlbr_clip_text(fname, pw - 16));
+    }
 
     var barx = px + 8;
-    var bary = py + 46;
     var barw = pw - 16;
     var barh = 8;
     draw_set_color(make_color_rgb(40, 40, 40));
@@ -1166,7 +1205,7 @@ function vs_dlbr_draw_dl_popup()
     }
     draw_set_color(c_yellow);
     draw_set_halign(fa_center);
-    draw_text(px + pw / 2, py + 58, string(floor(frac * 100)) + "%   Esc cancel");
+    draw_text(px + pw / 2, pcty, string(floor(frac * 100)) + "%   Esc cancel");
 }
 
 function vs_dlbr_on_close()

@@ -210,15 +210,17 @@ function vs_http_num(_v, _fallback)
 // http_get_file: 1 = file is on disk, 0 = keep waiting, -1 = fail.
 // Tiny files report got==total (status=1, http_status=-1) before the dest
 // exists; treating that as success writes nothing.
+// HTTP 4xx/5xx can arrive while status is still 1 (progress). Checking that
+// only after status==1 used to wait until the 5-minute file timeout.
 function vs_http_file_settle(_gmStatus, _httpStatus, _fileReady, _doneProg)
 {
+    if (_httpStatus >= 400) return -1;
     if (_gmStatus == 1)
     {
         if (_fileReady && _doneProg) return 1;
         return 0;
     }
     if (_gmStatus < 0) return -1;
-    if (_httpStatus >= 400) return -1;
     if (!_fileReady) return 0;
     return 1;
 }
