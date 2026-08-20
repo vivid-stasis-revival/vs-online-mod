@@ -718,6 +718,164 @@ function vs_lobby_member_await_score(_m)
     return !(_m.reportedScore);
 }
 
+function vs_lobby_note_seen(_id)
+{
+    var m = vs_lobby_find_member(_id);
+    if (m == undefined) return;
+    m.last_seen = current_time;
+}
+
+function vs_lobby_wait_st()
+{
+    if (!variable_global_exists("vs_lobby_wait"))
+    {
+        global.vs_lobby_wait = { t0: 0, logged: false };
+    }
+    return global.vs_lobby_wait;
+}
+
+function vs_lobby_wait_begin()
+{
+    var st = vs_lobby_wait_st();
+    st.t0 = current_time;
+    st.logged = false;
+    var n = 0;
+    if (instance_exists(o_st_handle) && is_array(o_st_handle.lobbyMembers))
+    {
+        n = array_length(o_st_handle.lobbyMembers);
+    }
+    vs_lobby_log("waiting_room begin members=" + string(n) + " pending=" + vs_lobby_wait_pending_label());
+}
+
+function vs_lobby_wait_pending_label()
+{
+    if (!instance_exists(o_st_handle) || !is_array(o_st_handle.lobbyMembers)) return "";
+    var bits = "";
+    var i = 0;
+    repeat (array_length(o_st_handle.lobbyMembers))
+    {
+        var m = o_st_handle.lobbyMembers[i];
+        i++;
+        if (!vs_lobby_member_await_score(m)) continue;
+        var nm = (m != undefined && variable_struct_exists(m, "name")) ? string(m.name) : "";
+        if (nm == "") nm = "player";
+        if (bits != "") bits += ", ";
+        bits += nm;
+    }
+    return bits;
+}
+
+function vs_lobby_wait_member_stale(_m)
+{
+    if (_m == undefined) return false;
+    var st = vs_lobby_wait_st();
+    var t0 = st.t0;
+    var seen = (variable_struct_exists(_m, "last_seen") && is_real(_m.last_seen)) ? _m.last_seen : 0;
+    var last = t0;
+    if (seen > last) last = seen;
+    return (current_time - last) >= 45000;
+}
+
+function vs_lobby_wait_skip_pending(_why)
+{
+    if (!instance_exists(o_st_handle) || !is_array(o_st_handle.lobbyMembers)) return 0;
+    var n = 0;
+    var i = 0;
+    repeat (array_length(o_st_handle.lobbyMembers))
+    {
+        var m = o_st_handle.lobbyMembers[i];
+        i++;
+        if (!vs_lobby_member_await_score(m)) continue;
+        m.reportedScore = true;
+        n++;
+    }
+    if (n > 0) vs_lobby_log("waiting_room skip n=" + string(n) + " why=" + string(_why));
+    return n;
+}
+
+function vs_lobby_wait_guest_leave(_why)
+{
+    vs_lobby_log("waiting_room guest leave " + string(_why));
+    room_goto(scene_multiplayer_lobby);
+}
+
+function vs_lobby_wait_step()
+{
+    if (!vs_online_is_custom()) return;
+    if (!instance_exists(obj_multiplayer_waiting_room)) return;
+    var st = vs_lobby_wait_st();
+    if (st.t0 <= 0) vs_lobby_wait_begin();
+    var pending = vs_lobby_wait_pending_label();
+    if (pending == "") return;
+    if (!st.logged)
+    {
+        st.logged = true;
+        vs_lobby_log("waiting_room pending " + pending);
+    }
+    if (vs_lobby_is_owner())
+    {
+        var i = 0;
+        var skipped = 0;
+        if (instance_exists(o_st_handle) && is_array(o_st_handle.lobbyMembers))
+        {
+            repeat (array_length(o_st_handle.lobbyMembers))
+            {
+                var m = o_st_handle.lobbyMembers[i];
+                i++;
+                if (!vs_lobby_member_await_score(m)) continue;
+                if (!vs_lobby_wait_member_stale(m)) continue;
+                m.reportedScore = true;
+                skipped++;
+            }
+        }
+        if (skipped > 0) vs_lobby_log("waiting_room timeout skip n=" + string(skipped) + " left=" + vs_lobby_wait_pending_label());
+    }
+    var cancel = keyboard_check_pressed(vk_escape);
+    if (variable_global_exists("menu_cancel") && keyboard_check_pressed(global.menu_cancel)) cancel = true;
+    if (input_check_pressed(5)) cancel = true;
+    if (cancel)
+    {
+        play_se(sfx_songsel_select);
+        if (vs_lobby_is_owner()) vs_lobby_wait_skip_pending("escape");
+        else vs_lobby_wait_guest_leave("escape");
+        return;
+    }
+}
+
+function vs_lobby_wait_draw()
+{
+    draw_set_font(global.default_font);
+    draw_set_halign(fa_left);
+    draw_set_color(c_white);
+    draw_text(10, 10, "Waiting for results...");
+    if (!vs_online_is_custom()) return;
+    var pending = vs_lobby_wait_pending_label();
+    if (pending == "") return;
+    draw_text(10, 22, "Waiting for " + pending);
+    var hint = vs_lobby_is_owner() ? "ESCAPE skip" : "ESCAPE lobby";
+    var left = 45;
+    var st = vs_lobby_wait_st();
+    if (instance_exists(o_st_handle) && is_array(o_st_handle.lobbyMembers))
+    {
+        var i = 0;
+        repeat (array_length(o_st_handle.lobbyMembers))
+        {
+            var m = o_st_handle.lobbyMembers[i];
+            i++;
+            if (!vs_lobby_member_await_score(m)) continue;
+            var seen = (variable_struct_exists(m, "last_seen") && is_real(m.last_seen)) ? m.last_seen : 0;
+            var last = st.t0;
+            if (seen > last) last = seen;
+            var sec = 45 - floor((current_time - last) / 1000);
+            if (sec < left) left = sec;
+        }
+    }
+    if (left < 0) left = 0;
+    draw_set_color(c_yellow);
+    draw_text(10, 34, hint + "  auto " + string(left) + "s");
+    draw_set_color(c_white);
+}
+
 function vs_lobby_anyone_need_dl()
 {
     if (!vs_online_is_custom()) return false;
@@ -2247,6 +2405,7 @@ function vs_online_on_ws_frame(_op, _payload)
                 + " bytes=" + string(buffer_get_size(_payload)));
         }
         vs_lobby_ensure_sender(senderId);
+        vs_lobby_note_seen(senderId);
         // payload position is now exactly at the packet type byte.
         var got = receive_packet(_payload, senderId);
         // packet.read already deletes the buffer on a known type.
