@@ -117,9 +117,25 @@ function vs_chartmeta_slot()
 {
     if (!variable_global_exists("vs_chartmeta"))
     {
-        global.vs_chartmeta = { names: {}, pending: "", next: "" };
+        global.vs_chartmeta = { names: {}, pending: "", q: [] };
+    }
+    if (!variable_struct_exists(global.vs_chartmeta, "q") || !is_array(global.vs_chartmeta.q))
+    {
+        global.vs_chartmeta.q = [];
     }
     return global.vs_chartmeta;
+}
+
+function vs_chartmeta_queued(_st, _cid)
+{
+    if (_st.pending == _cid) return true;
+    var i = 0;
+    repeat (array_length(_st.q))
+    {
+        if (_st.q[i] == _cid) return true;
+        i++;
+    }
+    return false;
 }
 
 function vs_chartmeta_get(_cid)
@@ -212,10 +228,10 @@ function vs_chartmeta_want(_cid)
     if (vs_chartmeta_get(cid) != "") return;
     var st = vs_chartmeta_slot();
     if (variable_struct_exists(st.names, cid)) return;
-    if (st.pending == cid) return;
+    if (vs_chartmeta_queued(st, cid)) return;
     if (st.pending != "")
     {
-        st.next = cid;
+        array_push(st.q, cid);
         return;
     }
     st.pending = cid;
@@ -259,8 +275,12 @@ function vs_chartmeta_finish(_ok)
         variable_struct_set(st.names, cid, { name: "", artist: "", serverId: "" });
     }
     vs_lobby_refresh_ui();
-    var n = st.next;
-    st.next = "";
+    var n = "";
+    if (array_length(st.q) > 0)
+    {
+        n = st.q[0];
+        array_delete(st.q, 0, 1);
+    }
     if (n != "") vs_chartmeta_want(n);
 }
 
@@ -1929,6 +1949,7 @@ function vs_lobby_spi_unmark(_id)
 
 function vs_lobby_host_sync(_why, _from)
 {
+    if (!vs_online_is_custom()) return;
     if (!vs_lobby_is_owner()) return;
     if (!instance_exists(o_st_handle)) return;
     // SendQueue also writes per-member scores. During play that overwrites

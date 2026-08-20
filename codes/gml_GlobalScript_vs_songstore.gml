@@ -328,22 +328,73 @@ function vs_songstore_skip_file(_name)
     return false;
 }
 
+// Detail GET is one-at-a-time with a FIFO of callbacks. A single global
+// on_done slot dropped Check-all when opening a row (and vice versa).
+function vs_songstore_fetch_slot()
+{
+    if (!variable_global_exists("vs_store_fetch"))
+    {
+        global.vs_store_fetch = { busy: false, q: [] };
+    }
+    if (!variable_struct_exists(global.vs_store_fetch, "q") || !is_array(global.vs_store_fetch.q))
+    {
+        global.vs_store_fetch.q = [];
+    }
+    return global.vs_store_fetch;
+}
+
+function vs_songstore_fetch_busy()
+{
+    var st = vs_songstore_fetch_slot();
+    return st.busy || array_length(st.q) > 0;
+}
+
+function vs_songstore_fetch_kick()
+{
+    var st = vs_songstore_fetch_slot();
+    if (st.busy) return;
+    if (array_length(st.q) <= 0) return;
+    st.busy = true;
+    var job = st.q[0];
+    var path = (job.kind == 2) ? "/api/v1/shatters/" : "/api/v1/songs/";
+    vs_online_get_json(path + job.id, false, vs_songstore_fetch_http);
+}
+
+function vs_songstore_fetch_http(_ok, _data, _status)
+{
+    var st = vs_songstore_fetch_slot();
+    var job = undefined;
+    if (array_length(st.q) > 0)
+    {
+        job = st.q[0];
+        array_delete(st.q, 0, 1);
+    }
+    st.busy = false;
+    if (job != undefined)
+    {
+        if (job.via == "check") vs_dlmgr_check_apply(job, _ok, _data, _status);
+        else if (job.on_done != undefined) job.on_done(_ok, _data, _status);
+    }
+    vs_songstore_fetch_kick();
+}
+
+function vs_songstore_fetch_push(_kind, _id, _on_done, _via, _chartId)
+{
+    var st = vs_songstore_fetch_slot();
+    var job = {};
+    variable_struct_set(job, "kind", _kind);
+    variable_struct_set(job, "id", string(_id));
+    variable_struct_set(job, "on_done", _on_done);
+    variable_struct_set(job, "via", string(_via));
+    variable_struct_set(job, "chartId", string(_chartId));
+    array_push(st.q, job);
+    vs_songstore_fetch_kick();
+}
+
 // _kind 2 = shatter (GET /shatters/:id), otherwise song (GET /songs/:id).
 function vs_songstore_fetch(_kind, _id, _on_done)
 {
-    if (!variable_global_exists("vs_store_detail_cb"))
-    {
-        global.vs_store_detail_cb = { on_done: undefined };
-    }
-    global.vs_store_detail_cb.on_done = _on_done;
-    var path = (_kind == 2) ? "/api/v1/shatters/" : "/api/v1/songs/";
-    vs_online_get_json(path + _id, false,
-        function(_ok, _data, _status)
-        {
-            var cb = global.vs_store_detail_cb.on_done;
-            global.vs_store_detail_cb.on_done = undefined;
-            if (cb != undefined) { cb(_ok, _data, _status); }
-        });
+    vs_songstore_fetch_push(_kind, _id, _on_done, "", "");
 }
 
 function vs_songstore_detail(_songId, _on_done)

@@ -119,6 +119,7 @@ function vs_lobby_dl_cancel()
 
 function vs_lobby_dl_on_queue()
 {
+    if (!vs_online_is_custom()) return;
     vs_lobby_suggest_clear();
     var st = vs_lobby_dl_st();
     vs_lobby_resolve_queued_songs();

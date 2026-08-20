@@ -32,9 +32,15 @@ function vs_dlbr_drop_pending()
     {
         global.vs_dlmgr_cb.on_done = undefined;
     }
-    if (variable_global_exists("vs_dlmgr_check_cb") && is_struct(global.vs_dlmgr_check_cb))
+    if (variable_global_exists("vs_store_fetch") && is_struct(global.vs_store_fetch) && is_array(global.vs_store_fetch.q))
     {
-        global.vs_dlmgr_check_cb.on_done = undefined;
+        var q = global.vs_store_fetch.q;
+        var i = 0;
+        repeat (array_length(q))
+        {
+            if (is_struct(q[i]) && q[i].via == "check") q[i].on_done = undefined;
+            i++;
+        }
     }
 }
 
