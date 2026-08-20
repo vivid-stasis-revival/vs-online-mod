@@ -1145,8 +1145,9 @@ function vs_lobby_scoreboard_tick()
     array_copy(members, 0, o_st_handle.lobbyMembers, 0, array_length(o_st_handle.lobbyMembers));
     var me = vs_lobby_find_member(vs_online_player_id());
     if (me == undefined) me = o_st_handle.currentMember;
+    if (me == undefined) return;
     currentMember = me;
-    if (me != undefined && variable_global_exists("currentscore"))
+    if (variable_global_exists("currentscore"))
     {
         vs_member_set_score(me, global.currentscore);
     }
@@ -2199,9 +2200,9 @@ function vs_lobby_matchmake(_on_done)
 
 function vs_lobby_join(_code, _on_done)
 {
-    var code = vs_lobby_norm_code(_code);
-    vs_lobby_log("join start code=" + code + " raw=" + string(_code) + " " + vs_lobby_flags());
-    if (code == undefined || string_length(code) != 6)
+    var joinCode = vs_lobby_norm_code(_code);
+    vs_lobby_log("join start code=" + joinCode + " raw=" + string(_code) + " " + vs_lobby_flags());
+    if (joinCode == undefined || string_length(joinCode) != 6)
     {
         vs_lobby_log("join bad code raw=" + string(_code));
         if (_on_done != undefined) { _on_done(false, undefined); }
@@ -2223,7 +2224,7 @@ function vs_lobby_join(_code, _on_done)
         if (_on_done != undefined) { _on_done(false, undefined); }
         return;
     }
-    global.vs_lobby_cb.code = code;
+    global.vs_lobby_cb.code = joinCode;
     global.vs_lobby_cb.on_done = _on_done;
     vs_online_with_conn(function()
     {
@@ -2237,7 +2238,11 @@ function vs_lobby_join(_code, _on_done)
         }
         global.vs_lobby_cb.join_busy = true;
         vs_lobby_log("join POST /lobbies/join code=" + string(global.vs_lobby_cb.code));
-        vs_online_post_json("/api/v1/lobbies/join", { code: global.vs_lobby_cb.code }, function(_ok, _data, _status)
+        // Do not write `{ code: ... }` here: vs_lobby_join's old `var code`
+        // made vsml rewrite that key to self.code inside this anon.
+        var body = {};
+        variable_struct_set(body, "code", global.vs_lobby_cb.code);
+        vs_online_post_json("/api/v1/lobbies/join", body, function(_ok, _data, _status)
         {
             global.vs_lobby_cb.join_busy = false;
             vs_lobby_log("join result " + vs_lobby_http_why(_ok, _data, _status));

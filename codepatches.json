@@ -911,7 +911,7 @@
     },
     {
         "Entry": "gml_Object_o_score_updater_Draw_64",
-        "Value": "if (variable_global_exists(\"op_bwp_hide_leaderboard\") && global.op_bwp_hide_leaderboard == 1) exit;",
+        "Value": "if (vs_online_is_custom() && currentMember == undefined) exit;\nif (variable_global_exists(\"op_bwp_hide_leaderboard\") && global.op_bwp_hide_leaderboard == 1) exit;",
         "Type": 2
     },
     {
