@@ -20,6 +20,6 @@ function SuggestSongPacket(arg0) : BasePacket(arg0, false, 3, 1) constructor
 
     static receive = function(arg0, arg1)
     {
-        if (vs_lobby_is_owner()) vs_lobby_suggest_push(arg0, arg1);
+        vs_lobby_suggest_push(arg0, arg1);
     };
 }
