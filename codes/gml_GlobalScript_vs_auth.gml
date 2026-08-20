@@ -196,6 +196,8 @@ function vs_auth_do_signout()
 
 function vs_auth_setup()
 {
+    do_step = method(id, vs_auth_step);
+    do_draw = method(id, vs_auth_draw);
     cfg = vs_online_get_config();
     signed_in = (variable_struct_exists(cfg, "refresh_token") && cfg.refresh_token != "")
              || (variable_struct_exists(cfg, "email") && cfg.email != "");

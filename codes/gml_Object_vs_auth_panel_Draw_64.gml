@@ -1,1 +1,1 @@
-vs_auth_draw();
+do_draw();

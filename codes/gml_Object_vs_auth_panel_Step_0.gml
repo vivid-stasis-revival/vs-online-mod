@@ -1,1 +1,1 @@
-vs_auth_step();
+do_step();

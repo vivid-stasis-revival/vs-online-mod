@@ -1,1 +1,1 @@
-vs_online_error_draw();
+do_draw();
