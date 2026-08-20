@@ -413,6 +413,15 @@ function vs_csm_play_log(_msg)
     vs_songstore_log("PLAY " + string(_msg));
 }
 
+function vs_csm_coerce_song_constants(_song)
+{
+    if (_song == undefined) return;
+    _song.difficulty_constant_1 = vs_csm_safe_real(struct_get_fallback(_song, "difficulty_constant_1", 0), 0);
+    _song.difficulty_constant_2 = vs_csm_safe_real(struct_get_fallback(_song, "difficulty_constant_2", 0), 0);
+    _song.difficulty_constant_3 = vs_csm_safe_real(struct_get_fallback(_song, "difficulty_constant_3", 0), 0);
+    _song.difficulty_constant_4 = vs_csm_safe_real(struct_get_fallback(_song, "difficulty_constant_4", 0), 0);
+}
+
 function vs_csm_safe_real(_v, _fallback)
 {
     if (_v == undefined) return _fallback;
@@ -642,6 +651,7 @@ function readCustomSongInfo(dir, rel)
 
     var songInfo = getGenericSong(-1);
     structcpy(songInfoSrc, songInfo);
+    vs_csm_coerce_song_constants(songInfo);
 
     songInfo.chart_path = rel;
     songInfo.chart_load_dir = dir;

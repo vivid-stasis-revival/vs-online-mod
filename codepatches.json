@@ -458,6 +458,24 @@
     },
     {
         "Entry": "gml_GlobalScript_rating_functions",
+        "Find": "global.song_list[i].chart_id != \"plaudite\" && global.song_list[i].chart_id != \"n7\"",
+        "Value": "global.song_list[i].chart_id != \"plaudite\" && global.song_list[i].chart_id != \"n7\" && !variable_struct_exists(global.song_list[i],\"is_custom\")",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_GlobalScript_rating_functions",
+        "Find": "function get_rating_value(arg0, arg1, arg2)\n{\n    arg1 = round(arg1 * 10) / 10;",
+        "Value": "function get_rating_value(arg0, arg1, arg2)\n{\n    if (!is_real(arg0) || arg0 != arg0) arg0 = 0;\n    if (!is_real(arg1) || arg1 != arg1) arg1 = 0;\n    if (!is_real(arg2) || arg2 != arg2) arg2 = 0;\n    arg1 = round(arg1 * 10) / 10;",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_GlobalScript_rating_functions",
+        "Find": "function get_ex_rating_value(arg0, arg1)\n{\n    arg1 = round(arg1 * 10) / 10;",
+        "Value": "function get_ex_rating_value(arg0, arg1)\n{\n    if (!is_real(arg0) || arg0 != arg0) arg0 = 0;\n    if (!is_real(arg1) || arg1 != arg1) arg1 = 0;\n    arg1 = round(arg1 * 10) / 10;",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_GlobalScript_rating_functions",
         "Find": "        unlock_achievement(\"rating_13000\");\n    }\n}",
         "Value": "        unlock_achievement(\"rating_13000\");\n    }\n    if (vs_online_is_custom()) vs_online_rating_refresh();\n}",
         "Type": 1
