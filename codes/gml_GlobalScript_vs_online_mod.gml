@@ -29,6 +29,89 @@
 // }
 // ============================================================================
 
+// UTF-8 bytes → GML Unicode. chr(byte) on UTF-8 makes Chinese Windows treat
+// those bytes as GBK, so Worldcross names show as 乱码 instead of tofu.
+function vs_utf8_from_buffer(_buf)
+{
+    if (_buf == undefined) return "";
+    var n = buffer_get_size(_buf);
+    var out = "";
+    while (buffer_tell(_buf) < n)
+    {
+        var b0 = buffer_read(_buf, buffer_u8);
+        var cp = 65533;
+        if (b0 < 128)
+        {
+            cp = b0;
+        }
+        else if ((b0 & 224) == 192)
+        {
+            if (buffer_tell(_buf) < n)
+            {
+                var b1 = buffer_read(_buf, buffer_u8);
+                if ((b1 & 192) == 128) cp = ((b0 & 31) << 6) | (b1 & 63);
+            }
+        }
+        else if ((b0 & 240) == 224)
+        {
+            if (buffer_tell(_buf) + 1 < n)
+            {
+                var b1 = buffer_read(_buf, buffer_u8);
+                var b2 = buffer_read(_buf, buffer_u8);
+                if ((b1 & 192) == 128 && (b2 & 192) == 128)
+                {
+                    cp = ((b0 & 15) << 12) | ((b1 & 63) << 6) | (b2 & 63);
+                }
+            }
+        }
+        else if ((b0 & 248) == 240)
+        {
+            if (buffer_tell(_buf) + 2 < n)
+            {
+                var b1 = buffer_read(_buf, buffer_u8);
+                var b2 = buffer_read(_buf, buffer_u8);
+                var b3 = buffer_read(_buf, buffer_u8);
+                if ((b1 & 192) == 128 && (b2 & 192) == 128 && (b3 & 192) == 128)
+                {
+                    cp = ((b0 & 7) << 18) | ((b1 & 63) << 12) | ((b2 & 63) << 6) | (b3 & 63);
+                    if (cp > 65535) cp = 65533;
+                }
+            }
+        }
+        out += chr(cp);
+    }
+    return out;
+}
+
+function vs_utf8_fix_string(_s)
+{
+    if (_s == undefined) return "";
+    var src = string(_s);
+    var n = string_length(src);
+    if (n <= 0) return src;
+    var i = 1;
+    var hasHigh = false;
+    repeat (n)
+    {
+        var o = ord(string_char_at(src, i));
+        if (o > 255) return src;
+        if (o >= 128) hasHigh = true;
+        i++;
+    }
+    if (!hasHigh) return src;
+    var buf = buffer_create(n, buffer_fixed, 1);
+    i = 1;
+    repeat (n)
+    {
+        buffer_write(buf, buffer_u8, ord(string_char_at(src, i)));
+        i++;
+    }
+    buffer_seek(buf, buffer_seek_start, 0);
+    var out = vs_utf8_from_buffer(buf);
+    buffer_delete(buf);
+    return out;
+}
+
 // --- config ----------------------------------------------------------------
 
 function vs_online_config_path()

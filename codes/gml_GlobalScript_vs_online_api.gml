@@ -548,7 +548,7 @@ function vs_http_on_async()
     }
     var gmStatus = vs_http_num(ds_map_find_value(async_load, "status"), -1);
     var httpStatus = vs_http_num(ds_map_find_value(async_load, "http_status"), -1);
-    var text = ds_map_find_value(async_load, "result");
+    var text = vs_utf8_fix_string(ds_map_find_value(async_load, "result"));
     if (gmStatus == 1)
     {
         var cl = vs_http_num(ds_map_find_value(async_load, "contentLength"), -1);
