@@ -2,7 +2,22 @@
 // vs_auth.gml — vs_auth_panel actions as named scripts.
 // ============================================================================
 
-function vs_auth_flow_started(_ok, _data)
+function vs_auth_note(_msg)
+{
+    global.vs_auth_note_line = string(_msg);
+    show_debug_message("VS AUTH: " + global.vs_auth_note_line);
+    vs_songstore_log("AUTH " + global.vs_auth_note_line);
+    if (!instance_exists(vs_auth_panel)) return;
+    with (vs_auth_panel)
+    {
+        var add = global.vs_auth_note_line;
+        if (!variable_instance_exists(self, "conn_log")) conn_log = "";
+        if (conn_log == "") conn_log = add;
+        else conn_log = add + chr(10) + conn_log;
+    }
+}
+
+function vs_auth_flow_started(_ok, _data, _status)
 {
     busy = false;
     if (_ok && _data != undefined)
@@ -24,6 +39,7 @@ function vs_auth_flow_started(_ok, _data)
         interval = variable_struct_exists(_data, "interval") ? max(vs_http_num(_data.interval, 5), 5) : 5;
         poll_at = current_time + interval * 1000;
         message = "Waiting for approval...";
+        vs_auth_note("device_authorization http=" + string(_status) + " code=" + string(user_code));
         play_se(sfx_songsel_select);
         vs_auth_open_device_page();
     }
@@ -31,6 +47,7 @@ function vs_auth_flow_started(_ok, _data)
     {
         stage = 0;
         message = "Could not start device flow. Is the server reachable?";
+        vs_auth_note("device_authorization FAIL http=" + string(_status) + " api=" + vs_online_server_url());
     }
 }
 
@@ -58,6 +75,7 @@ function vs_auth_flow_polled(_ok, _data, _status)
     {
         stage = 2;
         message = "Signed in!";
+        vs_auth_note("token OK http=" + string(_status));
         vs_online_apply_oauth_tokens(_data);
         vs_online_refresh_me(method(self, vs_auth_on_me));
         return;
@@ -78,10 +96,12 @@ function vs_auth_flow_polled(_ok, _data, _status)
         interval += 5;
         poll_at = current_time + interval * 1000;
         message = "Slow down - retrying...";
+        vs_auth_note("token slow_down interval=" + string(interval));
         return;
     }
     stage = 0;
     message = "Device flow failed (" + err + ") - press Enter to restart.";
+    vs_auth_note("token FAIL http=" + string(_status) + " err=" + err);
 }
 
 function vs_auth_on_poll(_ok, _data, _status)
@@ -139,6 +159,7 @@ function vs_auth_start_flow()
     busy = true;
     stage = 1;
     message = "Requesting device code...";
+    vs_auth_note("POST " + vs_online_server_url() + "/oauth2/device_authorization");
     vs_online_oauth_start(method(self, vs_auth_flow_started));
 }
 
@@ -187,6 +208,7 @@ function vs_auth_setup()
     message = "";
     busy = false;
     sel = 0;
+    conn_log = "";
     if (!signed_in)
     {
         vs_auth_start_flow();
@@ -270,7 +292,12 @@ function vs_auth_draw()
     var cw = display_get_gui_width();
     var ch = display_get_gui_height();
     var bw = 280;
-    var bh = signed_in ? 128 : 150;
+    var logh = 0;
+    if (!signed_in && variable_instance_exists(self, "conn_log") && conn_log != "")
+    {
+        logh = 56;
+    }
+    var bh = (signed_in ? 128 : 150) + logh;
     var bx = (cw - bw) / 2;
     var by = (ch - bh) / 2;
 
@@ -386,6 +413,11 @@ function vs_auth_draw()
             draw_text(bx + 12, by + 106, message);
             draw_set_color(c_gray);
             draw_text(bx + 12, by + 118, "Enter: open page   Esc: close");
+            if (logh > 0)
+            {
+                draw_set_color(make_color_rgb(140, 148, 160));
+                draw_text_ext(bx + 12, by + 132, conn_log, 9, bw - 24);
+            }
         }
         else
         {
@@ -397,6 +429,11 @@ function vs_auth_draw()
             draw_text_ext(bx + 12, by + 44, message, 10, bw - 24);
             draw_set_color(c_gray);
             draw_text_ext(bx + 12, by + 88, "Enter: start   Esc: close", 10, bw - 24);
+            if (logh > 0)
+            {
+                draw_set_color(make_color_rgb(140, 148, 160));
+                draw_text_ext(bx + 12, by + 108, conn_log, 9, bw - 24);
+            }
         }
     }
 
