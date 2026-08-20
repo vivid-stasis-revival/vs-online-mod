@@ -856,6 +856,67 @@ function vs_csm_row_score(_row)
     return v;
 }
 
+function vs_csm_song_is_custom(_id)
+{
+    if (!variable_global_exists("song_list")) return false;
+    if (_id == undefined || !is_real(_id) || _id < 0 || _id >= array_length(global.song_list)) return false;
+    var s = global.song_list[_id];
+    return s != undefined && s != 0 && variable_struct_exists(s, "is_custom");
+}
+
+function vs_csm_hs_diff_index(_diff)
+{
+    var d = string_upper(string(_diff));
+    if (d == "OPENING") return 0;
+    if (d == "MIDDLE") return 1;
+    if (d == "FINALE") return 2;
+    if (d == "ENCORE" || d == "BACKSTAGE") return 3;
+    if (d == "PRELUDE") return 4;
+    return 0;
+}
+
+function vs_csm_hs_field(_row, _field)
+{
+    if (_row == undefined) return 0;
+    if (_field == 1)
+    {
+        var g = variable_struct_get(_row, "game_score");
+        return (g == undefined || !is_real(g)) ? 0 : g;
+    }
+    if (_field == 2)
+    {
+        var l = variable_struct_get(_row, "lamp");
+        return (l == undefined || !is_real(l)) ? 0 : l;
+    }
+    if (_field == 3)
+    {
+        var c = variable_struct_get(_row, "max_combo");
+        return (c == undefined || !is_real(c)) ? 0 : c;
+    }
+    return vs_csm_row_score(_row);
+}
+
+// Old song select reads highscore_table by numeric song_id. Custom charts
+// reuse those slots, so a new download can show another chart's PB/AP.
+function vs_csm_hs_get(_id, _diff, _field)
+{
+    if (!variable_global_exists("highscores") || _id == undefined || !is_real(_id) || _id < 0)
+        return 0;
+    if (_id >= array_length(global.highscores.normal)) return 0;
+    var di = vs_csm_hs_diff_index(_diff);
+    var rows = global.highscores.normal[_id];
+    if (rows == undefined || !is_array(rows) || di < 0 || di >= array_length(rows)) return 0;
+    return vs_csm_hs_field(rows[di], _field);
+}
+
+function vs_csm_hs_get_shatter(_id, _field)
+{
+    if (!variable_global_exists("highscores") || _id == undefined || !is_real(_id) || _id < 0)
+        return 0;
+    if (_id >= array_length(global.highscores.shatter)) return 0;
+    return vs_csm_hs_field(global.highscores.shatter[_id], _field);
+}
+
 function vs_csm_scores_merge_start()
 {
     if (!vs_online_is_custom() || !vs_online_is_account()) return;

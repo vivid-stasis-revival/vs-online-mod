@@ -1184,6 +1184,18 @@
         "Type": 3
     },
     {
+        "Entry": "gml_Object_o_songobject_NEW_Draw_0",
+        "Find": "var song_score = get_value_from_highscore_table(song_id, diffCHART, 0);\nvar ex_score = get_value_from_highscore_table(song_id, diffCHART, 1);\nini_open(global.highscore_file);\ndraw_sprite(sp_songobject_lamp, ini_read_real(song_id, diffCHART + \"_COMBO\", 0), x + 5, y + 5);\nini_close();",
+        "Value": "var song_score;\nvar ex_score;\nvar lampv;\nif (vs_csm_song_is_custom(song_id))\n{\n    song_score = vs_csm_hs_get(song_id, diffCHART, 0);\n    ex_score = vs_csm_hs_get(song_id, diffCHART, 1);\n    lampv = vs_csm_hs_get(song_id, diffCHART, 2);\n}\nelse\n{\n    song_score = get_value_from_highscore_table(song_id, diffCHART, 0);\n    ex_score = get_value_from_highscore_table(song_id, diffCHART, 1);\n    ini_open(global.highscore_file);\n    lampv = ini_read_real(song_id, diffCHART + \"_COMBO\", 0);\n    ini_close();\n}\ndraw_sprite(sp_songobject_lamp, lampv, x + 5, y + 5);",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_Object_o_songselect_top_Draw_64",
+        "Find": "highscore = get_value_from_highscore_table(song.song_id, diffCHART, 0);\nhighgamescore = get_value_from_highscore_table(song.song_id, diffCHART, 1);\nhighscore = string_repeat(\"0\", 7 - string_length(string(round(highscore)))) + string(round(highscore));\nhighscore = string_insert(\",\", highscore, 2);\nhighscore = string_insert(\",\", highscore, 6);\ncomborecord = get_combo_from_highscore_table(song.song_id, diffCHART);",
+        "Value": "if (variable_struct_exists(song, \"is_custom\"))\n{\n    highscore = shatter ? vs_csm_hs_get_shatter(song.song_id, 0) : vs_csm_hs_get(song.song_id, diffCHART, 0);\n    highgamescore = shatter ? vs_csm_hs_get_shatter(song.song_id, 1) : vs_csm_hs_get(song.song_id, diffCHART, 1);\n    comborecord = shatter ? vs_csm_hs_get_shatter(song.song_id, 3) : vs_csm_hs_get(song.song_id, diffCHART, 3);\n}\nelse\n{\n    highscore = get_value_from_highscore_table(song.song_id, diffCHART, 0);\n    highgamescore = get_value_from_highscore_table(song.song_id, diffCHART, 1);\n    comborecord = get_combo_from_highscore_table(song.song_id, diffCHART);\n}\nhighscore = string_repeat(\"0\", 7 - string_length(string(round(highscore)))) + string(round(highscore));\nhighscore = string_insert(\",\", highscore, 2);\nhighscore = string_insert(\",\", highscore, 6);",
+        "Type": 1
+    },
+    {
         "Entry": "gml_GlobalScript_create_shatter_list",
         "Find": "global.shatter_list[17].name = \"Angelstar?\";",
         "Value": "",
