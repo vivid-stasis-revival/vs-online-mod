@@ -1746,6 +1746,14 @@ function vs_online_highscore_is_dev()
 
 // --- B40 / rating (server projection) --------------------------------------
 
+function vs_online_rscore_keep_last()
+{
+    if (!vs_online_is_custom()) return;
+    if (!variable_global_exists("rscore_last")) return;
+    if (!(instance_exists(o_2023results) || instance_exists(obj_results) || instance_exists(obj_resultsOld))) return;
+    global.rscore = global.rscore_last;
+}
+
 function vs_online_rating_refresh()
 {
     if (!vs_online_is_account()) return;
