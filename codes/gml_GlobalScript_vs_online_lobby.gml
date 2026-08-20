@@ -545,6 +545,7 @@ function vs_lobby_suggest_push(_s, _from)
 
 function vs_lobby_suggest_accept()
 {
+    if (!vs_lobby_is_owner()) return;
     var q = vs_lobby_suggest_q();
     if (array_length(q) <= 0) return;
     var item = q[0];
@@ -557,6 +558,7 @@ function vs_lobby_suggest_accept()
 
 function vs_lobby_suggest_ignore()
 {
+    if (!vs_lobby_is_owner()) return;
     var q = vs_lobby_suggest_q();
     if (array_length(q) <= 0) return;
     play_se(sfx_songsel_select);
