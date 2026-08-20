@@ -34,6 +34,8 @@ function vs_dlmgr_list(_query, _page, _kind, _on_done)
     global.vs_dlmgr_cb.page = _page;
     global.vs_dlmgr_cb.kind = _kind;
     global.vs_dlmgr_cb.on_done = _on_done;
+    global.vs_dlmgr_cb.session = variable_global_exists("vs_dlbr_session") ? global.vs_dlbr_session : 0;
+    global.vs_with_conn_src = "dlbr";
     vs_online_with_conn(function()
     {
         var kind = global.vs_dlmgr_cb.kind;

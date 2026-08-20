@@ -28,6 +28,7 @@ function vs_media_init()
         global.vs_jk_load_key = "";
         global.vs_jk_load_path = "";
         global.vs_media_gen = 0;
+        global.vs_media_job_gen = 0;
         global.vs_media_got = 0;
         global.vs_media_total = 0;
         global.vs_media_bgm_paused = false;
@@ -197,9 +198,35 @@ function vs_media_audio_url(_previewUrl, _jacketUrl, _id)
     return vs_online_server_url() + "/uploads/songs/" + string(_id) + "/music.ogg";
 }
 
+function vs_media_cancel()
+{
+    vs_media_init();
+    global.vs_media_q = [];
+    global.vs_media_gen += 1;
+    global.vs_media_want_pv = "";
+    if (global.vs_pv_inst != -1)
+    {
+        if (audio_is_playing(global.vs_pv_inst)) audio_stop_sound(global.vs_pv_inst);
+        global.vs_pv_inst = -1;
+    }
+    global.vs_jk_load_key = "";
+    global.vs_jk_load_path = "";
+    global.vs_media_busy = false;
+    global.vs_media_rid = -1;
+    global.vs_media_kind = "";
+    global.vs_media_id = "";
+    global.vs_media_path = "";
+    global.vs_media_placing = false;
+    global.vs_media_placeTries = 0;
+    global.vs_media_got = 0;
+    global.vs_media_total = 0;
+    global.vs_media_scheduled = false;
+}
+
 function vs_media_select(_id, _jacketUrl, _previewUrl)
 {
     vs_media_init();
+    if (!instance_exists(vs_downloader_browser)) return;
     vs_media_request("jacket", _id, _jacketUrl);
     var audio = vs_media_audio_url(_previewUrl, _jacketUrl, _id);
     if (audio != "") vs_media_request("preview", _id, audio);
@@ -227,6 +254,7 @@ function vs_media_stop_preview()
 function vs_media_try_play()
 {
     vs_media_init();
+    if (!instance_exists(vs_downloader_browser)) return;
     var key = global.vs_media_want_pv;
     if (key == "") return;
     if (!variable_struct_exists(global.vs_pv_snd, key)) return;
@@ -306,6 +334,7 @@ function vs_media_start()
     }
     var url = vs_songstore_abs_url(job.url);
     global.vs_media_gen += 1;
+    global.vs_media_job_gen = global.vs_media_gen;
     global.vs_media_rid = http_get_file(url, dest);
     if (global.vs_media_rid == undefined || global.vs_media_rid < 0)
     {
@@ -320,6 +349,7 @@ function vs_media_on_timeout()
 {
     vs_media_init();
     if (!global.vs_media_busy) return;
+    if (variable_global_exists("vs_media_job_gen") && global.vs_media_job_gen != global.vs_media_gen) return;
     vs_media_finish(false);
 }
 
@@ -402,6 +432,7 @@ function vs_media_on_place()
 {
     vs_media_init();
     if (!global.vs_media_busy || !global.vs_media_placing) return;
+    if (variable_global_exists("vs_media_job_gen") && global.vs_media_job_gen != global.vs_media_gen) return;
     if (vs_http_file_here(global.vs_media_path) || file_exists(vs_media_abs(global.vs_media_path)))
     {
         show_debug_message("VS Media: file ready " + string(global.vs_media_kind) + " " + string(global.vs_media_id));
