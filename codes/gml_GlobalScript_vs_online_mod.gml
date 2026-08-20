@@ -820,12 +820,12 @@ function vs_online_show_score_error(_why)
     {
         kind = "score";
         title = "Score Upload Failed";
-        buttons = ["取消", "重置"];
+        buttons = ["取消", "重试"];
         on_retry = undefined;
         retrying = false;
         selected = 1;
         server_url = vs_online_server_url();
-        message = string(_why) + "\n取消 = stay on results.\n重置 = retry upload.";
+        message = string(_why) + "\n取消 = stay on results.\n重试 = retry upload.";
     }
 }
 
@@ -1006,7 +1006,7 @@ function vs_online_error_step()
         {
             var btn = buttons[selected];
             instance_destroy();
-            if (btn == "重置") vs_online_score_retry_upload();
+            if (btn == "重试") vs_online_score_retry_upload();
         }
         else if (selected == 0)
         {
