@@ -829,13 +829,16 @@ function vs_dlbr_jump_chart(_chartId, _kind, _name)
         vs_dlbr_set_status("Stay in the lobby. Close Downloader to go back.");
         return;
     }
-    vs_localcharts_refresh();
     if (_kind == 2)
     {
+        if (vs_localcharts_jump_shatter(_chartId)) return;
+        vs_localcharts_refresh();
         if (vs_localcharts_jump_shatter(_chartId)) return;
         vs_dlbr_set_status(_name + " is not in the shatter list.");
         return;
     }
+    if (vs_localcharts_jump(_chartId)) return;
+    vs_localcharts_refresh();
     if (vs_localcharts_jump(_chartId)) return;
     vs_dlbr_set_status(_name + " is not in All Custom Songs yet.");
 }
@@ -874,6 +877,7 @@ function vs_dlbr_jump_from_detail()
                 return;
             }
             vs_dlbr_close_detail();
+            if (vs_localcharts_jump_pack(r.id)) return;
             vs_localcharts_refresh();
             if (vs_localcharts_jump_pack(r.id)) return;
             var members = vs_dlbr_pack_members(r, detail);
