@@ -810,7 +810,7 @@
     {
         "Entry": "gml_GlobalScript_ReportScorePacket",
         "Find": "buffer_write(buffer, buffer_u8, arg0.flag);\n        return buffer;",
-        "Value": "buffer_write(buffer, buffer_u8, arg0.flag);buffer_write(buffer, buffer_s8, vs_lobby_local_play_diff());buffer_write(buffer, buffer_u8, vs_lobby_local_autoplay() ? 1 : 0);\n        return buffer;",
+        "Value": "buffer_write(buffer, buffer_u8, arg0.flag);if (vs_online_is_custom()) { buffer_write(buffer, buffer_s8, vs_lobby_local_play_diff());buffer_write(buffer, buffer_u8, vs_lobby_local_autoplay() ? 1 : 0); }\n        return buffer;",
         "Type": 0
     },
     {
@@ -870,13 +870,13 @@
     {
         "Entry": "gml_Object_obj_multiplayer_lobby_Create_0",
         "Find": "obj_multiplayer_lobby.isReady = true;\n            send_packet(SendReadyPacket, true);",
-        "Value": "obj_multiplayer_lobby.isReady = true;\n            send_packet(SendPlayerInfoPacket);\n            send_packet(SendReadyPacket, true);",
+        "Value": "obj_multiplayer_lobby.isReady = true;\n            if (vs_online_is_custom()) send_packet(SendPlayerInfoPacket);\n            send_packet(SendReadyPacket, true);",
         "Type": 0
     },
     {
         "Entry": "gml_GlobalScript_AddSongPacket",
         "Find": "o_st_handle.songQueue = [arg0];",
-        "Value": "o_st_handle.songQueue = [arg0];global.songselect_difficulty = arg0.difficulty; vs_lobby_dl_on_queue(); send_packet(SendPlayerInfoPacket); if (vs_online_is_custom()) vs_lobby_log(\"AddSong songId=\" + string(arg0.songId) + \" diff=\" + string(arg0.difficulty) + \" chart=\" + vs_online_queue_chart_id(arg0));",
+        "Value": "o_st_handle.songQueue = [arg0];global.songselect_difficulty = arg0.difficulty; if (vs_online_is_custom()) { vs_lobby_dl_on_queue(); send_packet(SendPlayerInfoPacket); vs_lobby_log(\"AddSong songId=\" + string(arg0.songId) + \" diff=\" + string(arg0.difficulty) + \" chart=\" + vs_online_queue_chart_id(arg0)); }",
         "Type": 0
     },
     {
@@ -911,7 +911,7 @@
     },
     {
         "Entry": "gml_Object_o_score_updater_Draw_64",
-        "Value": "if (vs_online_is_custom() && currentMember == undefined) exit;\nif (variable_global_exists(\"op_bwp_hide_leaderboard\") && global.op_bwp_hide_leaderboard == 1) exit;",
+        "Value": "if (currentMember == undefined) exit;\nif (variable_global_exists(\"op_bwp_hide_leaderboard\") && global.op_bwp_hide_leaderboard == 1) exit;",
         "Type": 2
     },
     {
@@ -935,7 +935,7 @@
     {
         "Entry": "gml_GlobalScript_SendPlayerInfoPacket",
         "Find": "        buffer_write(buffer, buffer_u8, global.highest_class);\n        return buffer;",
-        "Value": "        buffer_write(buffer, buffer_u8, global.highest_class);\n        buffer_write(buffer, buffer_bool, true);buffer_write(buffer, buffer_s8, vs_lobby_local_play_diff());buffer_write(buffer, buffer_u8, vs_lobby_local_autoplay() ? 1 : 0);buffer_write(buffer, buffer_u8, vs_lobby_local_need_dl() ? 1 : 0);return buffer;",
+        "Value": "        buffer_write(buffer, buffer_u8, global.highest_class);\n        buffer_write(buffer, buffer_bool, true);if (vs_online_is_custom()) { buffer_write(buffer, buffer_s8, vs_lobby_local_play_diff());buffer_write(buffer, buffer_u8, vs_lobby_local_autoplay() ? 1 : 0);buffer_write(buffer, buffer_u8, vs_lobby_local_need_dl() ? 1 : 0); }return buffer;",
         "Type": 1
     },
     {

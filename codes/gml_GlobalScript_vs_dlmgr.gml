@@ -72,26 +72,19 @@ function vs_dlmgr_downloaded(_chartId)
 // that are missing or changed (empty array => up to date).
 function vs_dlmgr_check(_songId, _chartId, _kind, _on_done)
 {
-    if (!variable_global_exists("vs_dlmgr_check_cb"))
+    vs_songstore_fetch_push(_kind, _songId, _on_done, "check", _chartId);
+}
+
+function vs_dlmgr_check_apply(_job, _ok, _detail, _status)
+{
+    var cb = _job.on_done;
+    if (cb == undefined) return;
+    if (!_ok || _detail == undefined)
     {
-        global.vs_dlmgr_check_cb = { on_done: undefined };
+        cb(false, undefined);
+        return;
     }
-    global.vs_dlmgr_check_cb.on_done = _on_done;
-    global.vs_dlmgr_check_cb.chartId = _chartId;
-    vs_songstore_fetch(_kind, _songId, function(_ok, _detail)
-    {
-        var slot = global.vs_dlmgr_check_cb;
-        var cb = slot.on_done;
-        var chartId = slot.chartId;
-        slot.on_done = undefined;
-        if (cb == undefined) return;
-        if (!_ok || _detail == undefined)
-        {
-            cb(false, undefined);
-            return;
-        }
-        cb(true, vs_songstore_diff(_detail.files, chartId));
-    });
+    cb(true, vs_songstore_diff(_detail.files, _job.chartId));
 }
 
 // Human text for a display row's sync state.
@@ -292,7 +285,7 @@ function vs_dlmgr_download(_songId, _chartId, _kind, _on_done)
 {
     if (!variable_global_exists("vs_dlmgr_dl"))
     {
-        global.vs_dlmgr_dl = { on_done: undefined, need: [], idx: 0, chartId: "", serverId: "", name: "", failed: false, cancel: false, fileGot: 0, fileTotal: 0, fileName: "", err: "" };
+        global.vs_dlmgr_dl = { on_done: undefined, need: [], idx: 0, chartId: "", serverId: "", name: "", failed: false, cancel: false, fetching: false, fileGot: 0, fileTotal: 0, fileName: "", err: "" };
     }
     global.vs_dlmgr_dl.on_done = _on_done;
     global.vs_dlmgr_dl.chartId = _chartId;
@@ -305,40 +298,45 @@ function vs_dlmgr_download(_songId, _chartId, _kind, _on_done)
     global.vs_dlmgr_dl.fileTotal = 0;
     global.vs_dlmgr_dl.fileName = "";
     global.vs_dlmgr_dl.err = "";
+    global.vs_dlmgr_dl.fetching = false;
     vs_songstore_dl_init();
     vs_songstore_sweep_tmp();
     vs_songstore_log("download start kind=" + string(_kind) + " song=" + string(_songId) + " chart=" + string(_chartId));
-    vs_songstore_fetch(_kind, _songId, function(_ok, _detail, _status)
+    global.vs_dlmgr_dl.fetching = true;
+    vs_songstore_fetch(_kind, _songId, vs_dlmgr_on_detail);
+}
+
+function vs_dlmgr_on_detail(_ok, _detail, _status)
+{
+    var st = global.vs_dlmgr_dl;
+    st.fetching = false;
+    if (st.cancel)
     {
-        var st = global.vs_dlmgr_dl;
-        if (st.cancel)
+        vs_dlmgr_dl_finish(false);
+        return;
+    }
+    if (!_ok || _detail == undefined)
+    {
+        var code = (_status == undefined) ? -1 : _status;
+        if (code == 404) vs_songstore_set_err("chart removed from server");
+        else vs_songstore_set_err("could not fetch song info (http " + string(code) + ")");
+        vs_dlmgr_dl_finish(false);
+        return;
+    }
+    st.name = variable_struct_exists(_detail, "name") ? _detail.name : vs_chartmeta_label(st.chartId);
+    vs_chartmeta_remember(_detail);
+    st.need = vs_songstore_diff(_detail.files, st.chartId);
+    st.idx = 0;
+    if (array_length(st.need) == 0)
+    {
+        if (!vs_songstore_has_chart(st.chartId))
         {
-            vs_dlmgr_dl_finish(false);
-            return;
+            vs_songstore_set_err("no chart files on server");
         }
-        if (!_ok || _detail == undefined)
-        {
-            var code = (_status == undefined) ? -1 : _status;
-            if (code == 404) vs_songstore_set_err("chart removed from server");
-            else vs_songstore_set_err("could not fetch song info (http " + string(code) + ")");
-            vs_dlmgr_dl_finish(false);
-            return;
-        }
-        st.name = variable_struct_exists(_detail, "name") ? _detail.name : vs_chartmeta_label(st.chartId);
-        vs_chartmeta_remember(_detail);
-        st.need = vs_songstore_diff(_detail.files, st.chartId);
-        st.idx = 0;
-        if (array_length(st.need) == 0)
-        {
-            if (!vs_songstore_has_chart(st.chartId))
-            {
-                vs_songstore_set_err("no chart files on server");
-            }
-            vs_dlmgr_dl_finish(vs_songstore_has_chart(st.chartId));
-            return;
-        }
-        vs_dlmgr_dl_step();
-    });
+        vs_dlmgr_dl_finish(vs_songstore_has_chart(st.chartId));
+        return;
+    }
+    vs_dlmgr_dl_step();
 }
 
 // Serial-download driver for vs_dlmgr_download (state in global.vs_dlmgr_dl).
@@ -350,8 +348,7 @@ function vs_dlmgr_cancel()
     st.cancel = true;
     st.failed = true;
     vs_songstore_dl_clear();
-    var waitingFetch = variable_global_exists("vs_store_detail_cb")
-        && global.vs_store_detail_cb.on_done != undefined;
+    var waitingFetch = variable_struct_exists(st, "fetching") && st.fetching;
     var busy = variable_global_exists("vs_dl_busy") && global.vs_dl_busy;
     // Fetch callback / in-flight http_get_file will finish. Between files
     // the queue is already empty and nobody would call on_done.

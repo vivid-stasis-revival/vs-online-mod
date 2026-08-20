@@ -506,7 +506,9 @@ function vs_localcharts_auto_check()
         global.vs_updates_available = [];
         return;
     }
-    vs_online_post_json("/api/v1/charts/check-updates", { charts: charts }, vs_localcharts_auto_done);
+    var body = {};
+    variable_struct_set(body, "charts", charts);
+    vs_online_post_json("/api/v1/charts/check-updates", body, vs_localcharts_auto_done);
 }
 
 function vs_localcharts_auto_done(_ok, _data, _status)

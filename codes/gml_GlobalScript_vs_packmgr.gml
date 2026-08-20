@@ -659,7 +659,9 @@ function vs_packmgr_run_sha(_members, _version)
         if (cb != undefined) cb(true, st.need);
         return;
     }
-    vs_online_post_json("/api/v1/charts/check-updates", { charts: charts }, vs_packmgr_check_sha);
+    var body = {};
+    variable_struct_set(body, "charts", charts);
+    vs_online_post_json("/api/v1/charts/check-updates", body, vs_packmgr_check_sha);
 }
 
 function vs_packmgr_check_sha(_ok, _data, _status)
