@@ -1865,6 +1865,20 @@ function vs_online_rating_lb_friends_done(_ok, _data, _status)
     inst.vs_rating_lb_busy = false;
 }
 
+function vs_online_rating_show_gain()
+{
+    if (!instance_exists(o_2023results)) return;
+    if (instance_exists(o_2023res_playerwindow))
+    {
+        o_2023res_playerwindow.ratingclass = get_rating_class_info(global.rscore);
+    }
+    var last = 0;
+    if (variable_global_exists("rscore_last")) last = global.rscore_last;
+    if (round(global.rscore) <= round(last)) return;
+    if (instance_exists(o_ratingUp)) return;
+    instance_create_depth(4, 4, 0, o_ratingUp);
+}
+
 function vs_online_rating_card_done(_ok, _data, _status)
 {
     if (!_ok || _data == undefined) return;
@@ -1874,6 +1888,7 @@ function vs_online_rating_card_done(_ok, _data, _status)
         || variable_struct_exists(_data, "completion"))
     {
         global.rscore = vs_online_rscore_from_card(_data);
+        vs_online_rating_show_gain();
         if (variable_global_exists("profile_file") && global.profile_file != undefined)
         {
             ini_open(global.profile_file);
