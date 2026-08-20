@@ -6,7 +6,7 @@
 // same JSON GET /packs/:id/package puts in the zip — so CSM sees a pack and
 // sha1_file() can track name/description/colors.
 // Local state is working_directory/vsonline.packs.json:
-//   [{ id, name, version, infoSha1, songs: [{ id, chartId, kind, name }] }]
+//   [{ id, name, description, color1, color2, version, infoSha1, songs: [{ id, chartId, kind, name }] }]
 // kind 0 = song, 2 = shatter. Unsub removes the list and the info file,
 // never the song folders.
 // ============================================================================
@@ -183,6 +183,56 @@ function vs_packmgr_info_stale(_packId, _data)
     return false;
 }
 
+function vs_packmgr_read_info_file(_packId)
+{
+    var p = vs_packmgr_info_path(_packId);
+    var j = vs_csm_read_json_file(p);
+    if (j == undefined) j = vs_csm_read_json_file(vs_songstore_install_path(p));
+    return j;
+}
+
+// Song-select copy: disk songpack_info.json, then vsonline.packs.json, then
+// the "Online pack." placeholder only if nothing was stored.
+function vs_packmgr_display_meta(_packId, _entry)
+{
+    var s = { name: "", description: "", color1: 8388479, color2: 16776960 };
+    var disk = vs_packmgr_info_struct(vs_packmgr_read_info_file(_packId));
+    if (disk.name != "") s.name = disk.name;
+    if (disk.description != "") s.description = disk.description;
+    if (disk.name != "" || disk.description != "" || disk.color1 != 0 || disk.color2 != 0)
+    {
+        s.color1 = disk.color1;
+        s.color2 = disk.color2;
+    }
+    if (_entry != undefined)
+    {
+        if (s.name == "" && variable_struct_exists(_entry, "name")) s.name = string(_entry.name);
+        if (s.description == "" && variable_struct_exists(_entry, "description"))
+            s.description = string(_entry.description);
+        if (variable_struct_exists(_entry, "color1"))
+            s.color1 = floor(vs_csm_safe_real(_entry.color1, s.color1));
+        if (variable_struct_exists(_entry, "color2"))
+            s.color2 = floor(vs_csm_safe_real(_entry.color2, s.color2));
+    }
+    if (s.name == "") s.name = string(_packId);
+    if (s.description == "") s.description = "Online pack.";
+    return s;
+}
+
+function vs_packmgr_store_meta(_packId, _info)
+{
+    var pid = string(_packId);
+    if (pid == "" || _info == undefined) return;
+    vs_packmgr_write_info(pid, _info);
+    var local = vs_packmgr_get(pid);
+    if (local == undefined) return;
+    local.name = _info.name;
+    local.description = _info.description;
+    local.color1 = _info.color1;
+    local.color2 = _info.color2;
+    vs_packmgr_upsert(local);
+}
+
 function vs_packmgr_csm_has(_packId)
 {
     var pid = string(_packId);
@@ -202,6 +252,11 @@ function vs_packmgr_csm_fill(_packInfo, _packId)
 {
     if (_packInfo == undefined) return;
     var local = vs_packmgr_get(_packId);
+    var meta = vs_packmgr_display_meta(_packId, local);
+    _packInfo.name = meta.name;
+    _packInfo.description = meta.description;
+    _packInfo.color1 = meta.color1;
+    _packInfo.color2 = meta.color2;
     if (local == undefined || !variable_struct_exists(local, "songs") || !is_array(local.songs)) return;
     if (!variable_struct_exists(_packInfo, "songs") || !is_array(_packInfo.songs))
         _packInfo.songs = [];
@@ -308,15 +363,14 @@ function vs_packmgr_csm_append()
             }
             if (array_length(songs) > 0)
             {
-                var pname = variable_struct_exists(e, "name") ? string(e.name) : string(e.id);
-                if (pname == "") pname = string(e.id);
+                var meta = vs_packmgr_display_meta(string(e.id), e);
                 array_push(global.custom_song_packs,
                 {
-                    name: pname,
+                    name: meta.name,
                     songs: songs,
-                    color1: 8388479,
-                    color2: 16776960,
-                    description: "Online pack.",
+                    color1: meta.color1,
+                    color2: meta.color2,
+                    description: meta.description,
                     vs_pack_id: string(e.id)
                 });
             }
@@ -538,6 +592,7 @@ function vs_packmgr_check_got(_ok, _data, _status)
     st.name = variable_struct_exists(_data, "name") ? _data.name : st.packId;
     st.version = variable_struct_exists(_data, "version") ? _data.version : 0;
     st.info = vs_packmgr_info_struct(_data);
+    vs_packmgr_store_meta(st.packId, st.info);
     vs_packmgr_run_sha(members, st.version);
 }
 
@@ -551,6 +606,8 @@ function vs_packmgr_check_members(_packId, _members, _version, _on_done)
     st.version = (_version == undefined) ? 0 : _version;
     st.failed = false;
     st.cancel = false;
+    if (st.info != undefined && (string(st.info.name) != "" || string(st.info.description) != ""))
+        vs_packmgr_store_meta(st.packId, st.info);
     vs_packmgr_run_sha(_members, st.version);
 }
 
@@ -682,10 +739,14 @@ function vs_packmgr_install_finish(_ok)
     if (_ok)
     {
         var infoSha = vs_packmgr_write_info(st.packId, st.info);
+        var iname = (st.info != undefined && st.info.name != "") ? st.info.name : st.name;
         vs_packmgr_upsert(
         {
             id: st.packId,
-            name: st.name,
+            name: iname,
+            description: (st.info != undefined) ? st.info.description : "",
+            color1: (st.info != undefined) ? st.info.color1 : 0,
+            color2: (st.info != undefined) ? st.info.color2 : 0,
             version: st.version,
             infoSha1: infoSha,
             songs: st.members
