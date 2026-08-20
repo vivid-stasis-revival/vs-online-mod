@@ -495,11 +495,23 @@ function vs_csm_pick_diff_file(_dir, _want)
     _dir = vs_csm_norm_dir(_dir);
     var want = string(_want);
     if (file_exists(_dir + want + ".vsc")) return { path: _dir + want + ".vsc", diff: want };
+    if (file_exists(_dir + want + ".vsb")) return { path: _dir + want + ".vsb", diff: want };
+    var mapped = vs_online_chart_file_diff(want);
+    if (mapped != "" && mapped != want)
+    {
+        if (file_exists(_dir + mapped + ".vsc")) return { path: _dir + mapped + ".vsc", diff: mapped };
+        if (file_exists(_dir + mapped + ".vsb")) return { path: _dir + mapped + ".vsb", diff: mapped };
+    }
+    // Standalone shatter folders only have difficulty_name (often ENCORE.vsc).
+    // Do not fall back to song OPENING/MIDDLE/FINALE/ENCORE lookup.
+    if (file_exists(_dir + "shatterinfo.json")) return undefined;
     var names = ["OPENING", "MIDDLE", "FINALE", "ENCORE", "PRELUDE"];
     for (var i = 0; i < 5; i++)
     {
         if (file_exists(_dir + names[i] + ".vsc"))
             return { path: _dir + names[i] + ".vsc", diff: names[i] };
+        if (file_exists(_dir + names[i] + ".vsb"))
+            return { path: _dir + names[i] + ".vsb", diff: names[i] };
     }
     return undefined;
 }
@@ -557,6 +569,10 @@ function readShatterInfo(dir, rel)
     songInfo.chart_load_dir = dir;
     songInfo.is_custom = true;
     songInfo.song_id = array_length(global.shatter_list);
+    if (!variable_struct_exists(songInfo, "difficulty_name") || string(songInfo.difficulty_name) == "")
+    {
+        if (vs_csm_chart_file_exists(dir, "ENCORE")) songInfo.difficulty_name = "ENCORE";
+    }
 
     var audName = variable_struct_exists(songInfo, "audio_id") ? songInfo.audio_id : "music.ogg";
     var aud = vs_csm_add_stream(dir, audName);
@@ -740,7 +756,11 @@ function CustomSongReader()
         {
             var e = entries[i];
             var key = string_lower(e.name);
-            if (file_exists(e.dir + "info.json"))
+            if (file_exists(e.dir + "shatterinfo.json"))
+            {
+                continue;
+            }
+            else if (file_exists(e.dir + "info.json"))
             {
                 if (variable_struct_exists(seenCharts, key)) continue;
                 var songRel = "Custom Songs/" + e.name + "/";
@@ -771,6 +791,7 @@ function CustomSongReader()
         for (var j = 0; j < array_length(children); j++)
         {
             var c = children[j];
+            if (file_exists(c.dir + "shatterinfo.json")) continue;
             if (!file_exists(c.dir + "info.json")) continue;
             var ck = string_lower(packJobs[p].name + "/" + c.name);
             if (variable_struct_exists(seenCharts, ck)) continue;

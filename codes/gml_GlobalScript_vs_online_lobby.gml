@@ -1087,6 +1087,12 @@ function vs_lobby_tag_ap(_m)
     return false;
 }
 
+function vs_lobby_ui_font()
+{
+    if (variable_global_exists("default_font")) return global.default_font;
+    return fnt_monacovs;
+}
+
 function vs_lobby_draw_namecard_tags(_m, _rx, _ry, _halign)
 {
     if (_m == undefined) return;
@@ -1097,6 +1103,7 @@ function vs_lobby_draw_namecard_tags(_m, _rx, _ry, _halign)
     var bits = lab;
     if (ap) bits = (bits == "") ? "AP" : (bits + " AP");
     if (_halign == undefined) _halign = fa_right;
+    draw_set_font(vs_lobby_ui_font());
     draw_set_halign(_halign);
     draw_set_color(ap && lab == "" ? c_yellow : vs_lobby_diff_color(d));
     draw_text_o(_rx, _ry, bits);
@@ -1122,7 +1129,7 @@ function vs_lobby_member_is_host(_m)
 function vs_lobby_draw_host_mark(_m, _x, _y)
 {
     if (!vs_lobby_member_is_host(_m)) return;
-    draw_set_font(fnt_monacovs);
+    draw_set_font(vs_lobby_ui_font());
     draw_set_halign(fa_left);
     draw_set_color(c_yellow);
     draw_text_o(_x, _y, "M");
@@ -1132,7 +1139,7 @@ function vs_lobby_draw_host_mark(_m, _x, _y)
 function vs_lobby_draw_dl_mark(_m, _x, _y)
 {
     if (!vs_lobby_tag_need_dl(_m)) return;
-    draw_set_font(fnt_monacovs);
+    draw_set_font(vs_lobby_ui_font());
     draw_set_halign(fa_left);
     draw_set_color(make_color_rgb(255, 40, 40));
     draw_text_o(_x, _y, "D");

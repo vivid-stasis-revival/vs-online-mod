@@ -1,3 +1,5 @@
+if (!vs_online_is_custom())
+{
     ini_open(working_directory + "custom_highscore");
 
     for (var i = 0; i < array_length(global.highscores.normal); i++)
@@ -46,4 +48,5 @@
     }
 
     ini_close();
-    ini_open(global.highscore_file);
+}
+ini_open(global.highscore_file);
