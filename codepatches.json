@@ -248,7 +248,7 @@
     {
         "Entry": "gml_GlobalScript_SendQueuePacket",
         "Find": "            member.ready = status;",
-        "Value": "            member.ready = status;\n            if (vs_online_is_custom()) { vs_member_set_score(member, _sc); vs_member_set_flag(member, _fl); }",
+        "Value": "            member.ready = status;\n            if (vs_online_is_custom() && !vs_lobby_score_live()) { vs_member_set_score(member, _sc); vs_member_set_flag(member, _fl); }",
         "Type": 0
     },
     {
@@ -761,9 +761,26 @@
         "Type": 1
     },
     {
+        "Entry": "gml_Object_o_score_updater_Create_0",
+        "Find": "interval = call_later(1, time_source_units_seconds, function()",
+        "Value": "interval = call_later(vs_online_is_custom() ? 0.25 : 1, time_source_units_seconds, function()",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_Object_o_score_updater_Step_0",
+        "Value": "if (vs_online_is_custom()) vs_lobby_scoreboard_tick();",
+        "Type": 2
+    },
+    {
         "Entry": "gml_Object_o_score_updater_Step_0",
         "Find": "return (arg0.score != arg1.score) ? sign(arg0.score - arg1.score) : (arg0.order - arg1.order);",
         "Value": "return (vs_member_get_score(arg0) != vs_member_get_score(arg1)) ? sign(vs_member_get_score(arg0) - vs_member_get_score(arg1)) : (arg0.order - arg1.order);",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_Object_o_score_updater_Step_0",
+        "Find": "oldMembers = json_parse(json_stringify(members));",
+        "Value": "if (vs_online_is_custom()) oldMembers = members; else oldMembers = json_parse(json_stringify(members));",
         "Type": 0
     },
     {
@@ -775,7 +792,7 @@
     {
         "Entry": "gml_Object_o_score_updater_Draw_64",
         "Find": "        _score = _score - currentMember.score;",
-        "Value": "        _score = _score - vs_member_get_score(currentMember);",
+        "Value": "        _score = _score - (vs_online_is_custom() ? global.currentscore : vs_member_get_score(currentMember));",
         "Type": 0
     },
     {
