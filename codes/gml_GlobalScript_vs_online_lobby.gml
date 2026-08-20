@@ -650,8 +650,10 @@ function vs_online_is_connected()
 function vs_member_get_score(_m)
 {
     if (_m == undefined) return 0;
-    if (variable_struct_exists(_m, "score")) return variable_struct_get(_m, "score");
+    // Prefer score_: vsml/GML can treat the identifier `score` as the
+    // built-in instance var, so a struct key named score is not reliable.
     if (variable_struct_exists(_m, "score_")) return variable_struct_get(_m, "score_");
+    if (variable_struct_exists(_m, "score")) return variable_struct_get(_m, "score");
     return 0;
 }
 
@@ -1127,6 +1129,27 @@ function vs_lobby_keep_play_tags(_dst, _src)
     if (variable_struct_exists(_src, "play_diff")) _dst.play_diff = _src.play_diff;
     if (variable_struct_exists(_src, "autoplay")) _dst.autoplay = _src.autoplay;
     if (variable_struct_exists(_src, "need_dl")) _dst.need_dl = _src.need_dl;
+}
+
+function vs_lobby_score_live()
+{
+    return instance_exists(o_score_updater);
+}
+
+// o_score_updater copies lobbyMembers once. A later roster rebuild would
+// leave the overlay on stale structs while UpdateScore writes the new ones.
+function vs_lobby_scoreboard_tick()
+{
+    if (!instance_exists(o_st_handle) || !is_array(o_st_handle.lobbyMembers)) return;
+    members = [];
+    array_copy(members, 0, o_st_handle.lobbyMembers, 0, array_length(o_st_handle.lobbyMembers));
+    var me = vs_lobby_find_member(vs_online_player_id());
+    if (me == undefined) me = o_st_handle.currentMember;
+    currentMember = me;
+    if (me != undefined && variable_global_exists("currentscore"))
+    {
+        vs_member_set_score(me, global.currentscore);
+    }
 }
 
 function vs_lobby_ops_lobby()
@@ -1639,22 +1662,20 @@ function vs_lobby_apply_roster(_members)
     repeat (array_length(_members))
     {
         var src = _members[i];
-        var m = vs_lobby_build_member(src);
-        var pid = string(m.id);
-        if (variable_struct_exists(prevById, pid))
+        var pid = "";
+        if (src != undefined && variable_struct_exists(src, "playerId")) pid = string(src.playerId);
+        var m = undefined;
+        if (pid != "" && variable_struct_exists(prevById, pid))
         {
-            var old = variable_struct_get(prevById, pid);
-            vs_lobby_keep_play_tags(m, old);
-            if (variable_struct_exists(old, "reportedScore")) m.reportedScore = old.reportedScore;
-            if (vs_member_get_score(m) == 0)
-            {
-                var oldSc = vs_member_get_score(old);
-                if (oldSc != 0)
-                {
-                    vs_member_set_score(m, oldSc);
-                    if (variable_struct_exists(old, "scoreFlag")) vs_member_set_flag(m, vs_member_get_flag(old));
-                }
-            }
+            // Keep the same struct so live score overlays keep updating.
+            m = variable_struct_get(prevById, pid);
+            vs_lobby_touch_member(src);
+            m.order = i;
+        }
+        else
+        {
+            m = vs_lobby_build_member(src);
+            m.order = i;
         }
         arr[i] = m;
         i++;
@@ -1909,6 +1930,13 @@ function vs_lobby_host_sync(_why, _from)
 {
     if (!vs_lobby_is_owner()) return;
     if (!instance_exists(o_st_handle)) return;
+    // SendQueue also writes per-member scores. During play that overwrites
+    // live UpdateScore values with whatever the host last stored (often 0).
+    if (vs_lobby_score_live())
+    {
+        vs_lobby_log("host sync skip in play " + string(_why));
+        return;
+    }
     if (_from == undefined) _from = "";
     var fromId = string(_from);
     if (fromId != "")
