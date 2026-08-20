@@ -812,14 +812,7 @@ function vs_online_oauth_start_done(_ok, _data, _status)
         array_delete(global.vs_oauth_start_q, 0, 1);
     }
     if (cb == undefined) return;
-    if (_ok && _data != undefined && variable_struct_exists(_data, "device_code"))
-    {
-        cb(true, _data);
-    }
-    else
-    {
-        cb(false, _data);
-    }
+    cb(_ok && _data != undefined && variable_struct_exists(_data, "device_code"), _data, _status);
 }
 
 function vs_online_oauth_poll(_deviceCode, _on_done)
