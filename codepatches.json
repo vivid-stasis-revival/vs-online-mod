@@ -107,7 +107,7 @@
     {
         "Entry": "gml_Object_obj_multiplayer_lobby_Step_0",
         "Find": "if (confirmMenu != undefined)\n{\n    exit;\n}",
-        "Value": "if (confirmMenu != undefined)\n{\n    exit;\n}\nif (vs_lobby_dl_step())\n{\n    exit;\n}\nif (vs_lobby_ops_step())\n{\n    exit;\n}",
+        "Value": "if (confirmMenu != undefined)\n{\n    exit;\n}\nif (instance_exists(vs_downloader_browser))\n{\n    exit;\n}\nif (vs_lobby_dl_step())\n{\n    exit;\n}\nif (vs_lobby_ops_step())\n{\n    exit;\n}",
         "Type": 0
     },
     {
@@ -119,7 +119,7 @@
     {
         "Entry": "gml_Object_obj_multiplayer_lobby_Create_0",
         "Find": "case \"hostlobby\":",
-        "Value": "case \"kick\": vs_lobby_ops_begin(\"kick\"); break;\n        case \"downloadchart\": vs_lobby_dl_go(); break;\n        case \"hostlobby\":",
+        "Value": "case \"kick\": vs_lobby_ops_begin(\"kick\"); break;\n        case \"downloadchart\": vs_lobby_dl_go(); break;\n        case \"opendownloader\": vs_dlbr_open_from_lobby(); break;\n        case \"hostlobby\":",
         "Type": 0
     },
     {
@@ -129,6 +129,12 @@
         "Type": 0
     },
 
+    {
+        "Entry": "gml_Object_obj_multiplayer_lobby_Draw_64",
+        "Find": "draw_set_default();",
+        "Value": "if (instance_exists(vs_downloader_browser)) exit;\ndraw_set_default();",
+        "Type": 1
+    },
     {
         "Entry": "gml_Object_obj_multiplayer_lobby_Draw_64",
         "Find": "steam_lobby_is_owner()",
