@@ -1,0 +1,14 @@
+---
+description: After finishing work, commit and push without asking
+alwaysApply: true
+---
+
+# Auto commit and push
+
+When a task leaves real repo changes, commit and push to `origin` without waiting to be asked.
+
+- Use the existing commit style (`fix:` / `log:` / …) and HEREDOC messages.
+- Include related untracked files that belong with the change.
+- Do not commit secrets, skip hooks, amend published history, or force-push.
+- `main` is the default branch; push normally (`git push origin HEAD`).
+- If there is nothing to commit, do not create an empty commit.

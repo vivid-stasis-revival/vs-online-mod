@@ -1,0 +1,20 @@
+---
+description: How to ship vs-online-mod GitHub releases and keep a local zip
+alwaysApply: true
+---
+
+# Releases
+
+Only create a GitHub release when the user says 发版. Code still commits and pushes as usual.
+
+- **发版 test** = prerelease from `test`, tag `test.x.y.z` (bump patch).
+- **发版** / **发版 main** / **release 发版** = release from `main`, production tag.
+- This is the **mod zip**, not a vsml / data.win rebuild.
+
+Zip with `git archive` as `vs-online-mod-<tag>.zip`, prefix `vs-online-mod/`. Include `README.md codepatches.json codepatches codes objects sprites fonts`. **Never include `tools/`**.
+
+After the GitHub release succeeds, copy that zip to:
+
+`/Users/drnarika/Projects/vs-online-mod-releases/`
+
+Keep previous zips. Tell the user the full path. Stay on `test` unless asked otherwise.
