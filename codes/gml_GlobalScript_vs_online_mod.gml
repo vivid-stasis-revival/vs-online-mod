@@ -823,7 +823,7 @@ function vs_online_show_score_error(_why)
         buttons = ["取消", "重置"];
         on_retry = undefined;
         retrying = false;
-        selected = 0;
+        selected = 1;
         server_url = vs_online_server_url();
         message = string(_why) + "\n取消 = stay on results.\n重置 = retry upload.";
     }
@@ -1004,9 +1004,9 @@ function vs_online_error_step()
         play_se(sfx_songsel_select);
         if (kind == "score")
         {
-            var doReset = (selected == 1);
+            var btn = buttons[selected];
             instance_destroy();
-            if (doReset) vs_online_score_retry_upload();
+            if (btn == "重置") vs_online_score_retry_upload();
         }
         else if (selected == 0)
         {
