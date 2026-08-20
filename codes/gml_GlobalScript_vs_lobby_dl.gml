@@ -341,9 +341,31 @@ function vs_lobby_dl_show_wait()
     st.err = "";
 }
 
+function vs_lobby_dl_resume_start()
+{
+    if (!vs_lobby_is_owner()) return;
+    if (!instance_exists(obj_multiplayer_lobby)) return;
+    if (vs_lobby_anyone_need_dl()) return;
+    if (!vs_lobby_everyone_ready()) return;
+    vs_lobby_log("start resume after wait");
+    send_packet(StartCountdownPacket, 3);
+}
+
+function vs_lobby_dl_wait_tick()
+{
+    var st = vs_lobby_dl_st();
+    if (!st.wait) return false;
+    if (vs_lobby_anyone_need_dl()) return false;
+    vs_lobby_dl_close();
+    vs_lobby_log("wait overlay clear");
+    vs_lobby_dl_resume_start();
+    return true;
+}
+
 function vs_lobby_dl_on_member_info()
 {
     if (!vs_online_is_custom()) return;
+    if (vs_lobby_dl_wait_tick()) return;
     if (!vs_lobby_anyone_need_dl()) return;
     if (!instance_exists(obj_multiplayer_lobby)) return;
     with (obj_multiplayer_lobby)
@@ -485,6 +507,7 @@ function vs_lobby_dl_step()
     }
     if (st.wait)
     {
+        if (vs_lobby_dl_wait_tick()) return false;
         if (cancel || input_check_pressed(4) || keyboard_check_pressed(vk_enter))
         {
             play_se(sfx_songsel_select);
@@ -570,7 +593,7 @@ function vs_lobby_dl_draw_wait()
     draw_text(px + pw / 2, py + 8, vs_dlbr_clip_text("Can't start yet", pw - 12));
     draw_set_font(global.default_font);
     draw_set_color(c_white);
-    draw_text(px + pw / 2, py + 28, vs_dlbr_clip_text("Someone still needs this chart", pw - 12));
+    draw_text(px + pw / 2, py + 28, vs_dlbr_clip_text(vs_lobby_need_dl_label(), pw - 12));
     draw_set_color(c_yellow);
     draw_text(px + pw / 2, py + 52, vs_dlbr_clip_text("ESCAPE", pw - 12));
     draw_set_halign(fa_left);

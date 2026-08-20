@@ -654,15 +654,68 @@ function vs_lobby_tag_need_dl(_m)
     return _m != undefined && variable_struct_exists(_m, "need_dl") && _m.need_dl;
 }
 
+function vs_lobby_member_connected(_m)
+{
+    if (_m == undefined) return false;
+    if (!variable_struct_exists(_m, "connected")) return true;
+    return vs_lobby_json_true(_m.connected);
+}
+
 function vs_lobby_member_needs_chart(_m)
 {
     if (_m == undefined) return false;
     if (variable_struct_exists(_m, "npc") && _m.npc) return false;
+    if (!vs_lobby_member_connected(_m)) return false;
     if (variable_struct_exists(_m, "id") && string(_m.id) == string(vs_online_player_id()))
     {
         return vs_lobby_local_need_dl();
     }
     return variable_struct_exists(_m, "need_dl") && _m.need_dl;
+}
+
+function vs_lobby_need_dl_label()
+{
+    if (vs_lobby_local_need_dl()) return "You still need this chart";
+    if (!instance_exists(o_st_handle) || !is_array(o_st_handle.lobbyMembers)) return "Someone still needs this chart";
+    var i = 0;
+    repeat (array_length(o_st_handle.lobbyMembers))
+    {
+        var m = o_st_handle.lobbyMembers[i];
+        if (vs_lobby_member_needs_chart(m))
+        {
+            var nm = (m != undefined && variable_struct_exists(m, "name")) ? string(m.name) : "";
+            if (nm == "") nm = "player";
+            return "Waiting for " + nm;
+        }
+        i++;
+    }
+    return "Someone still needs this chart";
+}
+
+function vs_lobby_everyone_ready()
+{
+    if (!instance_exists(o_st_handle) || !is_array(o_st_handle.lobbyMembers)) return false;
+    var n = 0;
+    var i = 0;
+    repeat (array_length(o_st_handle.lobbyMembers))
+    {
+        var m = o_st_handle.lobbyMembers[i];
+        i++;
+        if (m == undefined) continue;
+        if (variable_struct_exists(m, "npc") && m.npc) continue;
+        if (!vs_lobby_member_connected(m)) continue;
+        n++;
+        if (!m.ready) return false;
+    }
+    return n > 0;
+}
+
+function vs_lobby_member_await_score(_m)
+{
+    if (_m == undefined) return false;
+    if (variable_struct_exists(_m, "npc") && _m.npc) return false;
+    if (!vs_lobby_member_connected(_m)) return false;
+    return !(_m.reportedScore);
 }
 
 function vs_lobby_anyone_need_dl()
@@ -1304,6 +1357,7 @@ function vs_lobby_apply_roster(_members)
         {
             var old = variable_struct_get(prevById, pid);
             vs_lobby_keep_play_tags(m, old);
+            if (variable_struct_exists(old, "reportedScore")) m.reportedScore = old.reportedScore;
             if (vs_member_get_score(m) == 0)
             {
                 var oldSc = vs_member_get_score(old);

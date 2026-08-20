@@ -169,6 +169,12 @@
     },
     {
         "Entry": "gml_Object_obj_multiplayer_waiting_room_Step_0",
+        "Find": "        if (!member.reportedScore)",
+        "Value": "        if (vs_online_is_custom() ? vs_lobby_member_await_score(member) : !member.reportedScore)",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_Object_obj_multiplayer_waiting_room_Step_0",
         "Find": "        send_packet(ShowScorePacket);",
         "Value": "        if (vs_online_is_custom()) vs_lobby_log(\"waiting_room ShowScore members=\" + string(array_length(members))); send_packet(ShowScorePacket);",
         "Type": 1
@@ -888,7 +894,7 @@
     {
         "Entry": "gml_GlobalScript_StartGamePacket",
         "Find": "                start_song(song.songId, song.difficulty, ",
-        "Value": "                if (vs_online_song_from_id(song.songId) == undefined) { if (vs_online_is_custom()) vs_lobby_log(\"start_game skip missing songId=\" + string(song.songId)); }\n                else start_song(song.songId, global.songselect_difficulty, ",
+        "Value": "                if (vs_online_is_custom()) vs_lobby_resolve_song_ref(song);\n                if (vs_online_song_from_id(song.songId) == undefined) { if (vs_online_is_custom()) { vs_lobby_log(\"start_game skip missing songId=\" + string(song.songId)); send_packet(ReportScorePacket, { score_: 0, flag: 1 }); } }\n                else start_song(song.songId, global.songselect_difficulty, ",
         "Type": 1
     },
     {
