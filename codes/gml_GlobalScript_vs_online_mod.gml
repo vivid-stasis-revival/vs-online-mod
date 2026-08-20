@@ -596,6 +596,9 @@ function vs_online_is_account()
 // will crash. Do not wait for vml_mods; other mods may register later in
 // the same Create. Do not use show_message here: YYC often hard-crashes
 // that builtin during the loading room instead of showing a dialog.
+//
+// parse_extra_value is official GML — never use it as a CSM fingerprint.
+// CSM's unique GlobalScript is initSetting (force GM audio on boot).
 function vs_online_has_fn(_name)
 {
     return variable_global_exists(_name);
@@ -611,7 +614,7 @@ function vs_online_conflict_why()
     {
         return "VS Online 与 betterWP 不兼容，请移除其一后重试。\n\nVS Online is incompatible with betterWP — please remove one of them and restart.";
     }
-    if (vs_online_has_fn("parse_extra_value"))
+    if (vs_online_has_fn("initSetting"))
     {
         return "VS Online 已内置 Custom Songs，请卸载独立的 Custom Songs Mod 后重试。\n\nVS Online already includes Custom Songs — please uninstall the standalone Custom Songs Mod and restart.";
     }
