@@ -488,6 +488,12 @@
     },
     {
         "Entry": "gml_GlobalScript_get_rating_completion_value",
+        "Find": "function get_rating_completion_value()\n{\n    var total_rate = 0;",
+        "Value": "function get_rating_completion_value()\n{\n    if (vs_online_is_custom()) { global.completion_bonus = 0; return 0; }\n    var total_rate = 0;",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_GlobalScript_get_rating_completion_value",
         "Find": "var song = global.song_list[s];",
         "Value": "var song = global.song_list[s]; if(struct_exists(song,\"is_custom\")) continue;",
         "Type": 1
@@ -519,8 +525,13 @@
     {
         "Entry": "gml_Object_obj_ratingWindow_Create_0",
         "Find": "lbIdTop100 = steam_download_scores(\"rating\", 0, 100);\ndataFriends = [];\nlbIdFriends = steam_download_friends_scores(\"rating\");",
-        "Value": "if (vs_online_is_custom()) { lbIdTop100 = -1; dataFriends = []; lbIdFriends = -1; vs_online_rating_refresh(); } else { lbIdTop100 = steam_download_scores(\"rating\", 0, 100); dataFriends = []; lbIdFriends = steam_download_friends_scores(\"rating\"); }",
+        "Value": "if (vs_online_is_custom()) { lbIdTop100 = -1; dataFriends = []; lbIdFriends = -1; vs_online_rating_refresh(); vs_online_rating_lb_fetch(id); } else { lbIdTop100 = steam_download_scores(\"rating\", 0, 100); dataFriends = []; lbIdFriends = steam_download_friends_scores(\"rating\"); }",
         "Type": 1
+    },
+    {
+        "Entry": "gml_Object_obj_ratingWindow_Other_69",
+        "ExternalFile": "rating_window_other69.gml",
+        "Type": 2
     },
     {
         "Entry": "gml_Object_obj_multiplayer_lobby_Create_0",
@@ -1040,7 +1051,18 @@
         "Value": "draw_sprite_stretched(member.avatar, 0, bx + ox + 5, by + oy + 5 + (i * 35), 23, 23);vs_lobby_draw_avatar_marks(member, bx + ox + 5, by + oy + 4 + (i * 35));",
         "Type": 0
     },
-
+    {
+        "Entry": "gml_Object_obj_multiplayer_lobby_Draw_64",
+        "Find": "draw_set_font(fnt_monacovs)",
+        "Value": "draw_set_font(global.default_font)",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_Object_obj_multiplayer_lobby_Draw_64",
+        "Find": "draw_set_font(fnt_phosphor)",
+        "Value": "draw_set_font(global.default_font)",
+        "Type": 0
+    },
     {
         "Entry": "gml_GlobalScript_load_song_information",
         "Find": "file_text_close(artists_file);",
@@ -1117,6 +1139,18 @@
         "Entry": "gml_GlobalScript_save_highscores",
         "Find": "ini_open(global.highscore_file);",
         "ExternalFile": "csm/SaveLoadHighScores/save_highscores.gml",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_GlobalScript_save_highscores",
+        "Find": "    for (var i = 0; i < array_length(global.highscores.normal); i++)\n    {\n        var diff_names = [\"OPENING\", \"MIDDLE\", \"FINALE\", \"ENCORE\", \"PRELUDE\"];",
+        "Value": "    for (var i = 0; i < array_length(global.highscores.normal); i++)\n    {\n        if (vs_online_is_custom() && i < array_length(global.song_list) && struct_exists(global.song_list[i], \"is_custom\")) continue;\n        var diff_names = [\"OPENING\", \"MIDDLE\", \"FINALE\", \"ENCORE\", \"PRELUDE\"];",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_GlobalScript_save_highscores",
+        "Find": "    for (var i = 0; i < array_length(global.highscores.shatter); i++)\n    {\n        var props = [[\"score\", \"\"], [\"game_score\", \"_GAME\"], [\"game_perc\", \"_GAMEPERC\"], [\"max_combo\", \"_MAXCOMBO\"], [\"lamp\", \"_COMBO\"]];",
+        "Value": "    for (var i = 0; i < array_length(global.highscores.shatter); i++)\n    {\n        if (vs_online_is_custom() && i < array_length(global.shatter_list) && struct_exists(global.shatter_list[i], \"is_custom\")) continue;\n        var props = [[\"score\", \"\"], [\"game_score\", \"_GAME\"], [\"game_perc\", \"_GAMEPERC\"], [\"max_combo\", \"_MAXCOMBO\"], [\"lamp\", \"_COMBO\"]];",
         "Type": 1
     },
     {

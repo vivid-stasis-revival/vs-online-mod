@@ -57,6 +57,18 @@ function vs_online_diff_api(_diff)
     return string(_diff);
 }
 
+// Songs POST lowercase API names (encore). Shatter playables keep the
+// chart's difficulty_name (ENCORE, SHATTER, …) so the server can match.
+function vs_online_diff_submit(_diff)
+{
+    if (variable_global_exists("song_shatter") && global.song_shatter)
+    {
+        var raw = string(_diff);
+        if (raw != "") return raw;
+    }
+    return vs_online_diff_api(_diff);
+}
+
 function vs_online_chart_file_diff(_diff)
 {
     var low = string_lower(string(_diff));
@@ -72,15 +84,26 @@ function vs_online_chart_file(_chartId, _diff, _ext)
 {
     if (_chartId == undefined || _chartId == "" || _diff == undefined || _diff == "") return "";
     var fileDiff = vs_online_chart_file_diff(_diff);
+    var rawDiff = string(_diff);
     var loadDir = vs_csm_load_dir_from_id(_chartId);
     var p = "";
     if (loadDir != "")
     {
         p = loadDir + fileDiff + _ext;
         if (file_exists(p)) return p;
+        if (rawDiff != "" && rawDiff != fileDiff)
+        {
+            p = loadDir + rawDiff + _ext;
+            if (file_exists(p)) return p;
+        }
     }
     p = "Custom Songs/" + _chartId + "/" + fileDiff + _ext;
     if (file_exists(p)) return p;
+    if (rawDiff != "" && rawDiff != fileDiff)
+    {
+        p = "Custom Songs/" + _chartId + "/" + rawDiff + _ext;
+        if (file_exists(p)) return p;
+    }
     p = working_directory + "Charts/" + _chartId + "/" + fileDiff + _ext;
     if (file_exists(p)) return p;
     return "";
@@ -1256,6 +1279,13 @@ function vs_online_score_mods_json()
     return "{\"gauge\":\"" + vs_online_json_esc(gauge) + "\",\"autoplay\":" + ap + ",\"failed\":" + fl + "}";
 }
 
+function vs_online_score_append_global_int(_json, _key, _gname)
+{
+    if (!variable_global_exists(_gname)) return _json;
+    var v = floor(real(variable_global_get(_gname)));
+    return _json + ",\"" + _key + "\":" + string(v);
+}
+
 function vs_online_score_body_json(_chartId, _difficulty, _sha1, _pts, _verified)
 {
     // Never put the identifier `score` in a struct / json_stringify: it is a
@@ -1265,7 +1295,7 @@ function vs_online_score_body_json(_chartId, _difficulty, _sha1, _pts, _verified
     var pts = floor(real(_pts));
     if (pts < 0) pts = 0;
     var out = "{\"chartId\":\"" + vs_online_json_esc(_chartId)
-        + "\",\"difficulty\":\"" + vs_online_json_esc(vs_online_diff_api(_difficulty))
+        + "\",\"difficulty\":\"" + vs_online_json_esc(vs_online_diff_submit(_difficulty))
         + "\",\"sha1\":\"" + vs_online_json_esc(sha)
         + "\",\"score\":" + string(pts);
     if (_verified && variable_global_exists("count_acrit"))
@@ -1289,6 +1319,36 @@ function vs_online_score_body_json(_chartId, _difficulty, _sha1, _pts, _verified
                 + ",\"noteCount\":" + string(nc)
                 + ",\"clearType\":" + string(ct)
                 + ",\"mods\":\"" + vs_online_json_esc(vs_online_score_mods_json()) + "\"";
+            out = vs_online_score_append_global_int(out, "earlyCrit", "count_early_crit");
+            out = vs_online_score_append_global_int(out, "lateCrit", "count_late_crit");
+            out = vs_online_score_append_global_int(out, "earlyGreat", "count_early_great");
+            out = vs_online_score_append_global_int(out, "lateGreat", "count_late_great");
+            out = vs_online_score_append_global_int(out, "earlyGood", "count_early_good");
+            out = vs_online_score_append_global_int(out, "lateGood", "count_late_good");
+            if (variable_global_exists("gamescore"))
+            {
+                out += ",\"exScore\":" + string(floor(real(global.gamescore)));
+            }
+            else
+            {
+                out = vs_online_score_append_global_int(out, "exScore", "ex_score");
+            }
+            if (variable_global_exists("max_ex"))
+            {
+                out += ",\"maxEx\":" + string(floor(real(global.max_ex)));
+            }
+            else
+            {
+                out += ",\"maxEx\":" + string(nc * 3);
+            }
+            if (variable_global_exists("play_time_ms"))
+            {
+                out = vs_online_score_append_global_int(out, "playTimeMs", "play_time_ms");
+            }
+            else if (variable_global_exists("playTimeMs"))
+            {
+                out = vs_online_score_append_global_int(out, "playTimeMs", "playTimeMs");
+            }
         }
     }
     return out + "}";
@@ -1307,14 +1367,14 @@ function vs_online_upload_score(_chartId, _difficulty, _sha1, _pts, _data)
     global.vs_score_up =
     {
         chartId: _chartId,
-        difficulty: vs_online_diff_api(_difficulty),
+        difficulty: vs_online_diff_submit(_difficulty),
         sha1: sha,
         pts: pts,
         legacy: false
     };
     var body = vs_online_score_body_json(_chartId, _difficulty, sha, pts, true);
     vs_online_score_log("POST /charts/scores chart=" + string(_chartId)
-        + " diff=" + string(vs_online_diff_api(_difficulty))
+        + " diff=" + string(vs_online_diff_submit(_difficulty))
         + " sha=" + string_copy(sha, 1, 8)
         + " pts=" + string(pts)
         + " body=" + body
@@ -1415,7 +1475,12 @@ function vs_online_upload_chart(_songIndex, _difficulty, _score)
         return;
     }
     var diff = _difficulty;
-    if ((diff == undefined || diff == "") && shatter && variable_global_exists("df_load"))
+    if (shatter && song != undefined && variable_struct_exists(song, "difficulty_name")
+        && string(song.difficulty_name) != "")
+    {
+        diff = song.difficulty_name;
+    }
+    else if ((diff == undefined || diff == "") && shatter && variable_global_exists("df_load"))
     {
         diff = global.df_load;
     }
@@ -1667,7 +1732,113 @@ function vs_online_rating_refresh()
 
 function vs_online_rating_window_refresh()
 {
+    if (!vs_online_is_custom()) return;
     vs_online_rating_refresh();
+    if (instance_exists(obj_ratingWindow))
+    {
+        var win = instance_find(obj_ratingWindow, 0);
+        if (win != noone && variable_instance_exists(win, "dataTop100"))
+            vs_online_rating_lb_fetch(win);
+    }
+}
+
+function vs_online_rating_lb_map_rows(_data)
+{
+    var rows = [];
+    var src = undefined;
+    if (_data != undefined && variable_struct_exists(_data, "entries") && is_array(_data.entries))
+        src = _data.entries;
+    else if (_data != undefined && variable_struct_exists(_data, "around") && is_array(_data.around))
+        src = _data.around;
+    if (src == undefined) return rows;
+    var i = 0;
+    repeat (array_length(src))
+    {
+        var e = src[i];
+        var nm = "";
+        if (variable_struct_exists(e, "name") && e.name != "") nm = e.name;
+        else if (variable_struct_exists(e, "playerId")) nm = string(e.playerId);
+        var row =
+        {
+            userid: variable_struct_exists(e, "playerId") ? e.playerId : "",
+            name: nm,
+            rank: variable_struct_exists(e, "rank") ? e.rank : (i + 1),
+            timestamp: variable_struct_exists(e, "uploadedAt") ? e.uploadedAt : 0
+        };
+        variable_struct_set(row, "score", variable_struct_exists(e, "score") ? variable_struct_get(e, "score") : 0);
+        array_push(rows, row);
+        i++;
+    }
+    return rows;
+}
+
+function vs_online_rating_lb_fetch(_inst)
+{
+    if (!vs_online_is_custom()) return;
+    if (_inst == undefined || !instance_exists(_inst)) return;
+    _inst.dataTop100 = [];
+    _inst.dataFriends = [];
+    _inst.vs_rating_lb_busy = true;
+    // One in-flight pair (top then friends). Close/reopen retargets the
+    // latest window and refetches after the current pair finishes so Top
+    // 100 / Friends cannot attach to the wrong instance.
+    if (variable_global_exists("vs_rating_lb_lock") && global.vs_rating_lb_lock)
+    {
+        var old = undefined;
+        if (variable_global_exists("vs_rating_lb_inst"))
+            old = global.vs_rating_lb_inst;
+        if (old != undefined && instance_exists(old) && old != _inst)
+            old.vs_rating_lb_busy = false;
+        global.vs_rating_lb_inst = _inst;
+        _inst.vs_rating_lb_stale = true;
+        return;
+    }
+    global.vs_rating_lb_lock = true;
+    global.vs_rating_lb_inst = _inst;
+    _inst.vs_rating_lb_stale = false;
+    vs_online_get_json("/api/v1/leaderboards/rating/scores?start=1&end=100", false, vs_online_rating_lb_top_done);
+}
+
+function vs_online_rating_lb_top_done(_ok, _data, _status)
+{
+    if (!vs_online_is_custom())
+    {
+        global.vs_rating_lb_lock = false;
+        return;
+    }
+    var inst = undefined;
+    if (variable_global_exists("vs_rating_lb_inst"))
+        inst = global.vs_rating_lb_inst;
+    var stale = false;
+    if (inst != undefined && instance_exists(inst) && variable_instance_exists(inst, "vs_rating_lb_stale"))
+        stale = inst.vs_rating_lb_stale;
+    if (inst != undefined && instance_exists(inst) && !stale)
+        inst.dataTop100 = vs_online_rating_lb_map_rows(_ok ? _data : undefined);
+    vs_online_get_json("/api/v1/leaderboards/rating/friends", true, vs_online_rating_lb_friends_done);
+}
+
+function vs_online_rating_lb_friends_done(_ok, _data, _status)
+{
+    if (!vs_online_is_custom())
+    {
+        global.vs_rating_lb_lock = false;
+        return;
+    }
+    var inst = undefined;
+    if (variable_global_exists("vs_rating_lb_inst"))
+        inst = global.vs_rating_lb_inst;
+    global.vs_rating_lb_lock = false;
+    if (inst == undefined || !instance_exists(inst))
+        return;
+    if (variable_instance_exists(inst, "vs_rating_lb_stale") && inst.vs_rating_lb_stale)
+    {
+        inst.vs_rating_lb_stale = false;
+        inst.vs_rating_lb_busy = false;
+        vs_online_rating_lb_fetch(inst);
+        return;
+    }
+    inst.dataFriends = vs_online_rating_lb_map_rows(_ok ? _data : undefined);
+    inst.vs_rating_lb_busy = false;
 }
 
 function vs_online_rating_card_done(_ok, _data, _status)
@@ -1691,7 +1862,11 @@ function vs_online_rating_card_done(_ok, _data, _status)
         if (global.rscore >= 10000) unlock_achievement("rating_10000");
         if (global.rscore >= 13000) unlock_achievement("rating_13000");
     }
-    if (variable_struct_exists(_data, "completionBonus"))
+    if (variable_struct_exists(_data, "completion"))
+    {
+        global.completion_bonus = vs_http_num(_data.completion, 0);
+    }
+    else if (variable_struct_exists(_data, "completionBonus"))
     {
         global.completion_bonus = _data.completionBonus / 1000;
     }
@@ -1710,15 +1885,15 @@ function vs_online_rscore_from_card(_data)
     // 1 chart on the 3-song test library → ~71.000; 2 charts → ~148.000,
     // and get_rating_class_info then reads class_ranges[last+1] and crashes.
     var fromRating = 0;
-    if (variable_struct_exists(_data, "rating")) fromRating = vs_http_num(_data.rating, 0);
+    var hasRating = variable_struct_exists(_data, "rating");
+    if (hasRating) fromRating = vs_http_num(_data.rating, 0);
     var b30 = 0;
     var e10 = 0;
-    var comp = 0;
     if (variable_struct_exists(_data, "best30")) b30 = vs_http_num(_data.best30, 0);
     if (variable_struct_exists(_data, "ex10")) e10 = vs_http_num(_data.ex10, 0);
-    if (variable_struct_exists(_data, "completion")) comp = vs_http_num(_data.completion, 0);
-    var fromParts = round(b30 * 1000 + e10 * 1000 + comp);
-    if (vs_online_rscore_ok(fromRating)) return fromRating;
+    // completion: 0 on custom server — do not fold it into the total.
+    var fromParts = round(b30 * 1000 + e10 * 1000);
+    if (hasRating && vs_online_rscore_ok(fromRating)) return fromRating;
     if (vs_online_rscore_ok(fromParts)) return fromParts;
     return 0;
 }
