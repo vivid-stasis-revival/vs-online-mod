@@ -490,6 +490,10 @@ function vs_online_opt_account_do()
     if (!instance_exists(vs_auth_panel))
     {
         instance_create_depth(0, 0, -10000, vs_auth_panel);
+        with (vs_auth_panel)
+        {
+            vs_auth_setup();
+        }
     }
 }
 
@@ -635,6 +639,7 @@ function vs_online_show_conflict(_why)
     var e = instance_create_depth(0, 0, -16000, vs_online_error);
     with (e)
     {
+        vs_online_error_bind();
         kind = "conflict";
         title = "Mod Conflict";
         buttons = ["退出 / Exit"];
@@ -944,8 +949,15 @@ function vs_online_show_error(_on_retry)
     }
 }
 
+function vs_online_error_bind()
+{
+    do_step = method(id, vs_online_error_step);
+    do_draw = method(id, vs_online_error_draw);
+}
+
 function vs_online_error_setup(_on_retry)
 {
+    vs_online_error_bind();
     kind = "connect";
     title = "Cannot Connect to Server";
     buttons = ["Retry", "Disable Custom Server"];
@@ -965,6 +977,7 @@ function vs_online_show_score_error(_why)
     var e = instance_create_depth(0, 0, -10000, vs_online_error);
     with (e)
     {
+        vs_online_error_bind();
         kind = "score";
         title = "Score Upload Failed";
         buttons = ["取消", "重试"];

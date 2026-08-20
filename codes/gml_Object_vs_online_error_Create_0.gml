@@ -1,5 +1,7 @@
-// Error dialog — Create. Message/on_retry filled by vs_online_show_error.
+// Error dialog — Create. No vs_* names (old vsml compiles those as instance vars).
 depth = -10000;
+do_step = function() { };
+do_draw = function() { };
 kind = "connect";
 title = "Cannot Connect to Server";
 server_url = "";
