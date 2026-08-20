@@ -565,6 +565,67 @@ function vs_online_is_account()
 
 // --- init ------------------------------------------------------------------
 
+// Standalone betterWP / CSM inject unique scripts we do not ship. Those
+// functions exist as soon as data.win loads, so this can run at the first
+// line of initiategame — before CreateSongDictionary, which dual-patching
+// will crash. Do not wait for vml_mods; other mods may register later in
+// the same Create. Do not use show_message here: YYC often hard-crashes
+// that builtin during the loading room instead of showing a dialog.
+function vs_online_has_fn(_name)
+{
+    return variable_global_exists(_name);
+}
+
+function vs_online_conflict_why()
+{
+    if (vs_online_has_fn("betterWP_add_options"))
+    {
+        return "VS Online 与 betterWP 不兼容，请移除其一后重试。\n\nVS Online is incompatible with betterWP — please remove one of them and restart.";
+    }
+    if (variable_global_exists("vml_mods") && is_struct(global.vml_mods) && variable_struct_exists(global.vml_mods, "betterWP_mod"))
+    {
+        return "VS Online 与 betterWP 不兼容，请移除其一后重试。\n\nVS Online is incompatible with betterWP — please remove one of them and restart.";
+    }
+    if (vs_online_has_fn("parse_extra_value"))
+    {
+        return "VS Online 已内置 Custom Songs，请卸载独立的 Custom Songs Mod 后重试。\n\nVS Online already includes Custom Songs — please uninstall the standalone Custom Songs Mod and restart.";
+    }
+    if (variable_global_exists("vml_mods") && is_struct(global.vml_mods) && variable_struct_exists(global.vml_mods, "custom_song_mod"))
+    {
+        return "VS Online 已内置 Custom Songs，请卸载独立的 Custom Songs Mod 后重试。\n\nVS Online already includes Custom Songs — please uninstall the standalone Custom Songs Mod and restart.";
+    }
+    return "";
+}
+
+function vs_online_show_conflict(_why)
+{
+    show_debug_message("VS Online: conflict " + string(_why));
+    if (instance_exists(vs_online_error))
+    {
+        with (vs_online_error) instance_destroy();
+    }
+    var e = instance_create_depth(0, 0, -16000, vs_online_error);
+    with (e)
+    {
+        kind = "conflict";
+        title = "Mod Conflict";
+        buttons = ["退出 / Exit"];
+        selected = 0;
+        on_retry = undefined;
+        retrying = false;
+        server_url = "";
+        message = string(_why);
+    }
+}
+
+function vs_online_conflict_halt()
+{
+    var why = vs_online_conflict_why();
+    if (why == "") return false;
+    vs_online_show_conflict(why);
+    return true;
+}
+
 function vs_online_bind_hooks()
 {
     // Store on global (not a struct): official menu anons cannot name vs_*
@@ -947,12 +1008,19 @@ function vs_online_error_clip(_text, _maxw)
     return s + "..";
 }
 
+function vs_online_error_font()
+{
+    if (variable_global_exists("default_font")) return global.default_font;
+    return fnt_monacovs;
+}
+
 function vs_online_error_draw()
 {
     var cw = display_get_gui_width();
     var ch = display_get_gui_height();
-    var bw = min(280, max(80, cw - 8));
-    var bh = min(130, max(70, ch - 8));
+    var conflict = (kind == "conflict");
+    var bw = min(conflict ? 420 : 280, max(80, cw - 8));
+    var bh = min(conflict ? 210 : 130, max(70, ch - 8));
     var bx = (cw - bw) / 2;
     var by = (ch - bh) / 2;
     var pad = 8;
@@ -978,7 +1046,7 @@ function vs_online_error_draw()
     var ttl = vs_online_error_clip(title, maxw);
     draw_text(bx + bw / 2, by + 5, ttl);
 
-    draw_set_font(global.default_font);
+    draw_set_font(vs_online_error_font());
     draw_set_color(c_white);
     draw_set_halign(fa_left);
     var msg = vs_online_error_break(message, maxw);
@@ -1010,9 +1078,10 @@ function vs_online_error_draw()
     }
     draw_text_ext(bx + pad, msgTop, shown, sep, maxw);
 
-    var btn_w = floor((bw - pad * 3) / 2);
+    var nbtn = array_length(buttons);
+    var btn_w = (nbtn <= 1) ? (bw - pad * 2) : floor((bw - pad * (nbtn + 1)) / nbtn);
     var bi = 0;
-    repeat (array_length(buttons))
+    repeat (nbtn)
     {
         var xb = bx + pad + bi * (btn_w + pad);
         var isSel = (bi == selected);
@@ -1042,6 +1111,14 @@ function vs_online_error_draw()
 
 function vs_online_error_step()
 {
+    if (kind == "conflict")
+    {
+        if (keyboard_check_pressed(vk_enter) || keyboard_check_pressed(vk_space) || keyboard_check_pressed(vk_escape))
+        {
+            game_end();
+        }
+        return;
+    }
     if (retrying)
     {
         return;

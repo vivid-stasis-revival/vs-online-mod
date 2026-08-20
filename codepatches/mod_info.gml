@@ -4,4 +4,5 @@ global.vml_mods.vs_online_mod = {
     description: "Custom server backend + Custom Songs for vivid/stasis",
     version: 100
 };
+if (vs_online_conflict_halt()) exit;
 vs_online_init();
