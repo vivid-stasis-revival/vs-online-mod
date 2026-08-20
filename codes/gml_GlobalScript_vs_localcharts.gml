@@ -404,24 +404,37 @@ function vs_localcharts_rebuild_packs()
 function vs_localcharts_jump(_chart_id)
 {
     if (_chart_id == undefined || _chart_id == "") return false;
-    vs_localcharts_rebuild_packs();
-    return vs_localcharts_enter_select(vs_localcharts_pack_pos(_chart_id));
+    var loc = vs_localcharts_pack_pos(_chart_id);
+    if (loc == undefined)
+    {
+        vs_localcharts_rebuild_packs();
+        loc = vs_localcharts_pack_pos(_chart_id);
+    }
+    return vs_localcharts_enter_select(loc);
 }
 
 function vs_localcharts_jump_pack(_pack_id)
 {
     if (_pack_id == undefined || _pack_id == "") return false;
-    vs_localcharts_rebuild_packs();
-    return vs_localcharts_enter_select(vs_localcharts_pack_pos_by_id(_pack_id));
+    var loc = vs_localcharts_pack_pos_by_id(_pack_id);
+    if (loc == undefined)
+    {
+        vs_localcharts_rebuild_packs();
+        loc = vs_localcharts_pack_pos_by_id(_pack_id);
+    }
+    return vs_localcharts_enter_select(loc);
 }
 
 function vs_localcharts_jump_shatter(_chart_id)
 {
     if (_chart_id == undefined || _chart_id == "") return false;
 
-    try { create_shatter_list(); } catch (_e) { }
-
     var sid = vs_localcharts_shatter_id_in_list(_chart_id);
+    if (sid < 0)
+    {
+        try { create_shatter_list(); } catch (_e) { }
+        sid = vs_localcharts_shatter_id_in_list(_chart_id);
+    }
     if (sid < 0) return false;
 
     // Shatter select ignores force_song_select (that is for Rhythm Play packs)
