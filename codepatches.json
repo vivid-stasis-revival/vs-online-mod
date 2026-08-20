@@ -512,6 +512,12 @@
     },
     {
         "Entry": "gml_GlobalScript_rating_functions",
+        "Find": "global.rscore = get_current_ratingscore();",
+        "Value": "global.rscore = get_current_ratingscore();\n    if (vs_online_is_custom()) global.rscore = global.rscore_last;",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_GlobalScript_rating_functions",
         "Find": "        unlock_achievement(\"rating_13000\");\n    }\n}",
         "Value": "        unlock_achievement(\"rating_13000\");\n    }\n    if (vs_online_is_custom()) vs_online_rating_refresh();\n}",
         "Type": 1
