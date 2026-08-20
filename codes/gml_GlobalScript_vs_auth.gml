@@ -47,7 +47,9 @@ function vs_auth_flow_started(_ok, _data, _status)
     {
         stage = 0;
         message = "Could not start device flow. Is the server reachable?";
-        vs_auth_note("device_authorization FAIL http=" + string(_status) + " api=" + vs_online_server_url());
+        var why = "json missing";
+        if (_data != undefined) why = "no device_code";
+        vs_auth_note("device_authorization FAIL http=" + string(_status) + " " + why + " api=" + vs_online_server_url());
     }
 }
 
