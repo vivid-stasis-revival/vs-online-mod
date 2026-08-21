@@ -491,7 +491,10 @@ function vs_csm_shatter_open_leaderboard()
         song: selected_song,
         difficulty: d,
         panel_y: py,
-        panel_h: ph
+        panel_h: ph,
+        // song_shatter is only true in-play; force the shatter token/sha path
+        // so F3 never falls through to freeplay ENCORE (API 404 on LEGACY/SHATTER).
+        vs_lb_force_shatter: true
     });
     lb.target_y = py;
     is_selecting = false;

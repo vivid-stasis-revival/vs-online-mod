@@ -123,6 +123,29 @@ function vs_online_chart_file_diff(_diff)
     return string(_diff);
 }
 
+function vs_online_chart_file_in_dir(_loadDir, _diff, _ext)
+{
+    if (_loadDir == undefined || _loadDir == "" || _diff == undefined || _diff == "") return "";
+    var fileDiff = vs_online_chart_file_diff(_diff);
+    var rawDiff = string(_diff);
+    var p = _loadDir + fileDiff + _ext;
+    if (file_exists(p)) return p;
+    if (rawDiff != "" && rawDiff != fileDiff)
+    {
+        p = _loadDir + rawDiff + _ext;
+        if (file_exists(p)) return p;
+    }
+    return "";
+}
+
+function vs_online_song_load_dir(_song)
+{
+    if (_song == undefined) return "";
+    var d = struct_get_fallback(_song, "chart_load_dir", "");
+    if (d != "") return d;
+    return struct_get_fallback(_song, "chart_path", "");
+}
+
 function vs_online_chart_file(_chartId, _diff, _ext)
 {
     if (_chartId == undefined || _chartId == "" || _diff == undefined || _diff == "") return "";
@@ -132,13 +155,8 @@ function vs_online_chart_file(_chartId, _diff, _ext)
     var p = "";
     if (loadDir != "")
     {
-        p = loadDir + fileDiff + _ext;
-        if (file_exists(p)) return p;
-        if (rawDiff != "" && rawDiff != fileDiff)
-        {
-            p = loadDir + rawDiff + _ext;
-            if (file_exists(p)) return p;
-        }
+        p = vs_online_chart_file_in_dir(loadDir, _diff, _ext);
+        if (p != "") return p;
     }
     p = "Custom Songs/" + _chartId + "/" + fileDiff + _ext;
     if (file_exists(p)) return p;
@@ -158,6 +176,23 @@ function vs_online_chart_sha1(_chartId, _diff)
     if (p == "") p = vs_online_chart_file(_chartId, _diff, ".vsb");
     if (p == "") return "";
     return sha1_file(p);
+}
+
+// Prefer this song's chart_load_dir so dual-folder / duplicate chart_id
+// rows do not hash a different folder via vs_csm_find_song (song_list first).
+function vs_online_chart_sha1_song(_song, _diff)
+{
+    var loadDir = vs_online_song_load_dir(_song);
+    if (loadDir != "")
+    {
+        var p = vs_online_chart_file_in_dir(loadDir, _diff, ".vsc");
+        if (p == "") p = vs_online_chart_file_in_dir(loadDir, _diff, ".vsb");
+        if (p != "") return sha1_file(p);
+    }
+    var chartId = (_song != undefined && variable_struct_exists(_song, "chart_id"))
+        ? string(_song.chart_id) : "";
+    if (chartId != "") return vs_online_chart_sha1(chartId, _diff);
+    return "";
 }
 
 function vs_online_chart_vsm_sha1(_chartId, _diff)
@@ -1569,11 +1604,16 @@ function vs_online_upload_chart(_songIndex, _difficulty, _score)
     {
         vs_online_score_log("failed/gauge-death still uploads (same as official Steam)");
     }
-    var sha = vs_online_chart_sha1(chartId, diff);
+    var sha = "";
+    if (shatter && song != undefined)
+        sha = vs_online_chart_sha1_song(song, diff);
+    if (sha == "")
+        sha = vs_online_chart_sha1(chartId, diff);
     if (sha == "" && shatter && song != undefined && variable_struct_exists(song, "difficulty_name")
         && string(song.difficulty_name) != "" && string(song.difficulty_name) != string(diff))
     {
-        sha = vs_online_chart_sha1(chartId, song.difficulty_name);
+        sha = vs_online_chart_sha1_song(song, song.difficulty_name);
+        if (sha == "") sha = vs_online_chart_sha1(chartId, song.difficulty_name);
         if (sha != "")
         {
             vs_online_score_log("sha1 via shatter difficulty_name=" + string(song.difficulty_name));
@@ -1592,7 +1632,8 @@ function vs_online_download_scores(_chartId, _difficulty, _sha1, _start, _end, _
 {
     if (!vs_online_is_account())
     {
-        if (_on_done != undefined) { _on_done(undefined); }
+        vs_online_score_log("LB skip no account chart=" + string(_chartId) + " diff=" + string(_difficulty));
+        if (_on_done != undefined) { _on_done({ entries: [] }); }
         return;
     }
     if (!variable_global_exists("vs_score_q"))
@@ -1600,14 +1641,20 @@ function vs_online_download_scores(_chartId, _difficulty, _sha1, _start, _end, _
         global.vs_score_q = [];
     }
     array_push(global.vs_score_q, _on_done);
+    var apiDiff = vs_online_diff_api(_difficulty);
     var url = "/api/v1/charts/scores?chartId=" + vs_online_url_encode(_chartId)
-            + "&difficulty=" + vs_online_url_encode(vs_online_diff_api(_difficulty))
+            + "&difficulty=" + vs_online_url_encode(apiDiff)
             + "&start=" + string(_start)
             + "&end=" + string(_end);
     if (_sha1 != undefined && _sha1 != "")
     {
         url += "&sha1=" + vs_online_url_encode(_sha1);
     }
+    vs_online_score_log("LB GET chart=" + string(_chartId)
+        + " diff=" + string(_difficulty)
+        + " api=" + string(apiDiff)
+        + " sha=" + string_copy(string(_sha1), 1, 8)
+        + " mode=top");
     vs_online_get_json(url, false, vs_online_download_scores_done);
 }
 
@@ -1619,14 +1666,25 @@ function vs_online_download_scores_done(_ok, _data, _status)
         cb = global.vs_score_q[0];
         array_delete(global.vs_score_q, 0, 1);
     }
-    if (cb != undefined) { cb(_ok ? _data : undefined); }
+    var n = -1;
+    if (_ok && _data != undefined)
+    {
+        if (variable_struct_exists(_data, "entries") && is_array(_data.entries))
+            n = array_length(_data.entries);
+        else if (variable_struct_exists(_data, "around") && is_array(_data.around))
+            n = array_length(_data.around);
+    }
+    vs_online_score_log("LB result ok=" + string(_ok) + " http=" + string(_status) + " n=" + string(n));
+    // 404 (unknown chart/diff) → empty board, not a stranded FIFO slot.
+    if (cb != undefined) { cb((_ok && _data != undefined) ? _data : { entries: [] }); }
 }
 
 function vs_online_download_friends_scores(_chartId, _difficulty, _sha1, _on_done)
 {
     if (!vs_online_is_account())
     {
-        if (_on_done != undefined) { _on_done(undefined); }
+        vs_online_score_log("LB friends skip no account chart=" + string(_chartId));
+        if (_on_done != undefined) { _on_done({ entries: [] }); }
         return;
     }
     if (!variable_global_exists("vs_score_q"))
@@ -1634,12 +1692,18 @@ function vs_online_download_friends_scores(_chartId, _difficulty, _sha1, _on_don
         global.vs_score_q = [];
     }
     array_push(global.vs_score_q, _on_done);
+    var apiDiff = vs_online_diff_api(_difficulty);
     var url = "/api/v1/charts/scores/friends?chartId=" + vs_online_url_encode(_chartId)
-            + "&difficulty=" + vs_online_url_encode(vs_online_diff_api(_difficulty));
+            + "&difficulty=" + vs_online_url_encode(apiDiff);
     if (_sha1 != undefined && _sha1 != "")
     {
         url += "&sha1=" + vs_online_url_encode(_sha1);
     }
+    vs_online_score_log("LB GET chart=" + string(_chartId)
+        + " diff=" + string(_difficulty)
+        + " api=" + string(apiDiff)
+        + " sha=" + string_copy(string(_sha1), 1, 8)
+        + " mode=friends");
     vs_online_get_json(url, true, vs_online_download_scores_done);
 }
 
@@ -1647,7 +1711,8 @@ function vs_online_download_around_scores(_chartId, _difficulty, _sha1, _count, 
 {
     if (!vs_online_is_account())
     {
-        if (_on_done != undefined) { _on_done(undefined); }
+        vs_online_score_log("LB around skip no account chart=" + string(_chartId));
+        if (_on_done != undefined) { _on_done({ around: [] }); }
         return;
     }
     if (!variable_global_exists("vs_score_q"))
@@ -1658,13 +1723,19 @@ function vs_online_download_around_scores(_chartId, _difficulty, _sha1, _count, 
     var n = floor(vs_http_num(_count, 12));
     if (n < 1) n = 12;
     if (n > 50) n = 50;
+    var apiDiff = vs_online_diff_api(_difficulty);
     var url = "/api/v1/charts/scores/around?chartId=" + vs_online_url_encode(_chartId)
-            + "&difficulty=" + vs_online_url_encode(vs_online_diff_api(_difficulty))
+            + "&difficulty=" + vs_online_url_encode(apiDiff)
             + "&count=" + string(n);
     if (_sha1 != undefined && _sha1 != "")
     {
         url += "&sha1=" + vs_online_url_encode(_sha1);
     }
+    vs_online_score_log("LB GET chart=" + string(_chartId)
+        + " diff=" + string(_difficulty)
+        + " api=" + string(apiDiff)
+        + " sha=" + string_copy(string(_sha1), 1, 8)
+        + " mode=around");
     vs_online_get_json(url, true, vs_online_download_scores_done);
 }
 
@@ -1753,20 +1824,33 @@ function vs_online_lb_download(_inst, _mode)
     if (di < 0 || di >= array_length(diffs)) return;
     var diffName = diffs[di];
     var chartId = _inst.song.chart_id;
-    var sha = vs_online_chart_sha1(chartId, diffName);
+    var forceShatter = variable_instance_exists(_inst, "vs_lb_force_shatter") && _inst.vs_lb_force_shatter;
+    var isShatter = forceShatter || vs_online_song_is_shatter(_inst.song);
+    var sha = vs_online_chart_sha1_song(_inst.song, diffName);
+    if (sha == "") sha = vs_online_chart_sha1(chartId, diffName);
     // Shatter: hash the on-disk chart (ENCORE.vsc / LEGACY.vsc / …) but query
     // the same API token upload uses. Standard names → SHATTER; custom names
     // (LEGACY / …) stay. Do not force SHATTER for every shatter (emptied DNA),
-    // and do not query raw ENCORE (misses rows uploaded as SHATTER).
-    if (vs_online_song_is_shatter(_inst.song))
+    // and do not query raw ENCORE (misses rows uploaded as SHATTER → HTTP 404).
+    if (isShatter)
     {
         var raw = diffName;
         if (variable_struct_exists(_inst.song, "difficulty_name") && string(_inst.song.difficulty_name) != "")
             raw = string(_inst.song.difficulty_name);
-        sha = vs_online_chart_sha1(chartId, raw);
+        sha = vs_online_chart_sha1_song(_inst.song, raw);
+        if (sha == "") sha = vs_online_chart_sha1(chartId, raw);
+        if (sha == "") sha = vs_online_chart_sha1_song(_inst.song, diffName);
         if (sha == "") sha = vs_online_chart_sha1(chartId, diffName);
         diffName = vs_online_diff_shatter_token(raw);
     }
+    vs_online_score_log("LB download chart=" + string(chartId)
+        + " songDiff=" + string(variable_struct_exists(_inst.song, "difficulty_name") ? _inst.song.difficulty_name : "")
+        + " idx=" + string(di)
+        + " query=" + string(diffName)
+        + " sha=" + string_copy(string(sha), 1, 8)
+        + " shatter=" + string(isShatter)
+        + " force=" + string(forceShatter)
+        + " mode=" + string(_mode));
     vs_online_lb_q_push(_inst);
     if (_mode == 1)
     {
