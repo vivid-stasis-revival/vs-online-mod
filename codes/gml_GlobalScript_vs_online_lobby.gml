@@ -2308,28 +2308,37 @@ function vs_lobby_count_st()
     // was the script itself (always truthy), so GET /lobbies never ran.
     if (!variable_global_exists("vs_lobby_cnt") || !is_struct(global.vs_lobby_cnt))
     {
-        global.vs_lobby_cnt = { inflight: false, wait: false, t0: 0 };
+        global.vs_lobby_cnt = { inflight: false, wait: false, t0: 0, next_at: 0, timer: undefined };
     }
     if (!variable_struct_exists(global.vs_lobby_cnt, "inflight")) global.vs_lobby_cnt.inflight = false;
     if (!variable_struct_exists(global.vs_lobby_cnt, "wait")) global.vs_lobby_cnt.wait = false;
     if (!variable_struct_exists(global.vs_lobby_cnt, "t0")) global.vs_lobby_cnt.t0 = 0;
+    if (!variable_struct_exists(global.vs_lobby_cnt, "next_at")) global.vs_lobby_cnt.next_at = 0;
+    if (!variable_struct_exists(global.vs_lobby_cnt, "timer")) global.vs_lobby_cnt.timer = undefined;
     return global.vs_lobby_cnt;
 }
 
 function vs_lobby_count_schedule()
 {
     var st = vs_lobby_count_st();
-    if (st.wait) return;
     if (!instance_exists(obj_multiplayer_lobby)) return;
     if (!vs_online_is_custom()) return;
+    // Reset so manual Refresh / list_done always get a fresh 5s window.
+    if (st.timer != undefined)
+    {
+        call_cancel(st.timer);
+        st.timer = undefined;
+    }
     st.wait = true;
-    call_later(60 * 5, time_source_units_frames, vs_lobby_count_on_timer);
+    st.next_at = current_time + 5000;
+    st.timer = call_later(60 * 5, time_source_units_frames, vs_lobby_count_on_timer);
 }
 
 function vs_lobby_count_on_timer()
 {
     var st = vs_lobby_count_st();
     st.wait = false;
+    st.timer = undefined;
     vs_lobby_refresh_count();
 }
 
