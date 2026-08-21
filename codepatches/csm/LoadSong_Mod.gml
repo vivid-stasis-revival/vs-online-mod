@@ -4,12 +4,11 @@ var chart = undefined;
 // cc.chartPath. Leaving "" for official .vsb made SV cache / gimmick I/O blow
 // up after prepare-menu Enter (keyboard softlock). Custom .vsc was fine
 // because the else-branch set chartPath. Worldcross uses the same LoadSong.
+// Keep the same relative shape get_chart_path_from_chart / load_text_chart
+// already use — do not force working_directory here (CG may prefix again).
 var chartPath = get_chart_path_from_chart(arg0);
 if (chartPath == undefined || chartPath == "")
     chartPath = "Charts/" + arg0 + "/";
-// Prefer absolute paths so gimmick/SV I/O does not depend on cwd.
-if (string_pos(":", chartPath) != 2 && string_char_at(chartPath, 1) != "/" && string_char_at(chartPath, 1) != "\\")
-    chartPath = working_directory + chartPath;
 if (string_char_at(chartPath, string_length(chartPath)) != "/" && string_char_at(chartPath, string_length(chartPath)) != "\\")
     chartPath += "/";
 if (variable_global_exists("song_id_last") && variable_global_exists("song_list")

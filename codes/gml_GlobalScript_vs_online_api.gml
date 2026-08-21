@@ -70,21 +70,16 @@ function vs_online_song_is_shatter(_song)
     {
         var sh = global.shatter_list[i];
         if (sh == _song) return true;
-        // Dual folders share chart_id with the song row — only treat as shatter
-        // when difficulty_name matches the shatter entry (not a leftover template field).
+        // Dual folders share chart_id with the song row. song_id lives in
+        // separate namespaces (song_list vs shatter_list) — never match on it.
+        // Only treat as shatter when difficulty_name matches the shatter row.
         if (sh != undefined
             && variable_struct_exists(sh, "chart_id") && variable_struct_exists(_song, "chart_id")
             && string(sh.chart_id) == string(_song.chart_id)
             && variable_struct_exists(sh, "difficulty_name")
             && variable_struct_exists(_song, "difficulty_name")
+            && string(_song.difficulty_name) != ""
             && string_upper(string(sh.difficulty_name)) == string_upper(string(_song.difficulty_name)))
-        {
-            return true;
-        }
-        if (sh != undefined
-            && variable_struct_exists(sh, "song_id") && variable_struct_exists(_song, "song_id")
-            && is_real(sh.song_id) && is_real(_song.song_id) && sh.song_id == _song.song_id
-            && sh.song_id >= 0)
         {
             return true;
         }
@@ -1811,14 +1806,29 @@ function vs_online_rating_cache_write(_rscore)
 {
     if (!vs_online_rscore_ok(_rscore)) return;
     var key = vs_online_rating_cache_key();
+    vs_online_rating_cache_write_key(key, _rscore);
+    if (variable_global_exists("profile_file") && global.profile_file != undefined)
+    {
+        ini_open(global.profile_file);
+        ini_write_real("profile", "ratinglast", _rscore);
+        ini_close();
+    }
+}
+
+function vs_online_rating_cache_write_key(_key, _rscore)
+{
+    if (!vs_online_rscore_ok(_rscore)) return;
+    var key = string(_key);
+    if (key == "") return;
     ini_open("custom_profile");
     ini_write_real("vsonline_rating", key, _rscore);
     ini_close();
     if (variable_global_exists("profile_file") && global.profile_file != undefined)
     {
         ini_open(global.profile_file);
-        ini_write_real("profile", "ratinglast", _rscore);
-        if (vs_online_is_custom())
+        if (key == "steam")
+            ini_write_real("profile", "ratinglast_steam", _rscore);
+        else
             ini_write_real("profile", "ratinglast_" + key, _rscore);
         ini_close();
     }
@@ -1835,12 +1845,15 @@ function vs_online_rating_cache_read()
     if (variable_global_exists("profile_file") && global.profile_file != undefined)
     {
         ini_open(global.profile_file);
-        v = ini_read_real("profile", "ratinglast_" + key, 0);
-        if (!vs_online_rscore_ok(v) || v <= 0)
-            v = ini_read_real("profile", "ratinglast", 0);
+        // Never fall back to bare ratinglast for a server key — that value
+        // may belong to Steam or another host after a hot-switch.
+        if (key == "steam")
+            v = ini_read_real("profile", "ratinglast_steam", 0);
+        else
+            v = ini_read_real("profile", "ratinglast_" + key, 0);
         ini_close();
     }
-    if (vs_online_rscore_ok(v)) return v;
+    if (vs_online_rscore_ok(v) && v > 0) return v;
     return 0;
 }
 
@@ -1855,13 +1868,19 @@ function vs_online_rating_cache_apply()
 
 function vs_online_rating_cache_apply_steam()
 {
-    if (!variable_global_exists("profile_file") || global.profile_file == undefined) return;
-    ini_open(global.profile_file);
-    var v = ini_read_real("profile", "ratinglast_steam", 0);
-    if (!vs_online_rscore_ok(v) || v <= 0)
-        v = ini_read_real("profile", "ratinglast", 0);
+    var v = 0;
+    ini_open("custom_profile");
+    v = ini_read_real("vsonline_rating", "steam", 0);
     ini_close();
-    if (!vs_online_rscore_ok(v)) return;
+    if ((!vs_online_rscore_ok(v) || v <= 0)
+        && variable_global_exists("profile_file") && global.profile_file != undefined)
+    {
+        ini_open(global.profile_file);
+        v = ini_read_real("profile", "ratinglast_steam", 0);
+        ini_close();
+    }
+    // Do not fall back to bare ratinglast — after Custom it may be the server value.
+    if (!vs_online_rscore_ok(v) || v <= 0) return;
     global.rscore = v;
 }
 

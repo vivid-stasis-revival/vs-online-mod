@@ -427,14 +427,10 @@ function vs_online_highscore_base(_orig)
 
 function vs_online_apply_custom_on()
 {
-    // Keep Steam ratinglast so toggling back does not show 0.000 / wrong class.
-    if (variable_global_exists("profile_file") && global.profile_file != undefined
-        && variable_global_exists("rscore") && vs_online_rscore_ok(global.rscore))
-    {
-        ini_open(global.profile_file);
-        ini_write_real("profile", "ratinglast_steam", global.rscore);
-        ini_close();
-    }
+    // Keep Steam rating so toggling back does not show 0.000 / wrong class.
+    // Flag is already Custom here — write the steam key explicitly.
+    if (variable_global_exists("rscore") && vs_online_rscore_ok(global.rscore))
+        vs_online_rating_cache_write_key("steam", global.rscore);
     vs_online_get_config();
     if (variable_global_exists("highscore_file"))
         global.highscore_file = vs_online_highscore_file(global.highscore_file);
@@ -448,6 +444,13 @@ function vs_online_apply_custom_on()
 
 function vs_online_apply_custom_off()
 {
+    // Flag is already Steam here — persist the custom rating under the server key
+    // before swapping the displayed rscore back.
+    if (variable_global_exists("rscore") && vs_online_rscore_ok(global.rscore))
+    {
+        var ckey = "vson" + string_copy(sha1_string_utf8(vs_online_server_url()), 1, 8);
+        vs_online_rating_cache_write_key(ckey, global.rscore);
+    }
     global.vs_online_conn = 0;
     if (variable_global_exists("highscore_file"))
         global.highscore_file = vs_online_highscore_base(global.highscore_file);
