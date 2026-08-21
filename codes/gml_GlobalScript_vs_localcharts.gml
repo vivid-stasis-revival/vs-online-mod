@@ -59,9 +59,10 @@ function vs_localcharts_read_pack(_dir)
 
 // Read one local chart's info.json into a manager row.
 // Returns undefined when the folder has no playable chart.
+// Dual folders may also have shatterinfo.json — still a song row (shatter is
+// a separate kind=2 row from vs_localcharts_read_shatter).
 function vs_localcharts_read_info(_dir, _pack)
 {
-    if (file_exists(_dir + "shatterinfo.json")) return undefined;
     if (!file_exists(_dir + "info.json")) return undefined;
 
     var raw = "";
@@ -171,35 +172,53 @@ function vs_localcharts_scan()
         {
             var e = entries[i];
             var key = string_lower(e.name);
-            if (file_exists(e.dir + "shatterinfo.json"))
+            var hasSh = file_exists(e.dir + "shatterinfo.json");
+            var hasInfo = file_exists(e.dir + "info.json");
+            // Dual folders need both rows. Kind-prefixed seen keys so a shared
+            // chart_id does not hide the song behind its paired shatter.
+            if (hasSh)
             {
-                if (variable_struct_exists(seen, key)) continue;
-                var sh = vs_localcharts_read_shatter(e.dir, "Shatter");
-                if (sh != undefined)
+                var shk = "sh:" + key;
+                if (!variable_struct_exists(seen, shk))
                 {
-                    variable_struct_set(seen, key, true);
-                    if (sh.chart_id != "") variable_struct_set(seen, string_lower(sh.chart_id), true);
-                    var pk1 = string_lower(string(sh.chart_id));
-                    if (sh.pack == "Shatter" && pk1 != "" && variable_struct_exists(pmap, pk1))
-                        sh.pack = variable_struct_get(pmap, pk1);
-                    array_push(out, sh);
+                    var sh = vs_localcharts_read_shatter(e.dir, "Shatter");
+                    if (sh != undefined)
+                    {
+                        var shCid = (sh.chart_id != "") ? ("sh:" + string_lower(string(sh.chart_id))) : "";
+                        if (shCid == "" || !variable_struct_exists(seen, shCid))
+                        {
+                            variable_struct_set(seen, shk, true);
+                            if (shCid != "") variable_struct_set(seen, shCid, true);
+                            var pk1 = string_lower(string(sh.chart_id));
+                            if (sh.pack == "Shatter" && pk1 != "" && variable_struct_exists(pmap, pk1))
+                                sh.pack = variable_struct_get(pmap, pk1);
+                            array_push(out, sh);
+                        }
+                    }
                 }
             }
-            else if (file_exists(e.dir + "info.json"))
+            if (hasInfo)
             {
-                if (variable_struct_exists(seen, key)) continue;
-                var s = vs_localcharts_read_info(e.dir, "Unpacked");
-                if (s != undefined)
+                var sk = "song:" + key;
+                if (!variable_struct_exists(seen, sk))
                 {
-                    variable_struct_set(seen, key, true);
-                    if (s.chart_id != "") variable_struct_set(seen, string_lower(s.chart_id), true);
-                    var pk0 = string_lower(string(s.chart_id));
-                    if (s.pack == "Unpacked" && pk0 != "" && variable_struct_exists(pmap, pk0))
-                        s.pack = variable_struct_get(pmap, pk0);
-                    array_push(out, s);
+                    var s = vs_localcharts_read_info(e.dir, "Unpacked");
+                    if (s != undefined)
+                    {
+                        var sCid = (s.chart_id != "") ? ("song:" + string_lower(string(s.chart_id))) : "";
+                        if (sCid == "" || !variable_struct_exists(seen, sCid))
+                        {
+                            variable_struct_set(seen, sk, true);
+                            if (sCid != "") variable_struct_set(seen, sCid, true);
+                            var pk0 = string_lower(string(s.chart_id));
+                            if (s.pack == "Unpacked" && pk0 != "" && variable_struct_exists(pmap, pk0))
+                                s.pack = variable_struct_get(pmap, pk0);
+                            array_push(out, s);
+                        }
+                    }
                 }
             }
-            else if (file_exists(e.dir + "songpack_info.json"))
+            else if (!hasSh && file_exists(e.dir + "songpack_info.json"))
             {
                 if (variable_struct_exists(seen, "pack:" + key)) continue;
                 variable_struct_set(seen, "pack:" + key, true);
@@ -216,26 +235,42 @@ function vs_localcharts_scan()
         {
             var pp = children[j].dir;
             var ck = string_lower(vs_localcharts_folder_name(packs[i]) + "/" + children[j].name);
-            if (file_exists(pp + "shatterinfo.json"))
+            var hasSh2 = file_exists(pp + "shatterinfo.json");
+            var hasInfo2 = file_exists(pp + "info.json");
+            if (hasSh2)
             {
-                if (variable_struct_exists(seen, ck)) continue;
-                var sh2 = vs_localcharts_read_shatter(pp, pk.name);
-                if (sh2 != undefined)
+                var shk2 = "sh:" + ck;
+                if (!variable_struct_exists(seen, shk2))
                 {
-                    variable_struct_set(seen, ck, true);
-                    if (sh2.chart_id != "") variable_struct_set(seen, string_lower(sh2.chart_id), true);
-                    array_push(out, sh2);
+                    var sh2 = vs_localcharts_read_shatter(pp, pk.name);
+                    if (sh2 != undefined)
+                    {
+                        var shCid2 = (sh2.chart_id != "") ? ("sh:" + string_lower(string(sh2.chart_id))) : "";
+                        if (shCid2 == "" || !variable_struct_exists(seen, shCid2))
+                        {
+                            variable_struct_set(seen, shk2, true);
+                            if (shCid2 != "") variable_struct_set(seen, shCid2, true);
+                            array_push(out, sh2);
+                        }
+                    }
                 }
             }
-            else if (file_exists(pp + "info.json"))
+            if (hasInfo2)
             {
-                if (variable_struct_exists(seen, ck)) continue;
-                var s2 = vs_localcharts_read_info(pp, pk.name);
-                if (s2 != undefined)
+                var sk2 = "song:" + ck;
+                if (!variable_struct_exists(seen, sk2))
                 {
-                    variable_struct_set(seen, ck, true);
-                    if (s2.chart_id != "") variable_struct_set(seen, string_lower(s2.chart_id), true);
-                    array_push(out, s2);
+                    var s2 = vs_localcharts_read_info(pp, pk.name);
+                    if (s2 != undefined)
+                    {
+                        var sCid2 = (s2.chart_id != "") ? ("song:" + string_lower(string(s2.chart_id))) : "";
+                        if (sCid2 == "" || !variable_struct_exists(seen, sCid2))
+                        {
+                            variable_struct_set(seen, sk2, true);
+                            if (sCid2 != "") variable_struct_set(seen, sCid2, true);
+                            array_push(out, s2);
+                        }
+                    }
                 }
             }
         }
