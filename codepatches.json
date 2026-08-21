@@ -972,7 +972,7 @@
     {
         "Entry": "gml_Object_o_songselect_main_Create_0",
         "Find": "    start_song(selected_song.song_id, confirm_menu.selected_difficulty);",
-        "Value": "    start_song(selected_song.song_id, vs_confirm_selected_diff_id(confirm_menu.selected_difficulty, confirm_menu.difficulties));",
+        "Value": "    start_song(selected_song.song_id, vs_confirm_selected_diff_id(confirm_menu.selected_difficulty, confirm_menu.difficulties), { song: selected_song });",
         "Type": 0
     },
     {
@@ -1535,7 +1535,7 @@
     {
         "Entry": "gml_GlobalScript_start_song",
         "Find": "var song = global.song_list[arg0];",
-        "Value": "var song = vs_online_song_from_id(arg0);\nif (song == undefined) { vs_csm_play_log(\"start_song skip missing idx=\" + string(arg0)); show_debug_message(\"VS Online: start_song skip missing idx=\" + string(arg0)); return; }\nglobal.currentSongInfo=song;",
+        "Value": "var song = vs_online_song_for_start(arg0, struct_get_fallback(arg2, \"song\", undefined));\nif (song == undefined) { var _n = (variable_global_exists(\"song_list\") && is_array(global.song_list)) ? array_length(global.song_list) : -1; vs_csm_play_log(\"start_song skip missing idx=\" + string(arg0) + \" len=\" + string(_n)); with (o_songselect_newconfirm) { if (instance_exists(id)) is_active = true; } return; }\nglobal.currentSongInfo=song;",
         "Type": 0
     },
     {

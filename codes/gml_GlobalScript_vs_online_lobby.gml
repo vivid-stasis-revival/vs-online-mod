@@ -91,12 +91,38 @@ function vs_online_song_id_from_chart(_chart)
 
 function vs_online_song_from_id(_songId)
 {
-    if (!variable_global_exists("song_list")) return undefined;
-    if (!is_real(_songId) || _songId < 0 || _songId >= array_length(global.song_list))
+    if (!variable_global_exists("song_list") || !is_array(global.song_list)) return undefined;
+    var sid = _songId;
+    if (is_string(sid) && string_digits(sid) == sid) sid = real(sid);
+    if (!is_real(sid) || sid < 0) return undefined;
+    sid = floor(sid);
+    var n = array_length(global.song_list);
+    if (sid < n && global.song_list[sid] != undefined)
+        return global.song_list[sid];
+    // song_id field can disagree with array index after list rebuilds.
+    var i = 0;
+    repeat (n)
     {
-        return undefined;
+        var s = global.song_list[i];
+        if (s != undefined && variable_struct_exists(s, "song_id")
+            && is_real(s.song_id) && floor(s.song_id) == sid)
+            return s;
+        i++;
     }
-    return global.song_list[_songId];
+    return undefined;
+}
+
+function vs_online_song_for_start(_songId, _hint)
+{
+    if (_hint != undefined) return _hint;
+    var song = vs_online_song_from_id(_songId);
+    if (song != undefined) return song;
+    with (o_songselect)
+    {
+        if (variable_instance_exists(id, "selected_song") && selected_song != undefined)
+            return selected_song;
+    }
+    return undefined;
 }
 
 function vs_online_missing_song(_cid)
