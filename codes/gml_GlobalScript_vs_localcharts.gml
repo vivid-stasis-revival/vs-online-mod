@@ -553,6 +553,7 @@ function vs_localcharts_auto_check()
     {
         st.done = true;
         global.vs_updates_available = [];
+        vs_csm_scores_merge_start();
         return;
     }
     var body = {};
@@ -594,4 +595,5 @@ function vs_localcharts_auto_done(_ok, _data, _status)
     st.updates = updates;
     global.vs_updates_available = updates;
     show_debug_message("VS Online: auto update check done - " + string(array_length(updates)) + " chart(s) need server updates.");
+    vs_csm_scores_merge_start();
 }

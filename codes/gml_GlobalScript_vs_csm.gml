@@ -979,13 +979,45 @@ function vs_csm_hs_store_combo(_id, _diff, _combo)
     save_highscores();
 }
 
-// Startup sync: overwrite local PB for download-manager (online) charts from
-// /scores/me. Manual/local customs and official songs are left alone. Failures
-// are silent. Persistence goes only to custom_highscore (never highscore_table).
+// Startup sync: pull /scores/me into custom_highscore for download-manager
+// charts that match the server catalog. Skips:
+//   - untracked local customs (no .vs_download.json)
+//   - charts flagged needsUpdate (published update OR local edits / WIP)
+// Only writes when the server has a score for this exact local sha1.
+// Failures and misses leave local alone. Never touches highscore_table.
+function vs_csm_chart_has_pending_update(_chartId)
+{
+    if (_chartId == undefined || _chartId == "") return false;
+    if (!variable_global_exists("vs_updates_available") || !is_array(global.vs_updates_available))
+        return false;
+    var want = string(_chartId);
+    var u = global.vs_updates_available;
+    for (var i = 0; i < array_length(u); i++)
+    {
+        var e = u[i];
+        if (e != undefined && string(struct_get_fallback(e, "chart_id", "")) == want)
+            return true;
+    }
+    return false;
+}
+
+function vs_csm_scores_merge_update_ready()
+{
+    // Wait for the one-shot check-updates pass so needsUpdate is known.
+    if (!variable_global_exists("vs_auto") || global.vs_auto == undefined) return false;
+    return variable_struct_exists(global.vs_auto, "done") && global.vs_auto.done;
+}
+
 function vs_csm_scores_merge_start()
 {
     if (!vs_online_is_custom() || !vs_online_is_account()) return;
     if (!variable_global_exists("highscores") || !variable_global_exists("song_list")) return;
+    if (!vs_csm_scores_merge_update_ready())
+    {
+        global.vs_csm_merge_pending = true;
+        return;
+    }
+    global.vs_csm_merge_pending = false;
 
     var jobs = [];
     var diffs = ["OPENING", "MIDDLE", "FINALE", "ENCORE", "PRELUDE"];
@@ -994,6 +1026,7 @@ function vs_csm_scores_merge_start()
         var song = global.song_list[i];
         if (song == undefined || !variable_struct_exists(song, "is_custom")) continue;
         if (!vs_dlmgr_tracked(song.chart_id)) continue;
+        if (vs_csm_chart_has_pending_update(song.chart_id)) continue;
         for (var d = 0; d < 5; d++)
         {
             var row = undefined;
@@ -1001,7 +1034,8 @@ function vs_csm_scores_merge_start()
                 row = global.highscores.normal[i][d];
             var sha = vs_online_chart_sha1(song.chart_id, diffs[d]);
             var loc = vs_csm_row_score(row);
-            if ((sha == undefined || sha == "") && (loc == undefined || loc <= 0)) continue;
+            // Need a real chart file sha — scores/me is versioned by sha1.
+            if (sha == undefined || sha == "") continue;
             array_push(jobs,
             {
                 kind: 0,
@@ -1021,10 +1055,11 @@ function vs_csm_scores_merge_start()
             var sh = global.shatter_list[s];
             if (sh == undefined || !variable_struct_exists(sh, "is_custom")) continue;
             if (!vs_dlmgr_tracked(sh.chart_id)) continue;
+            if (vs_csm_chart_has_pending_update(sh.chart_id)) continue;
             var srow = (s < array_length(global.highscores.shatter)) ? global.highscores.shatter[s] : undefined;
             var sha2 = vs_online_chart_sha1(sh.chart_id, sh.difficulty_name);
             var loc2 = vs_csm_row_score(srow);
-            if ((sha2 == undefined || sha2 == "") && (loc2 == undefined || loc2 <= 0)) continue;
+            if (sha2 == undefined || sha2 == "") continue;
             array_push(jobs,
             {
                 kind: 1,
@@ -1145,14 +1180,13 @@ function vs_csm_scores_merge_done(_ok, _data, _status)
     var st = global.vs_csm_merge;
     if (st.idx >= array_length(st.jobs)) return;
     var job = st.jobs[st.idx];
-    // HTTP / parse failure: leave local alone (silent).
-    if (_ok)
+    // Only overwrite when the server has a PB for this exact local sha1.
+    // Miss / HTTP failure / WIP sha: leave local alone (silent).
+    if (_ok && _data != undefined && variable_struct_exists(_data, "found") && _data.found)
     {
-        var server_ = 0;
-        if (_data != undefined && variable_struct_exists(_data, "found") && _data.found)
-            server_ = variable_struct_get(_data, "score");
-        if (server_ == undefined || !is_real(server_)) server_ = 0;
-        vs_csm_scores_merge_apply(job, server_);
+        var server_ = variable_struct_get(_data, "score");
+        if (server_ != undefined && is_real(server_))
+            vs_csm_scores_merge_apply(job, server_);
     }
     if (!vs_csm_scores_merge_alive()) return;
     st.idx += 1;
