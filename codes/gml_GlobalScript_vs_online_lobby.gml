@@ -459,8 +459,12 @@ function vs_lobby_lobby_id()
 {
     if (vs_online_is_custom())
     {
-        if (!instance_exists(o_st_handle) || o_st_handle.lobbyId == undefined) return 0;
-        return vs_http_num(o_st_handle.lobbyId, 0);
+        if (!instance_exists(o_st_handle)) return 0;
+        var id = vs_http_num(o_st_handle.lobbyId, 0);
+        if (id > 0) return id;
+        // In-room even if lobbyId failed to coerce — landing/Draw must hide.
+        if (vs_lobby_has_code()) return 1;
+        return 0;
     }
     return steam_lobby_get_lobby_id();
 }

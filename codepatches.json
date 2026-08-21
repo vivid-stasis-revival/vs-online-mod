@@ -144,8 +144,9 @@
     },
     {
         "Entry": "gml_Object_obj_multiplayer_lobby_Draw_0",
-        "ExternalFile": "lobby_draw0.gml",
-        "Type": 2
+        "Find": "draw_set_default();",
+        "Value": "vs_lobby_draw0();\nexit;\ndraw_set_default();",
+        "Type": 1
     },
     {
         "Entry": "gml_Object_obj_multiplayer_waiting_room_Step_0",

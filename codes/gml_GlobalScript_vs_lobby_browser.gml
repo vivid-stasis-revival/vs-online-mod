@@ -379,6 +379,100 @@ function vs_lobby_browser_step()
     return true;
 }
 
+// Draw_0 entry: codepatch inserts `vs_lobby_draw0(); exit;` at the top
+// (Type 1). vsml Type 2 is InsertBefore — NOT a full replace — so an
+// ExternalFile Type 2 previously left the stock Draw_0 running too.
+function vs_lobby_draw0()
+{
+    draw_set_default();
+    if (vs_lobby_lobby_id() <= 0)
+    {
+        if (vs_lobby_browser_active())
+            vs_lobby_browser_draw();
+        else
+            vs_lobby_draw0_legacy();
+    }
+    vs_lobby_draw0_status();
+}
+
+function vs_lobby_draw0_legacy()
+{
+    var height = 19;
+    var width = 110;
+    var gap = 11;
+    var itemCount = array_length(menu_actions_landing);
+    var totalHeight = (itemCount * (height + gap)) - gap;
+    var startY = floor((180 - totalHeight) / 2);
+    for (var i = 0; i < itemCount; i++)
+    {
+        var _x = 104;
+        var _y = startY + (i * (height + gap));
+        draw_set_color(c_black);
+        draw_rectangle(_x + 1, _y + 1, _x + 1 + width, _y + 1 + height, true);
+        draw_set_color(c_white);
+        draw_rectangle(_x + 1, _y + 1, _x + 1 + width, _y + 1 + height, false);
+        if (i != cursor_pos)
+        {
+            draw_set_color(c_black);
+            draw_rectangle(_x + 2, _y + 2, _x + width, _y + height, false);
+        }
+        draw_set_color((i == cursor_pos) ? c_black : c_white);
+        draw_set_halign(fa_center);
+        draw_set_valign(fa_middle);
+        draw_text(_x + 1 + floor(width / 2), _y + 2 + floor(height / 2), menu_actions_landing[i].txt);
+        draw_set_halign(fa_left);
+        draw_set_valign(fa_top);
+    }
+    draw_set_color(c_white);
+    draw_set_halign(fa_center);
+    draw_text_o(160, startY + totalHeight + 7, "Total Lobbies: " + string(lobbyCount) + "\nHold Shift and Press \"Paste Code\" to join random lobby");
+    if (entering_code)
+    {
+        draw_sprite(sp_multiplayer_entercode, 0, 135, startY + totalHeight + 6);
+        draw_set_color(c_white);
+        draw_set_halign(fa_center);
+        draw_text_o(160, startY + totalHeight + 7, string_upper(keyboard_string));
+    }
+    draw_set_halign(fa_left);
+    draw_set_valign(fa_top);
+}
+
+function vs_lobby_draw0_status()
+{
+    var label = vs_online_is_custom() ? "Server:" : "Steamworks:";
+    draw_set_halign(fa_left);
+    draw_set_valign(fa_top);
+    draw_set_color(c_white);
+    draw_set_font(global.default_font);
+    draw_text(2, 170, label);
+    var ox = 2 + string_width(label + " ");
+    if (vs_online_is_connected())
+    {
+        draw_set_color(c_lime);
+        draw_text(ox, 170, "Connected");
+    }
+    else
+    {
+        draw_set_color(c_red);
+        draw_text(ox, 170, "Disconnected");
+    }
+}
+
+function vs_lobby_browser_keychip(_x, _y, _key, _hint, _right)
+{
+    var kw = string_width(_key);
+    var hw = string_width(_hint);
+    var need = kw + 4 + hw + 5;
+    if (_right > 0 && _x + need > _right) return _x;
+    draw_set_color(make_color_rgb(80, 220, 230));
+    draw_rectangle(_x - 1, _y - 1, _x + kw + 1, _y + 8, false);
+    draw_set_color(c_black);
+    draw_text(_x, _y, _key);
+    draw_set_color(make_color_rgb(170, 176, 186));
+    draw_text(_x + kw + 4, _y, _hint);
+    return _x + need;
+}
+
 function vs_lobby_browser_draw()
 {
     if (!vs_lobby_browser_active()) return;
@@ -386,76 +480,74 @@ function vs_lobby_browser_draw()
 
     var st = vs_lobby_browser_st();
     vs_lobby_browser_clamp();
+
+    // Downloader-like panel in room space (320x180).
+    var pad = 3;
+    var bx = pad;
+    var by = pad;
+    var bw = 320 - pad * 2;
+    var bh = 166 - pad;
+    draw_set_alpha(0.55);
+    draw_set_color(c_black);
+    draw_rectangle(0, 0, 320, 180, false);
+    draw_set_alpha(1);
+    draw_set_color(make_color_rgb(12, 14, 18));
+    draw_rectangle(bx, by, bx + bw, by + bh, false);
+    draw_set_color(make_color_rgb(48, 52, 60));
+    draw_rectangle(bx, by, bx + bw, by + bh, true);
+
+    draw_set_font(fnt_monacovs);
+    draw_set_halign(fa_left);
+    draw_set_valign(fa_top);
+    draw_set_color(make_color_rgb(80, 220, 230));
+    draw_text(bx + 5, by + 2, "Lobby");
+    draw_set_font(global.default_font);
+    draw_set_halign(fa_right);
+    draw_set_color(make_color_rgb(180, 186, 196));
+    var left = vs_lobby_browser_refresh_left();
+    draw_text(bx + bw - 5, by + 3, string(left) + "s");
+    draw_set_halign(fa_left);
+
     var labels = vs_lobby_browser_labels();
     var nbtn = array_length(labels);
-    var bw = 88;
-    var gap = 6;
-    var total = nbtn * bw + (nbtn - 1) * gap;
-    var bx0 = floor((320 - total) / 2);
-    var by = 4;
-    var bh = 16;
-
+    var tabx = bx + 5;
+    var taby = by + 14;
     var i = 0;
     repeat (nbtn)
     {
-        var bx = bx0 + i * (bw + gap);
+        var lab = labels[i];
+        var tw = string_width(lab) + 10;
         var sel = (st.focus == 0 && st.top_i == i);
-        draw_set_color(c_black);
-        draw_rectangle(bx + 1, by + 1, bx + bw + 1, by + bh + 1, true);
-        draw_set_color(c_white);
-        draw_rectangle(bx + 1, by + 1, bx + bw + 1, by + bh + 1, false);
-        if (!sel)
+        if (sel)
         {
+            draw_set_color(make_color_rgb(240, 210, 70));
+            draw_rectangle(tabx, taby, tabx + tw, taby + 11, false);
             draw_set_color(c_black);
-            draw_rectangle(bx + 2, by + 2, bx + bw, by + bh, false);
         }
-        draw_set_color(sel ? c_black : c_white);
-        draw_set_halign(fa_center);
-        draw_set_valign(fa_middle);
-        draw_set_font(global.default_font);
-        draw_text(bx + 1 + floor(bw / 2), by + 2 + floor(bh / 2), labels[i]);
+        else
+        {
+            draw_set_color(make_color_rgb(110, 116, 126));
+        }
+        draw_text(tabx + 5, taby + 1, lab);
+        tabx += tw + 4;
         i++;
     }
-    draw_set_halign(fa_left);
-    draw_set_valign(fa_top);
 
-    var mid_x = 160;
-    var mid_top = 28;
-    if (st.loading)
+    var listTop = by + 28;
+    var listBot = by + bh - 22;
+    var row_h = 14;
+    var mid_x = bx + floor(bw / 2);
+
+    if (st.loading || st.busy)
     {
         draw_set_halign(fa_center);
-        draw_set_color(c_aqua);
+        draw_set_color(make_color_rgb(80, 220, 230));
         draw_set_font(fnt_monacovs);
-        draw_text(mid_x, 70, "Loading rooms");
-        var cx = mid_x;
-        var cy = 100;
-        var r = 10;
-        var phase = (current_time / 80) % 8;
-        var ti = 0;
-        repeat (8)
-        {
-            var a = (ti / 8) * 2 * pi - pi / 2;
-            var bright = ((ti - floor(phase) + 8) % 8) < 3;
-            draw_set_color(bright ? c_white : make_color_rgb(80, 80, 80));
-            draw_circle(cx + cos(a) * r, cy + sin(a) * r, bright ? 2.5 : 1.5, false);
-            ti++;
-        }
+        draw_text(mid_x, listTop + 28, st.busy ? "Working..." : "Loading rooms");
         draw_set_font(global.default_font);
-        draw_set_color(c_white);
-        draw_set_halign(fa_center);
-        draw_text(mid_x, 118, st.busy ? "Working..." : "Refreshing...");
+        draw_set_color(make_color_rgb(180, 186, 196));
+        draw_text(mid_x, listTop + 48, st.busy ? "Please wait" : "Refreshing...");
         draw_set_halign(fa_left);
-        draw_set_color(c_white);
-    }
-    else if (st.busy)
-    {
-        draw_set_halign(fa_center);
-        draw_set_color(c_aqua);
-        draw_set_font(fnt_monacovs);
-        draw_text(mid_x, 80, "Working...");
-        draw_set_halign(fa_left);
-        draw_set_font(global.default_font);
-        draw_set_color(c_white);
     }
     else
     {
@@ -465,18 +557,15 @@ function vs_lobby_browser_draw()
         var ps = st.page_size;
         var start = st.page * ps;
         var on_page = clamp(n - start, 0, ps);
-        var row_h = 20;
         if (on_page <= 0)
         {
             draw_set_halign(fa_center);
-            draw_set_color(c_gray);
-            draw_set_font(global.default_font);
+            draw_set_color(make_color_rgb(140, 146, 156));
             var empty = "No rooms";
             if (st.filter == 1) empty = "No joinable rooms";
             else if (st.filter == 2) empty = "No unjoinable rooms";
-            draw_text(mid_x, 80, empty);
+            draw_text(mid_x, listTop + 36, empty);
             draw_set_halign(fa_left);
-            draw_set_color(c_white);
         }
         else
         {
@@ -484,59 +573,73 @@ function vs_lobby_browser_draw()
             repeat (on_page)
             {
                 var row = rows[start + ri];
-                var ry = mid_top + ri * row_h;
+                var ry = listTop + ri * row_h;
+                if (ry + row_h > listBot) break;
                 var sel = (st.focus == 1 && st.list_i == ri);
                 var joinable = vs_lobby_browser_row_joinable(row);
+                var rx0 = bx + 4;
+                var rx1 = bx + bw - 4;
                 if (sel)
                 {
-                    draw_set_color(c_white);
-                    draw_rectangle(12, ry, 308, ry + row_h - 2, false);
-                    draw_set_color(c_black);
+                    draw_set_color(make_color_rgb(240, 210, 70));
+                    draw_rectangle(rx0, ry, rx1, ry + row_h - 2, false);
                 }
                 else
                 {
-                    draw_set_color(joinable ? c_white : c_gray);
+                    draw_set_color(make_color_rgb(22, 24, 30));
+                    draw_rectangle(rx0, ry, rx1, ry + row_h - 2, false);
+                    draw_set_color(make_color_rgb(40, 44, 52));
+                    draw_rectangle(rx0, ry, rx1, ry + row_h - 2, true);
                 }
-                draw_set_font(global.default_font);
+                draw_set_color(sel ? c_black : (joinable ? make_color_rgb(200, 204, 212) : make_color_rgb(120, 124, 134)));
                 draw_set_halign(fa_left);
                 var host = variable_struct_exists(row, "hostName") ? string(row.hostName) : "?";
-                if (string_length(host) > 14) host = string_copy(host, 1, 13) + ".";
+                if (string_length(host) > 12) host = string_copy(host, 1, 11) + ".";
                 var cur = variable_struct_exists(row, "memberCount") ? string(floor(row.memberCount)) : "0";
                 var mx = variable_struct_exists(row, "maxMembers") ? string(floor(row.maxMembers)) : "?";
-                // Prefer struct_get for "code" — same vsml footgun as join JSON keys.
                 var invite = "";
                 if (variable_struct_exists(row, "code")) invite = string(variable_struct_get(row, "code"));
-                var mark = joinable ? "" : " [X]";
-                draw_text(16, ry + 4, host + "  " + cur + "/" + mx + "  " + invite + mark);
+                var mark = joinable ? "" : " X";
+                draw_text(rx0 + 4, ry + 2, host + "  " + cur + "/" + mx + "  " + invite + mark);
                 ri++;
             }
         }
-        if (!obj_multiplayer_lobby.entering_code)
+        draw_set_halign(fa_right);
+        draw_set_color(make_color_rgb(180, 186, 196));
+        draw_text(bx + bw - 5, by + bh - 20, "[" + string(st.page + 1) + "/" + string(pages) + "] "
+            + vs_lobby_browser_filter_name(st.filter) + " " + string(n));
+        draw_set_halign(fa_left);
+        if (st.status != "" && current_time < st.status_until)
         {
-            var left = vs_lobby_browser_refresh_left();
-            draw_set_halign(fa_center);
-            draw_set_color(c_white);
-            draw_set_font(global.default_font);
-            draw_text(mid_x, 136, "Page " + string(st.page + 1) + "/" + string(pages)
-                + "  " + vs_lobby_browser_filter_name(st.filter)
-                + "  " + string(n) + "  " + string(left) + "s");
-            draw_set_color(c_gray);
-            if (st.focus == 0)
-                draw_text(mid_x, 148, "Shift+Host: private   Shift+Join: paste   F: filter");
-            else
-                draw_text(mid_x, 148, "F: filter   Confirm: join room");
-            if (st.status != "" && current_time < st.status_until)
-            {
-                draw_set_color(c_yellow);
-                draw_text(mid_x, 158, st.status);
-            }
-            draw_set_halign(fa_left);
+            draw_set_color(make_color_rgb(120, 210, 140));
+            draw_text(bx + 5, by + bh - 20, st.status);
         }
     }
 
-    // Join-code overlay (browser uses fixed position; legacy keeps original).
+    var hx = bx + 5;
+    var hy = by + bh - 10;
+    var right = bx + bw - 5;
+    if (st.focus == 0)
+    {
+        hx = vs_lobby_browser_keychip(hx, hy, "ENTER", "ok", right);
+        hx = vs_lobby_browser_keychip(hx, hy, "SHIFT", "priv/paste", right);
+        hx = vs_lobby_browser_keychip(hx, hy, "F", "filt", right);
+        vs_lobby_browser_keychip(hx, hy, "UD", "list", right);
+    }
+    else
+    {
+        hx = vs_lobby_browser_keychip(hx, hy, "ENTER", "join", right);
+        hx = vs_lobby_browser_keychip(hx, hy, "LR", "page", right);
+        hx = vs_lobby_browser_keychip(hx, hy, "F", "filt", right);
+        vs_lobby_browser_keychip(hx, hy, "UD", "move", right);
+    }
+
     if (obj_multiplayer_lobby.entering_code)
     {
+        draw_set_alpha(0.55);
+        draw_set_color(c_black);
+        draw_rectangle(0, 0, 320, 180, false);
+        draw_set_alpha(1);
         draw_sprite(sp_multiplayer_entercode, 0, 135, 140);
         draw_set_color(c_white);
         draw_set_halign(fa_center);
@@ -545,5 +648,6 @@ function vs_lobby_browser_draw()
     }
 
     draw_set_halign(fa_left);
+    draw_set_valign(fa_top);
     draw_set_color(c_white);
 }
