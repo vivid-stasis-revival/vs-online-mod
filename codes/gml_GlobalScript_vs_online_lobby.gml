@@ -460,8 +460,8 @@ function vs_lobby_lobby_id()
     if (vs_online_is_custom())
     {
         if (!instance_exists(o_st_handle)) return 0;
-        var id = vs_http_num(o_st_handle.lobbyId, 0);
-        if (id > 0) return id;
+        var lid = vs_http_num(o_st_handle.lobbyId, 0);
+        if (lid > 0) return lid;
         // In-room even if lobbyId failed to coerce — landing/Draw must hide.
         if (vs_lobby_has_code()) return 1;
         return 0;
