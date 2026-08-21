@@ -299,6 +299,48 @@
         "Type": 0
     },
     {
+        "Entry": "gml_Object_o_songselect_leaderboard_Create_0",
+        "Find": "is_active = true;\ndownloadScores();",
+        "Value": "is_active = true;\nif (!variable_instance_exists(id, \"panel_y\")) panel_y = 35;\nif (!variable_instance_exists(id, \"panel_h\")) panel_h = 130;\ndownloadScores();",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_Object_o_songselect_leaderboard_Step_0",
+        "Find": "o_songselect_main.is_selecting = true;",
+        "Value": "with (o_songselect) is_selecting = true;",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_Object_o_songselect_leaderboard_Step_0",
+        "Find": "target_y = -95;",
+        "Value": "target_y = panel_y - panel_h;",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_Object_o_songselect_leaderboard_Step_0",
+        "Find": "y <= -95",
+        "Value": "y <= (panel_y - panel_h)",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_Object_o_songselect_leaderboard_Draw_0",
+        "Find": "if (surf == undefined || !surface_exists(surf))\n{\n    surf = surface_create(207, 130);\n}",
+        "Value": "if (surf == undefined || !surface_exists(surf))\n{\n    surf = surface_create(207, panel_h);\n}",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_Object_o_songselect_leaderboard_Draw_0",
+        "Find": "draw_surface_part(surf, 0, 35 - y, 207, (y - 35) + 130, x, 35);",
+        "Value": "draw_surface_part(surf, 0, panel_y - y, 207, (y - panel_y) + panel_h, x, panel_y);",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_Object_o_songselect_Step_0",
+        "Find": "event_user(15);",
+        "Value": "if (object_index == o_songselect_shatter)\n    vs_csm_shatter_stats_input();\nevent_user(15);",
+        "Type": 0
+    },
+    {
         "Entry": "gml_Object_obj_ratingWindow_Draw_64",
         "Find": "                    const = song.difficulty_constant_4;\n                    break;\n            }\n            draw_text_o(x + 185, y + 26 + (i * 9), string_format(const, 1, 1));\n            draw_set_color(c_white);\n            draw_text_o(x + 10, y + 26 + (i * 9), string((page * 10) + i + 1));",
         "Value": "                    const = song.difficulty_constant_4;\n                    break;\n                case 5:\n                    draw_set_color(#FFD21A);\n                    const = struct_get_fallback(song, \"difficulty_constant_1\", 0);\n                    break;\n            }\n            draw_text_o(x + 185, y + 26 + (i * 9), string_format(const, 1, 1));\n            draw_set_color(c_white);\n            draw_text_o(x + 10, y + 26 + (i * 9), string((page * 10) + i + 1));",

@@ -482,12 +482,18 @@ function vs_csm_shatter_open_leaderboard()
     if (any) return;
     play_se(select);
     var d = vs_csm_shatter_diff_index(selected_song);
-    var lb = instance_create_depth(0, -95, depth - 1, o_songselect_leaderboard,
+    // Shatter has no freeplay difficulty bar (y 14–33), so the list starts at
+    // top_trim_y=14. Freeplay leaderboard parks at 35 / height 130.
+    var py = 14;
+    var ph = 152;
+    var lb = instance_create_depth(0, py - ph, depth - 1, o_songselect_leaderboard,
     {
         song: selected_song,
-        difficulty: d
+        difficulty: d,
+        panel_y: py,
+        panel_h: ph
     });
-    lb.target_y = 35;
+    lb.target_y = py;
     is_selecting = false;
 }
 
