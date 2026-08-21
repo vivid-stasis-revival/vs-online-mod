@@ -379,23 +379,46 @@ function vs_lobby_unlock_pad_id(_id)
     }
 }
 
-function vs_lobby_song_has_diff(_song, _d)
+function vs_online_song_has_diff(_song, _d)
 {
     if (_song == undefined) return false;
     if (!is_real(_d) || _d < 0 || _d > 3) return false;
-    // Do not use chart-file probes here. WP Options/Ready used to clamp the
-    // queue to the first existing .vsc, which froze every song on OPENING.
+    // Do not use chart-file probes for official songs — WP used to clamp to
+    // the first existing .vsc and freeze every song on OPENING.
     if (_d == 3)
     {
-        var he = struct_get_fallback(_song, "has_encore", false);
-        return (he == true || he == 1 || he == "1.0");
+        if (variable_struct_exists(_song, "is_custom") && _song.is_custom)
+        {
+            var dir = struct_get_fallback(_song, "chart_load_dir", struct_get_fallback(_song, "chart_path", ""));
+            // Customs: only a real ENCORE chart file counts (info.json templates
+            // often leave constant_4 / has_encore residue).
+            return (dir != "" && vs_csm_has_encore_file(dir));
+        }
+        return vs_csm_meta_has_encore(_song);
     }
     return true;
 }
 
+function vs_lobby_diff_num(_d)
+{
+    if (is_real(_d) && _d == _d) return clamp(floor(_d), 0, 4);
+    var s = string_lower(string(_d));
+    if (s == "opening" || s == "0") return 0;
+    if (s == "middle" || s == "1") return 1;
+    if (s == "finale" || s == "2") return 2;
+    if (s == "encore" || s == "backstage" || s == "3") return 3;
+    if (s == "prelude" || s == "4") return 4;
+    return 0;
+}
+
+function vs_lobby_song_has_diff(_song, _d)
+{
+    return vs_online_song_has_diff(_song, _d);
+}
+
 function vs_lobby_clamp_diff(_song, _d)
 {
-    var d = is_real(_d) ? floor(_d) : 0;
+    var d = vs_lobby_diff_num(_d);
     if (vs_lobby_song_has_diff(_song, d)) return d;
     var i = 0;
     repeat (4)
@@ -417,12 +440,12 @@ function vs_lobby_fix_queue_diff()
     if (song == undefined) return;
     vs_lobby_unlock_pad_id(struct_get_fallback(song, "song_id", s.songId));
     if (!vs_lobby_song_has_diff(song, 3)) song.has_encore = false;
+    else if (!vs_csm_json_has_encore(struct_get_fallback(song, "has_encore", false)))
+        song.has_encore = "1.0";
     var d = 0;
-    if (variable_struct_exists(s, "difficulty") && is_real(s.difficulty)) d = s.difficulty;
-    else if (variable_global_exists("songselect_difficulty") && is_real(global.songselect_difficulty))
-    {
-        d = global.songselect_difficulty;
-    }
+    if (variable_struct_exists(s, "difficulty")) d = vs_lobby_diff_num(s.difficulty);
+    else if (variable_global_exists("songselect_difficulty"))
+        d = vs_lobby_diff_num(global.songselect_difficulty);
     if (!vs_lobby_song_has_diff(song, d)) d = vs_lobby_clamp_diff(song, d);
     s.difficulty = d;
     global.songselect_difficulty = d;
@@ -441,12 +464,12 @@ function vs_lobby_queue_confirm_song()
     if (song == undefined) return undefined;
     vs_lobby_unlock_pad_id(struct_get_fallback(song, "song_id", s.songId));
     if (!vs_lobby_song_has_diff(song, 3)) song.has_encore = false;
+    else if (!vs_csm_json_has_encore(struct_get_fallback(song, "has_encore", false)))
+        song.has_encore = "1.0";
     var d = 0;
-    if (variable_struct_exists(s, "difficulty") && is_real(s.difficulty)) d = s.difficulty;
-    else if (variable_global_exists("songselect_difficulty") && is_real(global.songselect_difficulty))
-    {
-        d = global.songselect_difficulty;
-    }
+    if (variable_struct_exists(s, "difficulty")) d = vs_lobby_diff_num(s.difficulty);
+    else if (variable_global_exists("songselect_difficulty"))
+        d = vs_lobby_diff_num(global.songselect_difficulty);
     if (!vs_lobby_song_has_diff(song, d)) d = vs_lobby_clamp_diff(song, d);
     s.difficulty = d;
     global.songselect_difficulty = d;

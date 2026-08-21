@@ -57,14 +57,55 @@ function vs_online_diff_api(_diff)
     return string(_diff);
 }
 
-// Songs POST lowercase API names (encore). Shatter playables keep the
-// chart's difficulty_name (ENCORE, SHATTER, …) so the server can match.
+// Songs POST lowercase API names (encore). Shatter must NOT collapse to
+// encore/opening — that would let shatter PBs feed B40. Keep a dedicated
+// token so the server can match the file and exclude rating.
+function vs_online_song_is_shatter(_song)
+{
+    if (variable_global_exists("song_shatter") && global.song_shatter) return true;
+    if (_song == undefined) return false;
+    if (!variable_global_exists("shatter_list") || !is_array(global.shatter_list)) return false;
+    var i = 0;
+    repeat (array_length(global.shatter_list))
+    {
+        var sh = global.shatter_list[i];
+        if (sh == _song) return true;
+        // Dual folders share chart_id with the song row — only treat as shatter
+        // when difficulty_name matches the shatter entry (not a leftover template field).
+        if (sh != undefined
+            && variable_struct_exists(sh, "chart_id") && variable_struct_exists(_song, "chart_id")
+            && string(sh.chart_id) == string(_song.chart_id)
+            && variable_struct_exists(sh, "difficulty_name")
+            && variable_struct_exists(_song, "difficulty_name")
+            && string_upper(string(sh.difficulty_name)) == string_upper(string(_song.difficulty_name)))
+        {
+            return true;
+        }
+        if (sh != undefined
+            && variable_struct_exists(sh, "song_id") && variable_struct_exists(_song, "song_id")
+            && is_real(sh.song_id) && is_real(_song.song_id) && sh.song_id == _song.song_id
+            && sh.song_id >= 0)
+        {
+            return true;
+        }
+        i++;
+    }
+    return false;
+}
+
 function vs_online_diff_submit(_diff)
 {
     if (variable_global_exists("song_shatter") && global.song_shatter)
     {
         var raw = string(_diff);
-        if (raw != "") return raw;
+        if (raw == "") raw = "SHATTER";
+        var low = string_lower(raw);
+        if (low == "opening" || low == "middle" || low == "finale"
+            || low == "encore" || low == "backstage" || low == "prelude")
+        {
+            return "SHATTER";
+        }
+        return raw;
     }
     return vs_online_diff_api(_diff);
 }
@@ -1322,6 +1363,12 @@ function vs_online_score_body_json(_chartId, _difficulty, _sha1, _pts, _verified
         + "\",\"difficulty\":\"" + vs_online_json_esc(vs_online_diff_submit(_difficulty))
         + "\",\"sha1\":\"" + vs_online_json_esc(sha)
         + "\",\"score\":" + string(pts);
+    if (variable_global_exists("song_shatter") && global.song_shatter)
+    {
+        // Server must exclude shatter from B40 / rating-card. Tag explicitly
+        // even when difficulty_name was ENCORE (file name on disk).
+        out += ",\"shatter\":true,\"ratingEligible\":false";
+    }
     if (_verified && variable_global_exists("count_acrit"))
     {
         var nc = vs_online_score_note_count();
@@ -1670,6 +1717,14 @@ function vs_online_lb_download(_inst, _mode)
     var diffName = diffs[di];
     var chartId = _inst.song.chart_id;
     var sha = vs_online_chart_sha1(chartId, diffName);
+    if (vs_online_song_is_shatter(_inst.song))
+    {
+        var raw = diffName;
+        if (variable_struct_exists(_inst.song, "difficulty_name") && string(_inst.song.difficulty_name) != "")
+            raw = string(_inst.song.difficulty_name);
+        sha = vs_online_chart_sha1(chartId, raw);
+        diffName = "SHATTER";
+    }
     if (!variable_global_exists("vs_lb_q"))
     {
         global.vs_lb_q = [];
@@ -1744,6 +1799,72 @@ function vs_online_highscore_is_dev()
     return string_pos("highscore_table_dev", string(global.highscore_file)) > 0;
 }
 
+// --- rating local cache (avoid 0.000 / wrong class color while HTTP is in flight)
+
+function vs_online_rating_cache_key()
+{
+    if (!vs_online_is_custom()) return "steam";
+    return "vson" + string_copy(sha1_string_utf8(vs_online_server_url()), 1, 8);
+}
+
+function vs_online_rating_cache_write(_rscore)
+{
+    if (!vs_online_rscore_ok(_rscore)) return;
+    var key = vs_online_rating_cache_key();
+    ini_open("custom_profile");
+    ini_write_real("vsonline_rating", key, _rscore);
+    ini_close();
+    if (variable_global_exists("profile_file") && global.profile_file != undefined)
+    {
+        ini_open(global.profile_file);
+        ini_write_real("profile", "ratinglast", _rscore);
+        if (vs_online_is_custom())
+            ini_write_real("profile", "ratinglast_" + key, _rscore);
+        ini_close();
+    }
+}
+
+function vs_online_rating_cache_read()
+{
+    var key = vs_online_rating_cache_key();
+    var v = 0;
+    ini_open("custom_profile");
+    v = ini_read_real("vsonline_rating", key, 0);
+    ini_close();
+    if (vs_online_rscore_ok(v) && v > 0) return v;
+    if (variable_global_exists("profile_file") && global.profile_file != undefined)
+    {
+        ini_open(global.profile_file);
+        v = ini_read_real("profile", "ratinglast_" + key, 0);
+        if (!vs_online_rscore_ok(v) || v <= 0)
+            v = ini_read_real("profile", "ratinglast", 0);
+        ini_close();
+    }
+    if (vs_online_rscore_ok(v)) return v;
+    return 0;
+}
+
+function vs_online_rating_cache_apply()
+{
+    var v = vs_online_rating_cache_read();
+    if (!vs_online_rscore_ok(v) || v <= 0) return;
+    global.rscore = v;
+    if (!variable_global_exists("rscore_last") || !vs_online_rscore_ok(global.rscore_last))
+        global.rscore_last = v;
+}
+
+function vs_online_rating_cache_apply_steam()
+{
+    if (!variable_global_exists("profile_file") || global.profile_file == undefined) return;
+    ini_open(global.profile_file);
+    var v = ini_read_real("profile", "ratinglast_steam", 0);
+    if (!vs_online_rscore_ok(v) || v <= 0)
+        v = ini_read_real("profile", "ratinglast", 0);
+    ini_close();
+    if (!vs_online_rscore_ok(v)) return;
+    global.rscore = v;
+}
+
 // --- B40 / rating (server projection) --------------------------------------
 
 function vs_online_rscore_keep_last()
@@ -1757,6 +1878,8 @@ function vs_online_rscore_keep_last()
 function vs_online_rating_refresh()
 {
     if (!vs_online_is_account()) return;
+    // Show last known value immediately so class color is not stuck at 0.000.
+    vs_online_rating_cache_apply();
     var pid = vs_online_player_id();
     if (pid == "") return;
     vs_online_get_json("/api/v1/players/" + vs_online_url_encode(pid) + "/rating-card", false, vs_online_rating_card_done);
@@ -1896,13 +2019,8 @@ function vs_online_rating_card_done(_ok, _data, _status)
         || variable_struct_exists(_data, "completion"))
     {
         global.rscore = vs_online_rscore_from_card(_data);
+        vs_online_rating_cache_write(global.rscore);
         vs_online_rating_show_gain();
-        if (variable_global_exists("profile_file") && global.profile_file != undefined)
-        {
-            ini_open(global.profile_file);
-            ini_write_real("profile", "ratinglast", global.rscore);
-            ini_close();
-        }
         if (global.rscore >= 2000) unlock_achievement("rating_2000");
         if (global.rscore >= 5000) unlock_achievement("rating_5000");
         if (global.rscore >= 8000) unlock_achievement("rating_8000");

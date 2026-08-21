@@ -1257,6 +1257,18 @@
         "Type": 1
     },
     {
+        "Entry": "gml_Object_o_songselect_shatter_Create_0",
+        "Find": "load_selected_song_info = function()\n{\n    var scr = global.highscores.shatter[selected_song.song_id];\n    selected_song_score = scr.score;\n    selected_song_combo_record = scr.max_combo;\n    selected_song_notes = LoadSongDataNoteCount(selected_song.chart_id, selected_song.difficulty_name);\n};",
+        "ExternalFile": "csm/shatter_load_info.gml",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_Object_o_songselect_shatter_Draw_0",
+        "Find": "event_inherited();\nvar tech_x = song_info_x + 1;\nvar section_headers = [\"RECORD\", \"COMBO\", \"BPM\", \"NOTES\"];\nvar section_colors = [4500479, 4521945, 16757828, 13059327];\nvar section_values = [round(selected_song_score), selected_song_combo_record, selected_song.bpm_display, selected_song_notes];\nif (struct_exists(song_objects[cursor_pos], \"diff\"))\n{\n    var diff = song_objects[cursor_pos].diff;\n    section_values = [round(selected_song_score), selected_song_combo_record, song_get_info(selected_song, \"bpm_display\", diff), selected_song_notes];\n}\nfor (var i = 0; i < array_length(section_headers); i++)\n{\n    var text_y = 123 + (i * 10);\n    draw_set_halign(fa_left);\n    draw_set_color(section_colors[i]);\n    draw_text(tech_x + 4, text_y, section_headers[i]);\n    draw_set_color(c_white);\n    draw_set_halign(fa_right);\n    draw_text(tech_x + 107, text_y, section_values[i]);\n}",
+        "ExternalFile": "csm/shatter_draw_stats.gml",
+        "Type": 1
+    },
+    {
         "Entry": "gml_Object_o_songselect_shatterold_Create_0",
         "Find": "global.current_pack = [0, 1, 2];\nfirst_song_refresh = true;\nrefresh_song_objects(0, true);\ntemporary_rs = 0;\ncursor_song_id = global.shatter_list[global.current_pack[0]];",
         "Value": "global.current_pack = (variable_global_exists(\"shatter_order\") && array_length(global.shatter_order) > 0) ? global.shatter_order : [0, 1, 2];\nfirst_song_refresh = true;\nrefresh_song_objects(0, true);\ntemporary_rs = 0;\ncursor_pos = 0;\nif (variable_global_exists(\"force_song_select\") && global.force_song_select >= 0)\n{\n    for (var i = 0; i < array_length(global.current_pack); i++)\n    {\n        if (global.current_pack[i] == global.force_song_select)\n        {\n            cursor_pos = i;\n            break;\n        }\n    }\n    global.force_song_select = -1;\n}\ncursor_song_id = global.shatter_list[global.current_pack[cursor_pos]];",

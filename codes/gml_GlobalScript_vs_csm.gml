@@ -423,6 +423,183 @@ function vs_csm_draw_diff_badge(_sprite, _diff_value, _x, _y)
     draw_set_valign(va);
 }
 
+// Shatter select inherits o_songselect (empty Other_25), so F3 / 五维 from
+// o_songselect_main never run. Reuse the same leaderboard object + tech-stat
+// globals GetSongStats fills.
+function vs_csm_shatter_diff_index(_song)
+{
+    if (_song == undefined) return 3;
+    var dn = string_upper(string(struct_get_fallback(_song, "difficulty_name", "ENCORE")));
+    if (dn == "OPENING") return 0;
+    if (dn == "MIDDLE") return 1;
+    if (dn == "FINALE") return 2;
+    if (dn == "PRELUDE") return 4;
+    return 3;
+}
+
+function vs_csm_shatter_stats_ensure()
+{
+    if (!variable_instance_exists(id, "song_stat_page")) song_stat_page = 0;
+    if (!variable_instance_exists(id, "song_stat_page_target")) song_stat_page_target = 0;
+    if (!variable_instance_exists(id, "stat_page_count")) stat_page_count = 2;
+    if (!variable_instance_exists(id, "song_stats_surf")) song_stats_surf = undefined;
+    if (!variable_instance_exists(id, "selected_song_stats") || !is_struct(selected_song_stats))
+        selected_song_stats = {};
+    if (!variable_instance_exists(id, "holding_sort")) holding_sort = 0;
+}
+
+function vs_csm_shatter_stats_sync()
+{
+    vs_csm_shatter_stats_ensure();
+    var keys = ["note", "tech", "speed", "multi", "fill", "gimmick"];
+    var i = 0;
+    repeat (array_length(keys))
+    {
+        var k = keys[i];
+        var g = variable_global_exists(k + "_stat") ? variable_global_get(k + "_stat") : 0;
+        variable_struct_set(selected_song_stats, k, vs_csm_safe_real(g, 0));
+        i++;
+    }
+}
+
+function vs_csm_shatter_stats_reload()
+{
+    if (!variable_instance_exists(id, "selected_song") || selected_song == undefined) return;
+    var dn = struct_get_fallback(selected_song, "difficulty_name", "ENCORE");
+    try { GetSongStats(selected_song, dn); } catch (_e0) { }
+    vs_csm_shatter_stats_sync();
+}
+
+function vs_csm_shatter_open_leaderboard()
+{
+    if (!variable_instance_exists(id, "selected_song") || selected_song == undefined) return;
+    if (!variable_instance_exists(id, "songs") || !is_array(songs) || array_length(songs) <= 0) return;
+    var any = false;
+    with (o_songselect_leaderboard)
+    {
+        if (is_active) any = true;
+    }
+    if (any) return;
+    play_se(select);
+    var d = vs_csm_shatter_diff_index(selected_song);
+    var lb = instance_create_depth(0, -95, depth - 1, o_songselect_leaderboard,
+    {
+        song: selected_song,
+        difficulty: d
+    });
+    lb.target_y = 35;
+    is_selecting = false;
+}
+
+function vs_csm_shatter_stats_input()
+{
+    vs_csm_shatter_stats_ensure();
+    var any_lb = false;
+    with (o_songselect_leaderboard)
+    {
+        if (is_active) any_lb = true;
+    }
+    // Same binding freeplay uses for F3 leaderboard (input 19).
+    if (input_check_pressed(19) && holding_sort < 15)
+        vs_csm_shatter_open_leaderboard();
+    // Same binding freeplay uses to cycle 五维 / info pages (input 8).
+    if (!any_lb && input_check_pressed(8))
+    {
+        play_se(sfx_note_hit);
+        song_stat_page_target = (song_stat_page_target + stat_page_count + (input_check(10) ? -1 : 1)) % stat_page_count;
+    }
+    var i = 1;
+    repeat (stat_page_count)
+    {
+        if (keyboard_check_pressed(ord(string(i))))
+        {
+            play_se(sfx_note_hit);
+            song_stat_page_target = i - 1;
+        }
+        i++;
+    }
+}
+
+function vs_csm_shatter_stats_draw()
+{
+    vs_csm_shatter_stats_ensure();
+    song_stat_page = lerp(song_stat_page, song_stat_page_target, 0.2);
+    var keys = ["note", "tech", "speed", "multi", "fill", "gimmick"];
+    var ki = 0;
+    repeat (array_length(keys))
+    {
+        var k = keys[ki];
+        var cur = variable_struct_exists(selected_song_stats, k) ? variable_struct_get(selected_song_stats, k) : 0;
+        var want = variable_global_exists(k + "_stat") ? variable_global_get(k + "_stat") : cur;
+        variable_struct_set(selected_song_stats, k, lerp(vs_csm_safe_real(cur, 0), vs_csm_safe_real(want, 0), 0.2));
+        ki++;
+    }
+    if (!surface_exists(song_stats_surf))
+        song_stats_surf = surface_create(111 * stat_page_count, 46);
+    surface_target(song_stats_surf);
+    draw_clear_alpha(c_black, 0);
+    // Page 0: record strip (shatter Draw used to hard-code this).
+    var page_x = 0;
+    var section_headers = ["RECORD", "COMBO", "BPM", "NOTES"];
+    var section_colors = [4500479, 4521945, 16757828, 13059327];
+    var bpm = selected_song != undefined ? struct_get_fallback(selected_song, "bpm_display", "") : "";
+    var section_values = [round(selected_song_score), selected_song_combo_record, bpm, selected_song_notes];
+    var i = 0;
+    repeat (4)
+    {
+        var text_y = 3 + (i * 10);
+        draw_set_halign(fa_left);
+        draw_set_color(section_colors[i]);
+        draw_text(page_x + 4, text_y, section_headers[i]);
+        draw_set_color(c_white);
+        draw_set_halign(fa_right);
+        draw_text(page_x + 107, text_y, section_values[i]);
+        i++;
+    }
+    // Page 1: 五维 (same CHIP/TECH/... strip as freeplay).
+    page_x = 111;
+    section_headers = ["CHIP", "TECH", "STREAM", "CHORD", "BURST", "GIMMICK"];
+    var section_keys = ["note", "tech", "speed", "multi", "fill", "gimmick"];
+    var gimmick_on = variable_global_exists("gimmick_stat") && global.gimmick_stat > 0;
+    var section_amount = array_length(section_headers) - (gimmick_on ? 0 : 1);
+    i = 0;
+    repeat (section_amount)
+    {
+        var ty = gimmick_on ? (3 + (i * 7)) : (3 + (i * 8));
+        if (sprite_exists(sp_techstats2025))
+            draw_sprite(sp_techstats2025, gimmick_on ? 0 : 1, page_x + 4, 3);
+        draw_set_halign(fa_right);
+        draw_set_color(c_white);
+        if (variable_global_exists("techstatfont")) draw_set_font(techstatfont);
+        var gv = variable_global_exists(section_keys[i] + "_stat") ? variable_global_get(section_keys[i] + "_stat") : 0;
+        draw_text(page_x + 120, ty, round(vs_csm_safe_real(gv, 0)));
+        draw_set_font(global.default_font);
+        var val = variable_struct_exists(selected_song_stats, section_keys[i])
+            ? vs_csm_safe_real(variable_struct_get(selected_song_stats, section_keys[i]), 0) : 0;
+        var max_val = 200;
+        if (val > max_val)
+        {
+            var val2 = max(0, val - 200);
+            draw_set_color(make_color_hsv((current_time / 2) % 255, 200, 255));
+            draw_rectangle(page_x + 42, ty, page_x + 42 + ((47 * min(val, max_val)) / 200), ty + 4, false);
+            draw_set_color(c_white);
+            draw_rectangle(page_x + 42, ty, page_x + 42 + ((47 * min(val2, max_val)) / 200), ty + 4, false);
+        }
+        else
+        {
+            draw_set_color(make_color_hsv(55 + (200 * (val / max_val)), 200, 255));
+            draw_rectangle(page_x + 42, ty, page_x + 42 + ((47 * min(val, max_val)) / 200), ty + 4, false);
+        }
+        i++;
+    }
+    surface_untarget();
+    var tech_x = round(song_info_x) + 1;
+    var openness = 111 * song_stat_page;
+    draw_surface_part(song_stats_surf, openness, 0, 111, 46, tech_x, 120);
+    draw_set_halign(fa_left);
+    draw_set_color(c_white);
+}
+
 function vs_csm_play_log(_msg)
 {
     var line = "VS PLAY: " + string(_msg);

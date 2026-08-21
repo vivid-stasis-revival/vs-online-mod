@@ -427,9 +427,21 @@ function vs_online_highscore_base(_orig)
 
 function vs_online_apply_custom_on()
 {
+    // Keep Steam ratinglast so toggling back does not show 0.000 / wrong class.
+    if (variable_global_exists("profile_file") && global.profile_file != undefined
+        && variable_global_exists("rscore") && vs_online_rscore_ok(global.rscore))
+    {
+        ini_open(global.profile_file);
+        ini_write_real("profile", "ratinglast_steam", global.rscore);
+        ini_close();
+    }
     vs_online_get_config();
     if (variable_global_exists("highscore_file"))
         global.highscore_file = vs_online_highscore_file(global.highscore_file);
+    // Hot-switch must reload the server-suffixed table; otherwise PBs stay on
+    // the Steam file until the next boot.
+    try { load_highscores(); } catch (_e0) { }
+    vs_online_rating_cache_apply();
     vs_csm_force_gm_audio();
     vs_online_ensure_identity(vs_online_init_on_identity);
 }
@@ -439,6 +451,9 @@ function vs_online_apply_custom_off()
     global.vs_online_conn = 0;
     if (variable_global_exists("highscore_file"))
         global.highscore_file = vs_online_highscore_base(global.highscore_file);
+    try { load_highscores(); } catch (_e1) { }
+    // Restore the last Steam-side rating display from the profile file.
+    vs_online_rating_cache_apply_steam();
 }
 
 function vs_online_opt_read_clamped(_file, _sec, _key, _def, _max, _varname)
@@ -704,6 +719,7 @@ function vs_online_init()
     vs_ws_start_listener();
     if (vs_online_is_custom())
     {
+        vs_online_rating_cache_apply();
         vs_online_ensure_identity(vs_online_init_on_identity);
     }
 }
