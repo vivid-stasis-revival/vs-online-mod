@@ -1964,9 +1964,41 @@ function vs_online_rating_lamp(_name)
     return 0;
 }
 
+// Ensure rsw_* exist and are padded so generate_rating_image / window draw
+// never index missing slots. Does not wipe an existing server projection.
+function vs_online_rating_ensure_window_arrays()
+{
+    if (!variable_global_exists("rsw_table") || !is_array(global.rsw_table))
+        global.rsw_table = [];
+    if (!variable_global_exists("rsw_ex_table") || !is_array(global.rsw_ex_table))
+        global.rsw_ex_table = [];
+    if (!variable_global_exists("rsw_top30") || !is_array(global.rsw_top30))
+        global.rsw_top30 = [];
+    if (!variable_global_exists("rsw_ex_top10") || !is_array(global.rsw_ex_top10))
+        global.rsw_ex_top10 = [];
+    while (array_length(global.rsw_top30) < 30)
+        array_push(global.rsw_top30, new rating_entry(0, 0, 1, 0, 0));
+    while (array_length(global.rsw_ex_top10) < 10)
+        array_push(global.rsw_ex_top10, new ex_rating_entry(0, 0, 0, 1, 0));
+}
+
+// Open a locally saved rating.png with the OS default viewer (custom share).
+function vs_online_rating_open_image(_file)
+{
+    if (_file == undefined || _file == "") return;
+    var path = string(_file);
+    var abs = path;
+    if (!(string_pos(":", path) == 2 || string_char_at(path, 1) == "/" || string_char_at(path, 1) == "\\"))
+        abs = working_directory + path;
+    if (!file_exists(abs) && file_exists(path))
+        abs = path;
+    if (!file_exists(abs)) return;
+    execute_shell_simple(abs);
+}
+
 function vs_online_rating_fill_window(_data)
 {
-    if (!variable_global_exists("rsw_table")) return;
+    vs_online_rating_ensure_window_arrays();
     global.rsw_table = [];
     global.rsw_ex_table = [];
     if (variable_struct_exists(_data, "top") && is_array(_data.top))

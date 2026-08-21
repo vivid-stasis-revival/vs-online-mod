@@ -529,6 +529,18 @@
         "Type": 1
     },
     {
+        "Entry": "gml_GlobalScript_rating_functions",
+        "Find": "function create_rating_array_for_window()\n{\n    global.rsw_table = [];\n    global.rsw_ex_table = [];",
+        "Value": "function create_rating_array_for_window()\n{\n    if (vs_online_is_custom())\n    {\n        vs_online_rating_ensure_window_arrays();\n        vs_online_rating_window_refresh();\n        return;\n    }\n    global.rsw_table = [];\n    global.rsw_ex_table = [];",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_Object_obj_ratingWindow_Step_0",
+        "Find": "            case 3:\n                var file = \"rating.png\";\n                generate_rating_image(rate_background + 1, incl_title, incl_constants, file);\n                \n                if (steam_initialised())\n                    steam_send_screenshot(file, 1081, 1332);\n                \n                break;",
+        "Value": "            case 3:\n                var file = \"rating.png\";\n                generate_rating_image(rate_background + 1, incl_title, incl_constants, file);\n                if (vs_online_is_custom())\n                    vs_online_rating_open_image(file);\n                else if (steam_initialised())\n                    steam_send_screenshot(file, 1081, 1332);\n                break;",
+        "Type": 1
+    },
+    {
         "Entry": "gml_Object_obj_ratingWindow_Create_0",
         "Find": "lbIdTop100 = steam_download_scores(\"rating\", 0, 100);\ndataFriends = [];\nlbIdFriends = steam_download_friends_scores(\"rating\");",
         "Value": "if (vs_online_is_custom()) { lbIdTop100 = -1; dataFriends = []; lbIdFriends = -1; vs_online_rating_refresh(); vs_online_rating_lb_fetch(id); } else { lbIdTop100 = steam_download_scores(\"rating\", 0, 100); dataFriends = []; lbIdFriends = steam_download_friends_scores(\"rating\"); }",
