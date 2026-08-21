@@ -58,13 +58,13 @@
     {
         "Entry": "gml_Object_obj_multiplayer_lobby_Create_0",
         "Find": "steam_lobby_create(2, 8);",
-        "Value": "if (vs_online_is_custom()) { vs_lobby_log(\"ui hostlobby\"); vs_lobby_create(true); } else { steam_lobby_create(2, 8); }",
+        "Value": "if (vs_online_is_custom()) { vs_lobby_log(\"ui hostlobby\"); vs_lobby_create(!keyboard_check(vk_shift)); } else { steam_lobby_create(2, 8); }",
         "Type": 1
     },
     {
         "Entry": "gml_Object_obj_multiplayer_lobby_Create_0",
         "Find": "steam_lobby_create(2, global.op_bugfix_multiplayer_size);",
-        "Value": "if (vs_online_is_custom()) { vs_lobby_log(\"ui hostlobby size\"); vs_lobby_create(true); } else { steam_lobby_create(2, global.op_bugfix_multiplayer_size); }",
+        "Value": "if (vs_online_is_custom()) { vs_lobby_log(\"ui hostlobby size\"); vs_lobby_create(!keyboard_check(vk_shift)); } else { steam_lobby_create(2, global.op_bugfix_multiplayer_size); }",
         "Type": 1
     },
     {
@@ -148,6 +148,12 @@
         "Type": 0
     },
 
+    {
+        "Entry": "gml_Object_obj_multiplayer_lobby_Draw_0",
+        "Find": "if (steam_lobby_get_lobby_id() <= 0)\n{\n    var height = 19;",
+        "Value": "if (vs_lobby_lobby_id() <= 0)\n{\n    if (vs_lobby_browser_active())\n    {\n        vs_lobby_browser_draw();\n    }\n    else\n    {\n    var height = 19;",
+        "Type": 1
+    },
     {
         "Entry": "gml_Object_obj_multiplayer_lobby_Draw_0",
         "Find": "steam_lobby_get_lobby_id()",
@@ -698,6 +704,12 @@
         "Type": 0
     },
     {
+        "Entry": "gml_Object_obj_multiplayer_lobby_Step_0",
+        "Find": "else if (!entering_code)\n{\n    if (input_check_pressed(UnknownEnum.Value_4))\n    {\n        do_multiplayer_lobby_button(menu_actions_landing[cursor_pos].callback);\n        play_se(sfx_songsel_select);\n    }\n    \n    var dpos = input_check_pressed(UnknownEnum.Value_14) - input_check_pressed(UnknownEnum.Value_13);\n    \n    if (dpos != 0)\n    {\n        cursor_pos = (array_length(menu_actions_landing) + cursor_pos + dpos) % array_length(menu_actions_landing);\n        play_se(sfx_songsel_cursor);\n    }\n    \n    if (input_check_pressed(UnknownEnum.Value_5))",
+        "Value": "else if (!entering_code)\n{\n    if (vs_lobby_browser_active())\n    {\n        vs_lobby_browser_step();\n    }\n    else\n    {\n    if (input_check_pressed(UnknownEnum.Value_4))\n    {\n        do_multiplayer_lobby_button(menu_actions_landing[cursor_pos].callback);\n        play_se(sfx_songsel_select);\n    }\n    \n    var dpos = input_check_pressed(UnknownEnum.Value_14) - input_check_pressed(UnknownEnum.Value_13);\n    \n    if (dpos != 0)\n    {\n        cursor_pos = (array_length(menu_actions_landing) + cursor_pos + dpos) % array_length(menu_actions_landing);\n        play_se(sfx_songsel_cursor);\n    }\n    }\n    \n    if (input_check_pressed(UnknownEnum.Value_5))",
+        "Type": 1
+    },
+    {
         "Entry": "gml_Object_obj_multiplayer_lobby_Create_0",
         "ExternalFile": "bwp_lobby_init.gml",
         "Type": 3
@@ -705,7 +717,7 @@
     {
         "Entry": "gml_Object_obj_multiplayer_lobby_Draw_0",
         "Find": "if (entering_code)",
-        "Value": "draw_set_color(c_white);draw_set_halign(fa_center);draw_text_o(160, startY + totalHeight + 7, string(\"Total Lobbies: {0}\\nHold Shift and Press \\\"Paste Code\\\" to join random lobby\", lobbyCount)); if (entering_code)",
+        "Value": "draw_set_color(c_white);draw_set_halign(fa_center);draw_text_o(160, startY + totalHeight + 7, string(\"Total Lobbies: {0}\\nHold Shift and Press \\\"Paste Code\\\" to join random lobby\", lobbyCount)); }\n    if (entering_code && !vs_lobby_browser_active())",
         "Type": 1
     },
     {

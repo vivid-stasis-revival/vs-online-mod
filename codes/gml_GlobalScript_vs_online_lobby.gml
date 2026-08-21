@@ -2346,6 +2346,12 @@ function vs_lobby_refresh_count()
         vs_lobby_count_schedule();
         return;
     }
+    // New matchmaking landing owns the public list fetch.
+    if (vs_lobby_browser_active())
+    {
+        vs_lobby_browser_refresh(false);
+        return;
+    }
     st.inflight = true;
     st.t0 = current_time;
     vs_online_get_json("/api/v1/lobbies", false, vs_lobby_count_done);
@@ -2490,6 +2496,8 @@ function vs_lobby_reset()
     {
         vs_lobby_log("reset no o_st_handle");
     }
+    if (instance_exists(obj_multiplayer_lobby) && vs_lobby_browser_active())
+        vs_lobby_browser_refresh(true);
 }
 
 // --- packet send -----------------------------------------------------------
