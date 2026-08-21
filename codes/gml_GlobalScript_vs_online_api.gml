@@ -1705,6 +1705,41 @@ function vs_online_lb_bind_download_around()
     }
 }
 
+// LB responses are FIFO via vs_http single-flight. Stamp each request with a
+// gen so a late/stale reply cannot fill a newer panel (or a destroyed one).
+function vs_online_lb_q_init()
+{
+    if (!variable_global_exists("vs_lb_q")) global.vs_lb_q = [];
+    if (!variable_global_exists("vs_lb_gen")) global.vs_lb_gen = 0;
+}
+
+function vs_online_lb_q_push(_inst)
+{
+    vs_online_lb_q_init();
+    global.vs_lb_gen += 1;
+    var gen = global.vs_lb_gen;
+    _inst.vs_lb_gen = gen;
+    array_push(global.vs_lb_q, { inst: _inst, gen: gen });
+    return gen;
+}
+
+// Pop the oldest job. Returns the instance only when it still exists and its
+// vs_lb_gen still matches; otherwise the reply is stale and is dropped.
+function vs_online_lb_q_take()
+{
+    vs_online_lb_q_init();
+    if (array_length(global.vs_lb_q) <= 0) return undefined;
+    var job = global.vs_lb_q[0];
+    array_delete(global.vs_lb_q, 0, 1);
+    if (!is_struct(job)) return undefined;
+    var inst = variable_struct_exists(job, "inst") ? job.inst : undefined;
+    var gen = variable_struct_exists(job, "gen") ? job.gen : -1;
+    if (inst == undefined || !instance_exists(inst)) return undefined;
+    if (!variable_instance_exists(inst, "vs_lb_gen") || inst.vs_lb_gen != gen)
+        return undefined;
+    return inst;
+}
+
 function vs_online_lb_download(_inst, _mode)
 {
     if (!instance_exists(_inst)) return;
@@ -1732,11 +1767,7 @@ function vs_online_lb_download(_inst, _mode)
         if (sha == "") sha = vs_online_chart_sha1(chartId, diffName);
         diffName = vs_online_diff_shatter_token(raw);
     }
-    if (!variable_global_exists("vs_lb_q"))
-    {
-        global.vs_lb_q = [];
-    }
-    array_push(global.vs_lb_q, _inst);
+    vs_online_lb_q_push(_inst);
     if (_mode == 1)
     {
         vs_online_download_friends_scores(chartId, diffName, sha, vs_online_lb_apply);
@@ -1753,19 +1784,10 @@ function vs_online_lb_download(_inst, _mode)
 
 function vs_online_lb_apply(_data)
 {
-    if (!vs_online_is_custom())
-    {
-        if (variable_global_exists("vs_lb_q") && array_length(global.vs_lb_q) > 0)
-            array_delete(global.vs_lb_q, 0, 1);
-        return;
-    }
-    var inst = undefined;
-    if (variable_global_exists("vs_lb_q") && array_length(global.vs_lb_q) > 0)
-    {
-        inst = global.vs_lb_q[0];
-        array_delete(global.vs_lb_q, 0, 1);
-    }
-    if (inst == undefined || !instance_exists(inst)) return;
+    // Always dequeue so a hot-switch / destroyed panel cannot strand the FIFO.
+    var inst = vs_online_lb_q_take();
+    if (!vs_online_is_custom()) return;
+    if (inst == undefined) return;
     inst.data = [];
     var rows = undefined;
     if (_data != undefined && variable_struct_exists(_data, "entries") && is_array(_data.entries))
