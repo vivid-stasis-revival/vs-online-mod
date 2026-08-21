@@ -451,6 +451,11 @@ function vs_online_opt_read_server()
     return vs_online_opt_read_clamped("custom_profile", "vsonline", "enabled", 0, 1, "op_vs_custom_server");
 }
 
+function vs_online_opt_read_legacy_lobby()
+{
+    return vs_online_opt_read_clamped("custom_profile", "vsonline", "legacy_lobby", 0, 1, "op_vs_legacy_lobby");
+}
+
 function vs_online_opt_read_countdown()
 {
     return vs_online_opt_read_clamped("custom_profile", "betterWP", "countdown", 0, 2, "op_bwp_countdown_sound");
@@ -534,6 +539,19 @@ function vs_online_add_options()
     };
     array_push(global.options_categories[ci].options, array_length(global.system_options));
     array_push(global.system_options, toggle);
+
+    var legacyLobbyOpt = {
+        name: "Use Legacy Worldcross Lobby",
+        description: "Restore the original Host / Paste / Join landing. Off = matchmaking lobby with public room list.",
+        type: 0,
+        values: ["Disabled", "Enabled"],
+        default_value: 0,
+        varname: "op_vs_legacy_lobby",
+        key: ["custom_profile", "vsonline", "legacy_lobby"],
+        read_value: vs_online_opt_read_legacy_lobby
+    };
+    array_push(global.options_categories[ci].options, array_length(global.system_options));
+    array_push(global.system_options, legacyLobbyOpt);
 
     var accountOpt = {
         name: "Account Management",
