@@ -1741,6 +1741,12 @@ function vs_online_lb_download(_inst, _mode)
 
 function vs_online_lb_apply(_data)
 {
+    if (!vs_online_is_custom())
+    {
+        if (variable_global_exists("vs_lb_q") && array_length(global.vs_lb_q) > 0)
+            array_delete(global.vs_lb_q, 0, 1);
+        return;
+    }
     var inst = undefined;
     if (variable_global_exists("vs_lb_q") && array_length(global.vs_lb_q) > 0)
     {
@@ -2031,6 +2037,9 @@ function vs_online_rating_show_gain()
 
 function vs_online_rating_card_done(_ok, _data, _status)
 {
+    // Hot-switch may leave a Custom rating-card reply in flight; never apply
+    // it after the player is back on Steam (would overwrite steam cache).
+    if (!vs_online_is_custom()) return;
     if (!_ok || _data == undefined) return;
     if (variable_struct_exists(_data, "rating")
         || variable_struct_exists(_data, "best30")

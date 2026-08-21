@@ -7,6 +7,7 @@ alwaysApply: true
 
 When a task leaves real repo changes, commit and push to `origin` without waiting to be asked.
 
+- **Required first:** follow `verify-load-before-push` — run `../../vividstasisModLoader.exe` from the mod root, confirm the newest `app-logs/vsml-*.log` has no load/compile errors, then commit/push. Never push a failed load to `test` or `main`.
 - Use the existing commit style (`fix:` / `log:` / …) and HEREDOC messages.
 - Include related untracked files that belong with the change.
 - Do not commit secrets, skip hooks, amend published history, or force-push.

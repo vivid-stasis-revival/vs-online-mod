@@ -1178,6 +1178,18 @@ function vs_csm_chart_has_pending_update(_chartId)
     return false;
 }
 
+function vs_csm_scores_merge_invalidate()
+{
+    // Drop in-flight PB merges on Steam/Custom hot-switch so a late HTTP
+    // reply cannot write custom scores into the other mode's highscore table.
+    if (variable_global_exists("vs_csm_merge_seq") && is_real(global.vs_csm_merge_seq))
+        global.vs_csm_merge_seq += 1;
+    else
+        global.vs_csm_merge_seq = 1;
+    global.vs_csm_merge = undefined;
+    global.vs_csm_merge_pending = false;
+}
+
 function vs_csm_scores_merge_update_ready()
 {
     // Wait for the one-shot check-updates pass so needsUpdate is known.
@@ -1260,6 +1272,7 @@ function vs_csm_scores_merge_start()
 
 function vs_csm_scores_merge_alive()
 {
+    if (!vs_online_is_custom()) return false;
     if (!variable_global_exists("vs_csm_merge") || global.vs_csm_merge == undefined) return false;
     if (!variable_global_exists("vs_csm_merge_seq")) return false;
     var st = global.vs_csm_merge;

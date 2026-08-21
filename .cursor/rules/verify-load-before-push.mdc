@@ -1,0 +1,16 @@
+---
+description: Run modloader load check before any commit/push to test or main
+alwaysApply: true
+---
+
+# Verify load before push
+
+Before `git commit` or `git push` to `test` or `main` (including auto commit/push):
+
+1. From the mod project root (`mods/vs-online-mod`), go **two directories up** to `modloader/`.
+2. Run `vividstasisModLoader.exe` (same folder; casing may vary).
+3. Read the newest `app-logs/vsml-*.log`.
+4. Only proceed with commit/push if load finished with **no** compile/patch errors (no `VML错误`, no `Compile errors`, no `Patching stopped`).
+5. If load fails, fix the code first; do not commit or push a broken build.
+
+Also watch for vsml traps that abort import: locals shadowing builtins (`var id`, `var score`, …), bad ExternalFile Find strings, and racey callbacks that assume Custom mode is still on after a hot-switch.

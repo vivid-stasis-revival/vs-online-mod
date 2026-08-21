@@ -431,6 +431,7 @@ function vs_online_apply_custom_on()
     // Flag is already Custom here — write the steam key explicitly.
     if (variable_global_exists("rscore") && vs_online_rscore_ok(global.rscore))
         vs_online_rating_cache_write_key("steam", global.rscore);
+    vs_csm_scores_merge_invalidate();
     vs_online_get_config();
     if (variable_global_exists("highscore_file"))
         global.highscore_file = vs_online_highscore_file(global.highscore_file);
@@ -451,6 +452,7 @@ function vs_online_apply_custom_off()
         var ckey = "vson" + string_copy(sha1_string_utf8(vs_online_server_url()), 1, 8);
         vs_online_rating_cache_write_key(ckey, global.rscore);
     }
+    vs_csm_scores_merge_invalidate();
     global.vs_online_conn = 0;
     if (variable_global_exists("highscore_file"))
         global.highscore_file = vs_online_highscore_base(global.highscore_file);
