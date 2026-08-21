@@ -132,6 +132,13 @@ function vs_lobby_browser_clamp()
     if (st.top_i >= array_length(labels)) st.top_i = array_length(labels) - 1;
 }
 
+function vs_lobby_browser_refresh_left()
+{
+    var st = vs_lobby_count_st();
+    if (!variable_struct_exists(st, "next_at") || st.next_at <= 0) return 0;
+    return max(0, ceil((st.next_at - current_time) / 1000));
+}
+
 function vs_lobby_browser_refresh(_spin)
 {
     if (!vs_lobby_browser_active()) return;
@@ -384,8 +391,11 @@ function vs_lobby_browser_draw()
             draw_circle(cx + cos(a) * r, cy + sin(a) * r, bright ? 2.5 : 1.5, false);
             ti++;
         }
-        draw_set_halign(fa_left);
         draw_set_font(global.default_font);
+        draw_set_color(c_white);
+        draw_set_halign(fa_center);
+        draw_text(mid_x, 118, "Refreshing...");
+        draw_set_halign(fa_left);
         draw_set_color(c_white);
     }
     else
@@ -444,12 +454,14 @@ function vs_lobby_browser_draw()
         }
         if (!obj_multiplayer_lobby.entering_code)
         {
+            var left = vs_lobby_browser_refresh_left();
             draw_set_halign(fa_center);
             draw_set_color(c_white);
             draw_set_font(global.default_font);
             draw_text(mid_x, 136, "Page " + string(st.page + 1) + "/" + string(pages)
                 + "  " + vs_lobby_browser_filter_name(st.filter)
-                + "  " + string(n) + " rooms");
+                + "  " + string(n) + " rooms"
+                + "  " + string(left) + "s");
             draw_set_color(c_gray);
             draw_text(mid_x, 148, "F: filter   Shift+Host: private");
             draw_set_halign(fa_left);
