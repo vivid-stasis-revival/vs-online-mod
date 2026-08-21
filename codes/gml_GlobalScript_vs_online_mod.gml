@@ -173,7 +173,14 @@ function vs_online_get_config()
         var f = file_text_open_read(path);
         if (f >= 0)
         {
-            var raw = file_text_read_string(f);
+            // Read the whole file — pretty-printed / multi-line JSON is common
+            // after hand-editing; file_text_read_string only returns one line.
+            // 整文件读入：手改后经常是多行格式化 JSON；file_text_read_string 只读一行。
+            var raw = "";
+            while (!file_text_eof(f))
+            {
+                raw += file_text_readln(f);
+            }
             file_text_close(f);
             try
             {
