@@ -443,6 +443,11 @@ function vs_media_request(_kind, _id, _url)
     }
     if (global.vs_media_busy && global.vs_media_id == _id && global.vs_media_kind == _kind) return;
     array_push(global.vs_media_q, { kind: _kind, id: _id, url: _url });
+    // Fast scrolling can enqueue dozens of jackets; keep only the newest few.
+    while (array_length(global.vs_media_q) > 12)
+    {
+        array_delete(global.vs_media_q, 0, 1);
+    }
     vs_media_schedule();
 }
 

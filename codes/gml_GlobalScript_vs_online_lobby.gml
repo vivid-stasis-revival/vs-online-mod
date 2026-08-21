@@ -1714,6 +1714,13 @@ function vs_online_avatar_ensure(_playerId, _url)
         return undefined;
     variable_struct_set(global.vs_avatar_pending, _playerId, true);
     array_push(global.vs_avatar_q, { id: _playerId, url: _url });
+    while (array_length(global.vs_avatar_q) > 16)
+    {
+        var drop = global.vs_avatar_q[0];
+        array_delete(global.vs_avatar_q, 0, 1);
+        if (drop != undefined && variable_struct_exists(drop, "id"))
+            variable_struct_set(global.vs_avatar_pending, drop.id, false);
+    }
     vs_online_avatar_pump();
     return undefined;
 }
@@ -2853,8 +2860,9 @@ function vs_online_on_ws_frame(_op, _payload)
         vs_lobby_ensure_sender(senderId);
         vs_lobby_note_seen(senderId);
         // payload position is now exactly at the packet type byte.
+        // receive_packet deletes the buffer on every path (known read,
+        // unknown type, and ownerOnly reject after our patch).
         var got = receive_packet(_payload, senderId);
-        // packet.read already deletes the buffer on a known type.
         if (got == undefined && !vs_lobby_pkt_quiet(pkt))
         {
             vs_lobby_log("recv unhandled from=" + senderId + " type=" + vs_lobby_pkt_name(pkt));

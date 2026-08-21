@@ -379,6 +379,17 @@ function vs_csm_free_collected_customs(_bag)
     var seenAud = {};
     var sprs = (variable_struct_exists(_bag, "spr") && is_array(_bag.spr)) ? _bag.spr : [];
     var auds = (variable_struct_exists(_bag, "aud") && is_array(_bag.aud)) ? _bag.aud : [];
+    // Stop playback that may still reference streams we are about to destroy.
+    var ai0 = 0;
+    repeat (array_length(auds))
+    {
+        var a0 = auds[ai0];
+        if (a0 != undefined && a0 != -1)
+        {
+            try { if (audio_is_playing(a0)) audio_stop_sound(a0); } catch (_eStop) {}
+        }
+        ai0++;
+    }
     var si = 0;
     repeat (array_length(sprs))
     {
@@ -589,6 +600,16 @@ function vs_csm_shatter_stats_ensure()
     if (!variable_instance_exists(id, "selected_song_stats") || !is_struct(selected_song_stats))
         selected_song_stats = {};
     if (!variable_instance_exists(id, "holding_sort")) holding_sort = 0;
+}
+
+function vs_csm_shatter_stats_free()
+{
+    if (!variable_instance_exists(id, "song_stats_surf")) return;
+    if (song_stats_surf != undefined && surface_exists(song_stats_surf))
+    {
+        try { surface_free(song_stats_surf); } catch (_e) {}
+    }
+    song_stats_surf = undefined;
 }
 
 function vs_csm_shatter_stats_sync()

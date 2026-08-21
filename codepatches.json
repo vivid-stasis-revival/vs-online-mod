@@ -36,8 +36,8 @@
     },
     {
         "Entry": "gml_GlobalScript_receive_packet",
-        "Find": "steam_lobby_get_owner_id()",
-        "Value": "vs_lobby_owner_id()",
+        "Find": "if (packet.ownerOnly && arg1 != steam_lobby_get_owner_id())\n                exit;",
+        "Value": "if (packet.ownerOnly && arg1 != vs_lobby_owner_id())\n            {\n                buffer_delete(arg0);\n                return undefined;\n            }",
         "Type": 0
     },
     {
@@ -338,6 +338,12 @@
         "Entry": "gml_Object_o_songselect_Step_0",
         "Find": "event_user(15);",
         "Value": "if (object_index == o_songselect_shatter)\n    vs_csm_shatter_stats_input();\nevent_user(15);",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_Object_o_songselect_CleanUp_0",
+        "Find": "font_delete(techstatfont);",
+        "Value": "font_delete(techstatfont);\nif (object_index == o_songselect_shatter)\n    vs_csm_shatter_stats_free();",
         "Type": 0
     },
     {
