@@ -346,8 +346,9 @@ function vs_lobby_browser_step()
         st.loading = false;
     vs_lobby_browser_clamp();
 
-    // Cycle Default → Joinable → Unjoinable (secondary bind or F).
-    if (input_check_pressed(10) || keyboard_check_pressed(ord("F")))
+    // F only — input 10 is often Shift / secondary, which must stay free for
+    // Shift+Host (private) and Shift+Join (paste).
+    if (keyboard_check_pressed(ord("F")))
     {
         st.filter = (st.filter + 1) % 3;
         st.page = 0;
