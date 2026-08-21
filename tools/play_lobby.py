@@ -8,6 +8,8 @@ Usage:
   python3 tools/play_lobby.py                  # host on test-api
   python3 tools/play_lobby.py --base https://online-api.vividstasis.cn
   python3 tools/play_lobby.py --join ABC123    # join as guest
+  python3 tools/play_lobby.py --matchmake      # random public room (or create)
+  python3 tools/play_lobby.py --matchmake --suggest testchart  # guest SuggestSong
 """
 from __future__ import annotations
 
@@ -120,6 +122,10 @@ def pkt_sticker(n: int = 3) -> bytes:
     return bytes([t.PKT_SEND_STICKER, n & 0xFF])
 
 
+def pkt_suggest(diff: int = 2, chart_id: str = "testchart") -> bytes:
+    return bytes([t.PKT_SUGGEST_SONG]) + struct.pack("b", diff) + gm_str(chart_id)
+
+
 def decode_pkt(inner: bytes) -> str:
     if not inner:
         return "empty"
@@ -182,7 +188,16 @@ def register_named(client: t.GMClient, name: str) -> Tuple[int, Any, str]:
 
 
 class FakeHost:
-    def __init__(self, client: t.GMClient, sess: t.WSSession, code: str, host_id: str):
+    def __init__(
+        self,
+        client: t.GMClient,
+        sess: t.WSSession,
+        code: str,
+        host_id: str,
+        suggest_chart: str = "",
+        suggest_diff: int = 2,
+        expect_addsong: bool = False,
+    ):
         self.client = client
         self.sess = sess
         self.code = code
@@ -197,9 +212,15 @@ class FakeHost:
         self._countdown_task: Optional[asyncio.Task] = None
         self._score_task: Optional[asyncio.Task] = None
         self._emote_task: Optional[asyncio.Task] = None
+        self._suggest_task: Optional[asyncio.Task] = None
         self._sticker_i = 0
         self.my_score = 0.0
         self.my_flag = 1
+        self.suggest_chart = suggest_chart
+        self.suggest_diff = suggest_diff
+        self.expect_addsong = expect_addsong
+        self.got_addsong = False
+        self.done = asyncio.Event()
 
     def roster(self) -> List[Dict[str, Any]]:
         rows = list(self.members.values())
@@ -411,6 +432,7 @@ class FakeHost:
             if self.host_id != self.me:
                 self.ensure_emotes()
                 await self.send_sticker(why="guest hello")
+                self.maybe_suggest()
             return
         if kind == "member_joined":
             mem = msg.get("member") or {}
@@ -460,8 +482,12 @@ class FakeHost:
         elif typ == t.PKT_SEND_PLAYER_INFO:
             await self.on_player_info(sender)
         elif typ == t.PKT_ADD_SONG and sender != self.me and self.host_id != self.me:
+            self.got_addsong = True
+            log(f"suggest chain OK: got AddSong from host (chart probe)")
             await asyncio.sleep(0.3)
             await self.send(pkt_ready(1), "SendReady guest after AddSong")
+            if self.expect_addsong:
+                self.done.set()
         elif typ == t.PKT_START_GAME and self.host_id != self.me and not self.playing:
             self.playing = True
             self.my_score = 0.0
@@ -482,11 +508,35 @@ class FakeHost:
                 self.members[sender]["score"] = pts
                 self.members[sender]["flag"] = flag
 
+    def maybe_suggest(self) -> None:
+        if not self.suggest_chart or self.host_id == self.me:
+            return
+        if self._suggest_task and not self._suggest_task.done():
+            return
+        self._suggest_task = asyncio.create_task(self._send_suggest())
 
-async def loop_ws(game: FakeHost) -> None:
+    async def _send_suggest(self) -> None:
+        # Let host_sync (SendQueue / PlayerInfo) settle before suggesting.
+        await asyncio.sleep(1.2)
+        await self.send(
+            pkt_suggest(self.suggest_diff, self.suggest_chart),
+            f"SuggestSong chart={self.suggest_chart!r} diff={self.suggest_diff}",
+        )
+
+
+async def loop_ws(game: FakeHost, idle_timeout: float = 60) -> None:
+    # Shorter poll when we are waiting for AddSong after SuggestSong.
+    timeout = 8.0 if game.expect_addsong else idle_timeout
+    deadline = time.monotonic() + 25.0 if game.expect_addsong else None
     while True:
+        if game.expect_addsong and game.done.is_set():
+            log("expect-addsong satisfied → exit")
+            return
+        if deadline is not None and time.monotonic() > deadline:
+            log("timeout waiting for AddSong after SuggestSong")
+            return
         try:
-            kind, payload = await game.sess.recv(timeout=60)
+            kind, payload = await game.sess.recv(timeout=timeout)
         except (TimeoutError, asyncio.TimeoutError):
             continue
         except t.ConnectionClosed as e:
@@ -499,7 +549,131 @@ async def loop_ws(game: FakeHost) -> None:
             await game.handle_bin(sender, inner)
 
 
-async def run(base: str, join_code: str, public: bool) -> int:
+async def run_suggest_chain(base: str, chart: str, diff: int) -> int:
+    """Host public room + guest matchmake + SuggestSong → AddSong (self-test)."""
+    host_c = t.GMClient(base)
+    guest_c = t.GMClient(base)
+
+    st, body, _ = host_c.get("/healthz", authed=False)
+    log(f"GET /healthz http={st} {body}")
+    if st != 200:
+        return 1
+
+    st, body, raw = register_named(host_c, "SuggestHost")
+    if not t.register_ok(st, body):
+        log(f"host register failed http={st} {raw[:200]}")
+        return 1
+    st, body, raw = register_named(guest_c, "SuggestGuest")
+    if not t.register_ok(st, body):
+        log(f"guest register failed http={st} {raw[:200]}")
+        return 1
+
+    st, created, raw = host_c.post("/api/v1/lobbies", json.dumps({"public": True}))
+    if not (st == 201 and isinstance(created, dict) and created.get("code")):
+        log(f"CREATE failed http={st} {raw[:200]}")
+        return 1
+    code = created["code"]
+    host_id = str(created.get("hostId") or host_c.player_id)
+    log(f"HOST lobby code={code} host={host_id}")
+
+    host_sess = await t.connect_gm_ws(t.ws_url(base, code, host_c.token))
+    host = FakeHost(host_c, host_sess, code, host_id)
+    host.apply_roster(created.get("members"))
+
+    st, mm, raw = guest_c.post("/api/v1/lobbies/matchmake", "{}")
+    if not (st == 200 and isinstance(mm, dict) and mm.get("code")):
+        log(f"MATCHMAKE failed http={st} {raw[:200]}")
+        try:
+            await host_sess.conn.close()
+        except Exception:
+            pass
+        return 1
+    landed = mm.get("code") == code
+    log(
+        f"GUEST matchmake → code={mm.get('code')} members={mm.get('memberCount')} "
+        f"{'HIT host room' if landed else 'other room — will leave+join host'}"
+    )
+    if not landed:
+        try:
+            guest_c.post("/api/v1/lobbies/" + str(mm["code"]) + "/leave", "{}")
+        except Exception:
+            pass
+        st, mm, raw = guest_c.post("/api/v1/lobbies/join", json.dumps({"code": code}))
+        if not (st == 200 and isinstance(mm, dict) and mm.get("code") == code):
+            log(f"JOIN host after matchmake miss failed http={st} {raw[:200]}")
+            try:
+                await host_sess.conn.close()
+            except Exception:
+                pass
+            return 1
+        log(f"GUEST join host code={code} members={mm.get('memberCount')}")
+
+    guest_sess = await t.connect_gm_ws(t.ws_url(base, code, guest_c.token))
+    guest = FakeHost(
+        guest_c,
+        guest_sess,
+        code,
+        host_id,
+        suggest_chart=chart,
+        suggest_diff=diff,
+        expect_addsong=True,
+    )
+    guest.apply_roster(mm.get("members"))
+
+    print("", flush=True)
+    print("=" * 60, flush=True)
+    print(f"  SUGGEST CHAIN TEST", flush=True)
+    print(f"  LOBBY CODE: {code}", flush=True)
+    print(f"  Server:     {base}", flush=True)
+    print(f"  Chart:      {chart!r} diff={diff}", flush=True)
+    print("=" * 60, flush=True)
+    print("", flush=True)
+
+    async def host_loop() -> None:
+        await loop_ws(host)
+
+    async def guest_loop() -> None:
+        await loop_ws(guest)
+
+    host_task = asyncio.create_task(host_loop())
+    guest_task = asyncio.create_task(guest_loop())
+    try:
+        await asyncio.wait_for(guest.done.wait(), timeout=25)
+    except asyncio.TimeoutError:
+        log("FAIL: guest never got AddSong after SuggestSong")
+        ok = False
+    else:
+        ok = guest.got_addsong
+        log("PASS: SuggestSong → host accept → AddSong relayed to guest" if ok else "FAIL")
+    finally:
+        guest.done.set()
+        host.done.set()
+        for task in (guest_task, host_task):
+            task.cancel()
+        for c, cd, sess in (
+            (guest_c, code, guest_sess),
+            (host_c, code, host_sess),
+        ):
+            try:
+                c.post("/api/v1/lobbies/" + cd + "/leave", "{}")
+            except Exception:
+                pass
+            try:
+                await sess.conn.close()
+            except Exception:
+                pass
+    return 0 if ok else 1
+
+
+async def run(
+    base: str,
+    join_code: str,
+    public: bool,
+    matchmake: bool = False,
+    suggest_chart: str = "",
+    suggest_diff: int = 2,
+    expect_addsong: bool = False,
+) -> int:
     client = t.GMClient(base)
     st, body, _ = client.get("/healthz", authed=False)
     log(f"GET /healthz http={st} {body}")
@@ -507,12 +681,14 @@ async def run(base: str, join_code: str, public: bool) -> int:
         log("server not healthy, abort")
         return 1
 
-    st, body, raw = register_named(client, "CursorHost" if not join_code else "CursorGuest")
+    role_guest = bool(join_code) or matchmake
+    st, body, raw = register_named(client, "CursorHost" if not role_guest else "CursorGuest")
     if not t.register_ok(st, body):
         log(f"register failed http={st} {raw[:200]}")
         return 1
     log(f"account name={client.name} id={client.player_id} email={client.email}")
 
+    created: Any = None
     if join_code:
         st, created, raw = client.post("/api/v1/lobbies/join", json.dumps({"code": join_code.upper()}))
         ok = st == 200 and isinstance(created, dict) and created.get("code")
@@ -521,6 +697,20 @@ async def run(base: str, join_code: str, public: bool) -> int:
             return 1
         code = created["code"]
         host_id = str(created.get("hostId") or "")
+    elif matchmake:
+        st, created, raw = client.post("/api/v1/lobbies/matchmake", "{}")
+        ok = st == 200 and isinstance(created, dict) and created.get("code")
+        log(f"MATCHMAKE http={st} {created if isinstance(created, dict) else raw[:200]}")
+        if not ok:
+            return 1
+        code = created["code"]
+        host_id = str(created.get("hostId") or "")
+        am_host = host_id == client.player_id or not host_id
+        if am_host:
+            host_id = client.player_id
+            log("matchmake created empty room → we are HOST")
+        else:
+            log(f"matchmake joined existing room host={host_id}")
     else:
         st, created, raw = client.post("/api/v1/lobbies", json.dumps({"public": public}))
         ok = st == 201 and isinstance(created, dict) and created.get("code")
@@ -531,23 +721,36 @@ async def run(base: str, join_code: str, public: bool) -> int:
         host_id = str(created.get("hostId") or client.player_id)
 
     url = t.ws_url(base, code, client.token)
+    am_guest = host_id != client.player_id
     print("", flush=True)
     print("=" * 60, flush=True)
     print(f"  LOBBY CODE: {code}", flush=True)
     print(f"  Server:     {base}", flush=True)
-    print(f"  Role:       {'guest' if join_code else 'HOST'}", flush=True)
+    print(f"  Role:       {'guest' if am_guest else 'HOST'}", flush=True)
     print(f"  Name:       {client.name}", flush=True)
+    if suggest_chart and am_guest:
+        print(f"  Suggest:    {suggest_chart!r} diff={suggest_diff}", flush=True)
     print("=" * 60, flush=True)
     print("Join: game Custom Server → same API → paste the lobby code.", flush=True)
     print("Host sends stickers in the lobby; pick a song to start (SuggestSong).", flush=True)
     print("", flush=True)
 
     sess = await t.connect_gm_ws(url)
-    game = FakeHost(client, sess, code, host_id)
+    game = FakeHost(
+        client,
+        sess,
+        code,
+        host_id,
+        suggest_chart=suggest_chart if am_guest else "",
+        suggest_diff=suggest_diff,
+        expect_addsong=expect_addsong and am_guest,
+    )
     if isinstance(created, dict):
         game.apply_roster(created.get("members"))
     try:
         await loop_ws(game)
+        if expect_addsong and am_guest:
+            return 0 if game.got_addsong else 1
     finally:
         try:
             client.post("/api/v1/lobbies/" + code + "/leave", "{}")
@@ -564,9 +767,37 @@ def main() -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--base", default="https://test-api.vividstasis.cn")
     p.add_argument("--join", default="", help="lobby code; omit to host")
+    p.add_argument("--matchmake", action="store_true", help="POST /lobbies/matchmake (random public)")
     p.add_argument("--private", action="store_true")
+    p.add_argument("--suggest", default="", metavar="CHART", help="as guest, send SuggestSong after welcome")
+    p.add_argument("--diff", type=int, default=2, help="SuggestSong difficulty (s8)")
+    p.add_argument(
+        "--expect-addsong",
+        action="store_true",
+        help="exit after receiving host AddSong (guest suggest test)",
+    )
+    p.add_argument(
+        "--self-test-suggest",
+        action="store_true",
+        help="host+matchmake guest in-process; assert SuggestSong→AddSong",
+    )
     args = p.parse_args()
-    return asyncio.run(run(args.base, args.join, public=not args.private))
+    if args.self_test_suggest:
+        chart = args.suggest or "testchart"
+        return asyncio.run(run_suggest_chain(args.base, chart, args.diff))
+    if args.join and args.matchmake:
+        p.error("use either --join or --matchmake, not both")
+    return asyncio.run(
+        run(
+            args.base,
+            args.join,
+            public=not args.private,
+            matchmake=args.matchmake,
+            suggest_chart=args.suggest,
+            suggest_diff=args.diff,
+            expect_addsong=args.expect_addsong,
+        )
+    )
 
 
 if __name__ == "__main__":
