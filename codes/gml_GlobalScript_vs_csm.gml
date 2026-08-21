@@ -545,7 +545,10 @@ function vs_csm_shatter_stats_draw()
         variable_struct_set(selected_song_stats, k, lerp(vs_csm_safe_real(cur, 0), vs_csm_safe_real(want, 0), 0.2));
         ki++;
     }
-    var surf_w = 111 * max(1, stat_page_count);
+    // Freeplay draws tech numbers at page_x+120 (past the 111px page). Pad the
+    // surface so 2-page shatter still has room; blit width matches freeplay
+    // (111 + openness) so those digits are not clipped.
+    var surf_w = 111 * max(1, stat_page_count) + 24;
     if (!surface_exists(song_stats_surf) || surface_get_width(song_stats_surf) != surf_w)
     {
         if (surface_exists(song_stats_surf)) surface_free(song_stats_surf);
@@ -572,7 +575,7 @@ function vs_csm_shatter_stats_draw()
         draw_text(page_x + 107, text_y, section_values[i]);
         i++;
     }
-    // Page 1: 五维 — keep numbers inside the 111px page (freeplay's +120 clips).
+    // Page 1: 五维 — same layout/font as freeplay o_songselect_main.
     page_x = 111;
     section_headers = ["CHIP", "TECH", "STREAM", "CHORD", "BURST", "GIMMICK"];
     var section_keys = ["note", "tech", "speed", "multi", "fill", "gimmick"];
@@ -584,11 +587,14 @@ function vs_csm_shatter_stats_draw()
         var ty = gimmick_on ? (3 + (i * 7)) : (3 + (i * 8));
         if (sprite_exists(sp_techstats2025))
             draw_sprite(sp_techstats2025, gimmick_on ? 0 : 1, page_x + 4, 3);
-        draw_set_halign(fa_right);
+        draw_set_halign(fa_left);
         draw_set_color(c_white);
-        if (variable_global_exists("techstatfont")) draw_set_font(techstatfont);
+        draw_set_halign(fa_right);
+        // techstatfont is an instance var on o_songselect (not global).
+        if (variable_instance_exists(id, "techstatfont"))
+            draw_set_font(techstatfont);
         var gv = variable_global_exists(section_keys[i] + "_stat") ? variable_global_get(section_keys[i] + "_stat") : 0;
-        draw_text(page_x + 107, ty, round(vs_csm_safe_real(gv, 0)));
+        draw_text(page_x + 120, ty, round(vs_csm_safe_real(gv, 0)));
         draw_set_font(global.default_font);
         var val = variable_struct_exists(selected_song_stats, section_keys[i])
             ? vs_csm_safe_real(variable_struct_get(selected_song_stats, section_keys[i]), 0) : 0;
@@ -611,7 +617,7 @@ function vs_csm_shatter_stats_draw()
     surface_untarget();
     var tech_x = round(song_info_x) + 1;
     var openness = 111 * song_stat_page;
-    draw_surface_part(song_stats_surf, openness, 0, 111, 46, tech_x, 120);
+    draw_surface_part(song_stats_surf, openness, 0, 111 + openness, 46, tech_x, 120);
     draw_set_halign(fa_left);
     draw_set_valign(fa_top);
     draw_set_font(global.default_font);
