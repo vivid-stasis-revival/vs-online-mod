@@ -103,7 +103,7 @@
     {
         "Entry": "gml_Object_obj_multiplayer_lobby_Step_0",
         "Find": "if (confirmMenu != undefined)\n{\n    exit;\n}",
-        "Value": "if (confirmMenu != undefined)\n{\n    exit;\n}\nif (instance_exists(vs_downloader_browser))\n{\n    exit;\n}\nif (vs_lobby_dl_step())\n{\n    exit;\n}\nif (vs_lobby_ops_step())\n{\n    exit;\n}",
+        "Value": "if (confirmMenu != undefined)\n{\n    exit;\n}\nif (instance_exists(vs_downloader_browser))\n{\n    exit;\n}\nif (vs_lobby_dl_step())\n{\n    exit;\n}\nif (vs_lobby_ops_step())\n{\n    exit;\n}\nif (vs_lobby_try_browser_step())\n{\n    exit;\n}",
         "Type": 0
     },
     {
@@ -673,12 +673,6 @@
         "Find": "steam_lobby_list_add_string_filter(\"code\", string_upper(keyboard_string), 0);",
         "Value": "if (!input_check(10)) steam_lobby_list_add_string_filter(\"code\", string_upper(keyboard_string), 0); joining = 1;",
         "Type": 0
-    },
-    {
-        "Entry": "gml_Object_obj_multiplayer_lobby_Step_0",
-        "Find": "else if (!entering_code)\n{\n    if (input_check_pressed(UnknownEnum.Value_4))\n    {\n        do_multiplayer_lobby_button(menu_actions_landing[cursor_pos].callback);\n        play_se(sfx_songsel_select);\n    }\n    \n    var dpos = input_check_pressed(UnknownEnum.Value_14) - input_check_pressed(UnknownEnum.Value_13);\n    \n    if (dpos != 0)\n    {\n        cursor_pos = (array_length(menu_actions_landing) + cursor_pos + dpos) % array_length(menu_actions_landing);\n        play_se(sfx_songsel_cursor);\n    }\n    \n    if (input_check_pressed(UnknownEnum.Value_5))",
-        "Value": "else if (!entering_code)\n{\n    if (vs_lobby_browser_active())\n    {\n        vs_lobby_browser_step();\n    }\n    else\n    {\n    if (input_check_pressed(UnknownEnum.Value_4))\n    {\n        do_multiplayer_lobby_button(menu_actions_landing[cursor_pos].callback);\n        play_se(sfx_songsel_select);\n    }\n    \n    var dpos = input_check_pressed(UnknownEnum.Value_14) - input_check_pressed(UnknownEnum.Value_13);\n    \n    if (dpos != 0)\n    {\n        cursor_pos = (array_length(menu_actions_landing) + cursor_pos + dpos) % array_length(menu_actions_landing);\n        play_se(sfx_songsel_cursor);\n    }\n    }\n    \n    if (input_check_pressed(UnknownEnum.Value_5))",
-        "Type": 1
     },
     {
         "Entry": "gml_Object_obj_multiplayer_lobby_Create_0",

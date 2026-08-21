@@ -223,7 +223,12 @@ function vs_lobby_browser_after_enter(_ok, _data)
 function vs_lobby_browser_do_top()
 {
     var st = vs_lobby_browser_st();
-    if (st.busy || st.loading) return;
+    // List refresh must not block Match/Host/Join.
+    if (st.busy)
+    {
+        vs_lobby_browser_set_status("Busy...");
+        return;
+    }
     switch (st.top_i)
     {
         case 0:
@@ -280,6 +285,54 @@ function vs_lobby_browser_do_list()
     vs_lobby_join(invite, vs_lobby_browser_after_enter);
 }
 
+// Early-exit from lobby Step_0 (same chain as dl/ops). Handles browser
+// landing input + back; returns true when this frame is consumed.
+function vs_lobby_try_browser_step()
+{
+    if (!vs_lobby_browser_active()) return false;
+    if (!instance_exists(obj_multiplayer_lobby)) return false;
+    if (vs_lobby_lobby_id() > 0) return false;
+    with (obj_multiplayer_lobby)
+    {
+        if (confirmMenu != undefined) return false;
+        if (entering_code) return false;
+    }
+    vs_lobby_browser_step();
+    if (input_check_pressed(5))
+        vs_lobby_browser_leave_landing();
+    return true;
+}
+
+function vs_lobby_browser_leave_landing()
+{
+    if (!instance_exists(obj_multiplayer_lobby)) return;
+    with (obj_multiplayer_lobby)
+    {
+        global.multiplayerLobby = false;
+        global.op_autoplay = global.hadAutoplay;
+        global.hadAutoplay = undefined;
+        audio_stop_all();
+        play_se(sfx_songsel_beginsong);
+        var transition = instance_create_depth(room_width / 2, room_height / 2, -1000, o_transition_diamond);
+        with (transition)
+        {
+            TweenEasyScale(1, 1, 320, 320, 0, 60, EaseOutQuad);
+            next_room = scene_mainmenu;
+            alarm[0] = 60;
+        }
+        confirmMenu = true;
+    }
+}
+
+function vs_lobby_browser_cycle_top(_dir)
+{
+    var st = vs_lobby_browser_st();
+    var n = array_length(vs_lobby_browser_labels());
+    if (n <= 0) return;
+    st.top_i = (n + st.top_i + _dir) % n;
+    play_se(sfx_songsel_cursor);
+}
+
 function vs_lobby_browser_step()
 {
     if (!vs_lobby_browser_active()) return false;
@@ -288,6 +341,9 @@ function vs_lobby_browser_step()
     if (obj_multiplayer_lobby.entering_code) return false;
 
     var st = vs_lobby_browser_st();
+    // Unstick a hung list refresh so Match/Host stay usable.
+    if (st.loading && st.inflight <= 0)
+        st.loading = false;
     vs_lobby_browser_clamp();
 
     // Cycle Default → Joinable → Unjoinable (secondary bind or F).
@@ -308,23 +364,23 @@ function vs_lobby_browser_step()
 
     if (st.focus == 0)
     {
-        if (left || right)
-        {
-            var n = array_length(vs_lobby_browser_labels());
-            st.top_i = (n + st.top_i + (right ? 1 : -1)) % n;
-            play_se(sfx_songsel_cursor);
-        }
+        // L/R always cycle Match/Host/Join.
+        if (left) vs_lobby_browser_cycle_top(-1);
+        if (right) vs_lobby_browser_cycle_top(1);
+        // U/D: legacy muscle memory — cycle buttons; Down enters list when ready.
+        if (up) vs_lobby_browser_cycle_top(-1);
         if (down)
         {
-            // Only enter list focus when there is something to select.
             var rowsDown = vs_lobby_browser_filtered();
             if (array_length(rowsDown) > 0 && !st.loading)
             {
                 st.focus = 1;
                 play_se(sfx_songsel_cursor);
             }
+            else
+                vs_lobby_browser_cycle_top(1);
         }
-        if (input_check_pressed(4))
+        if (input_check_pressed(4) || keyboard_check_pressed(vk_enter))
         {
             play_se(sfx_songsel_select);
             vs_lobby_browser_do_top();
@@ -370,7 +426,7 @@ function vs_lobby_browser_step()
                 play_se(sfx_songsel_cursor);
             }
         }
-        if (input_check_pressed(4))
+        if (input_check_pressed(4) || keyboard_check_pressed(vk_enter))
         {
             play_se(sfx_songsel_select);
             vs_lobby_browser_do_list();
@@ -622,9 +678,9 @@ function vs_lobby_browser_draw()
     if (st.focus == 0)
     {
         hx = vs_lobby_browser_keychip(hx, hy, "ENTER", "ok", right);
+        hx = vs_lobby_browser_keychip(hx, hy, "LR/UD", "btn", right);
         hx = vs_lobby_browser_keychip(hx, hy, "SHIFT", "priv/paste", right);
-        hx = vs_lobby_browser_keychip(hx, hy, "F", "filt", right);
-        vs_lobby_browser_keychip(hx, hy, "UD", "list", right);
+        vs_lobby_browser_keychip(hx, hy, "F", "filt", right);
     }
     else
     {
