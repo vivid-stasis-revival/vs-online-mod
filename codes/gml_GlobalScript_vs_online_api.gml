@@ -1996,6 +1996,132 @@ function vs_online_rating_open_image(_file)
     execute_shell_simple(abs);
 }
 
+// --- custom generate: fetch server card → local PNG → open ---------------
+
+function vs_online_rating_gen_st()
+{
+    if (!variable_global_exists("vs_rating_gen") || !is_struct(global.vs_rating_gen))
+    {
+        global.vs_rating_gen = {
+            busy: false,
+            seq: 0,
+            bg: 1,
+            incl_title: true,
+            incl_constants: true
+        };
+    }
+    return global.vs_rating_gen;
+}
+
+function vs_online_rating_gen_busy()
+{
+    var st = vs_online_rating_gen_st();
+    return st.busy == true;
+}
+
+function vs_online_rating_gen_cancel()
+{
+    var st = vs_online_rating_gen_st();
+    if (!st.busy) return;
+    st.seq += 1;
+    st.busy = false;
+}
+
+function vs_online_rating_gen_begin(_win)
+{
+    if (!vs_online_is_custom()) return;
+    if (_win == undefined || _win == noone) return;
+    var st = vs_online_rating_gen_st();
+    if (st.busy) return;
+    var pid = vs_online_player_id();
+    if (pid == "") return;
+    st.busy = true;
+    st.seq += 1;
+    st.bg = _win.rate_background + 1;
+    st.incl_title = _win.incl_title;
+    st.incl_constants = _win.incl_constants;
+    var seq = st.seq;
+    vs_online_get_json("/api/v1/players/" + vs_online_url_encode(pid) + "/rating-card", false, function(_ok, _data, _status)
+    {
+        vs_online_rating_gen_on_card(seq, _ok, _data);
+    });
+}
+
+function vs_online_rating_gen_on_card(_seq, _ok, _data)
+{
+    var st = vs_online_rating_gen_st();
+    if (!st.busy || _seq != st.seq) return;
+    if (_ok && _data != undefined)
+    {
+        global.rscore = vs_online_rscore_from_card(_data);
+        if (variable_struct_exists(_data, "completion"))
+            global.completion_bonus = vs_http_num(_data.completion, 0);
+        else if (variable_struct_exists(_data, "completionBonus"))
+            global.completion_bonus = _data.completionBonus / 1000;
+        vs_online_rating_fill_window(_data);
+        var file = "rating.png";
+        generate_rating_image(st.bg, st.incl_title, st.incl_constants, file);
+        vs_online_rating_open_image(file);
+    }
+    // Only clear if this response still owns the wait (cancel bumps seq).
+    if (_seq == st.seq)
+        st.busy = false;
+}
+
+// Returns true when the generate wait overlay is eating input.
+function vs_online_rating_gen_step(_win)
+{
+    if (!vs_online_rating_gen_busy()) return false;
+    // Same cancel binding the rating window uses to close (Value_5).
+    if (input_check_pressed(5))
+        vs_online_rating_gen_cancel();
+    return true;
+}
+
+function vs_online_rating_gen_draw()
+{
+    if (!vs_online_rating_gen_busy()) return;
+    var cw = display_get_gui_width();
+    var ch = display_get_gui_height();
+    var pw = min(200, max(80, cw - 8));
+    var ph = min(90, max(56, ch - 8));
+    var px = (cw - pw) / 2;
+    var py = (ch - ph) / 2;
+    draw_set_alpha(0.55);
+    draw_set_color(c_black);
+    draw_rectangle(0, 0, cw, ch, false);
+    draw_set_alpha(1);
+    draw_set_color(c_black);
+    draw_rectangle(px - 2, py - 2, px + pw + 2, py + ph + 2, false);
+    draw_set_color(c_white);
+    draw_rectangle(px, py, px + pw, py + ph, true);
+    draw_set_font(fnt_monacovs);
+    draw_set_halign(fa_center);
+    draw_set_valign(fa_top);
+    draw_set_color(c_aqua);
+    draw_text(px + pw / 2, py + 8, "Fetching rating");
+    // Simple rotating arc (8 ticks).
+    var cx = px + pw / 2;
+    var cy = py + 42;
+    var r = 10;
+    var phase = (current_time / 80) % 8;
+    var i = 0;
+    repeat (8)
+    {
+        var a = (i / 8) * 2 * pi - pi / 2;
+        var bright = ((i - floor(phase) + 8) % 8) < 3;
+        draw_set_color(bright ? c_white : make_color_rgb(80, 80, 80));
+        draw_circle(cx + cos(a) * r, cy + sin(a) * r, bright ? 2.5 : 1.5, false);
+        i++;
+    }
+    draw_set_font(global.default_font);
+    draw_set_color(c_yellow);
+    draw_text(px + pw / 2, py + ph - 16, "ESCAPE");
+    draw_set_halign(fa_left);
+    draw_set_valign(fa_top);
+    draw_set_color(c_white);
+}
+
 function vs_online_rating_fill_window(_data)
 {
     vs_online_rating_ensure_window_arrays();
