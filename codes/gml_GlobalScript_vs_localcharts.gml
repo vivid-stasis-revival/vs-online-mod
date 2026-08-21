@@ -373,10 +373,21 @@ function vs_localcharts_pack_pos_by_id(_pack_id)
 //     so freshly downloaded / removed charts take effect in the select.
 function vs_localcharts_refresh()
 {
+    // Snapshot old custom handles, rebuild, then free — never free-before-load
+    // (a failed rebuild would leave song_list pointing at deleted sprites).
+    try { vs_media_stop_preview(); } catch (_ePv) {}
+    var oldAssets = { spr: [], aud: [] };
+    try { oldAssets = vs_csm_collect_loaded_customs(); }
+    catch (_eCol) { show_debug_message("VS LocalCharts: collect customs failed -> " + string(_eCol)); }
     // load_song_information rebuilds song_list then CustomSongReader appends once.
     vs_songstore_clear_save_songs();
+    var loadOk = true;
     try { load_song_information(); }
-    catch (_e) { show_debug_message("VS LocalCharts: song reload failed -> " + string(_e)); }
+    catch (_e)
+    {
+        loadOk = false;
+        show_debug_message("VS LocalCharts: song reload failed -> " + string(_e));
+    }
     try { create_song_packs(); }
     catch (_e2) { show_debug_message("VS LocalCharts: pack rebuild failed -> " + string(_e2)); }
     try { load_highscores(); }
@@ -384,6 +395,11 @@ function vs_localcharts_refresh()
     try { process_song_unlocks(); }
     catch (_e4) { show_debug_message("VS LocalCharts: unlock rebuild failed -> " + string(_e4)); }
     vs_lobby_unlock_pad();
+    if (loadOk)
+    {
+        try { vs_csm_free_collected_customs(oldAssets); }
+        catch (_eFree) { show_debug_message("VS LocalCharts: free customs failed -> " + string(_eFree)); }
+    }
 }
 
 // Jump into the song select with a chart focused (used from both the download

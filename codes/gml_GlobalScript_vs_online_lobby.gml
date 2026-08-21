@@ -1505,6 +1505,7 @@ function vs_online_avatar_cache()
     {
         global.vs_avatar_spr = {};
         global.vs_avatar_q = [];
+        global.vs_avatar_order = [];
         global.vs_avatar_busy = false;
         global.vs_avatar_cur = "";
         global.vs_avatar_req = -1;
@@ -1516,12 +1517,107 @@ function vs_online_avatar_cache()
         global.vs_avatar_placing = false;
         global.vs_avatar_placeTries = 0;
     }
+    if (!variable_global_exists("vs_avatar_order")) global.vs_avatar_order = [];
     if (!variable_global_exists("vs_avatar_placing"))
     {
         global.vs_avatar_placing = false;
         global.vs_avatar_placeTries = 0;
     }
     return global.vs_avatar_spr;
+}
+
+function vs_online_avatar_cap()
+{
+    return 32;
+}
+
+function vs_online_avatar_order_touch(_playerId)
+{
+    vs_online_avatar_cache();
+    var i = 0;
+    repeat (array_length(global.vs_avatar_order))
+    {
+        if (global.vs_avatar_order[i] == _playerId)
+        {
+            array_delete(global.vs_avatar_order, i, 1);
+            break;
+        }
+        i++;
+    }
+    array_push(global.vs_avatar_order, _playerId);
+}
+
+function vs_online_avatar_pinned(_playerId)
+{
+    if (_playerId == undefined || _playerId == "") return false;
+    if (_playerId == global.vs_avatar_cur) return true;
+    var cfg = vs_online_get_config();
+    if (variable_struct_exists(cfg, "playerId") && string(cfg.playerId) == string(_playerId)) return true;
+    if (instance_exists(o_st_handle))
+    {
+        try
+        {
+            var m = o_st_handle.getMember(_playerId);
+            if (m != undefined) return true;
+        }
+        catch (_e) {}
+    }
+    return false;
+}
+
+function vs_online_avatar_drop(_playerId)
+{
+    if (_playerId == undefined || _playerId == "") return;
+    var cache = vs_online_avatar_cache();
+    var i = 0;
+    repeat (array_length(global.vs_avatar_order))
+    {
+        if (global.vs_avatar_order[i] == _playerId)
+        {
+            array_delete(global.vs_avatar_order, i, 1);
+            break;
+        }
+        i++;
+    }
+    if (!variable_struct_exists(cache, _playerId)) return;
+    var spr = variable_struct_get(cache, _playerId);
+    variable_struct_remove(cache, _playerId);
+    // Clear live member refs so Draw does not use a deleted sprite index.
+    if (instance_exists(o_st_handle) && spr != undefined)
+    {
+        try
+        {
+            var m = o_st_handle.getMember(_playerId);
+            if (m != undefined && variable_struct_exists(m, "avatar") && m.avatar == spr)
+                m.avatar = undefined;
+        }
+        catch (_eMem) {}
+    }
+    if (spr != undefined && spr != -1 && sprite_exists(spr))
+    {
+        try { sprite_delete(spr); } catch (_e) {}
+    }
+}
+
+function vs_online_avatar_evict()
+{
+    vs_online_avatar_cache();
+    var maxn = vs_online_avatar_cap();
+    var skips = 0;
+    while (array_length(global.vs_avatar_order) > maxn)
+    {
+        var old = global.vs_avatar_order[0];
+        array_delete(global.vs_avatar_order, 0, 1);
+        if (vs_online_avatar_pinned(old))
+        {
+            array_push(global.vs_avatar_order, old);
+            skips += 1;
+            if (skips > array_length(global.vs_avatar_order)) break;
+            continue;
+        }
+        skips = 0;
+        vs_online_avatar_drop(old);
+    }
 }
 
 function vs_online_avatar_rel(_playerId)
@@ -1538,13 +1634,42 @@ function vs_online_avatar_file(_playerId)
     return "";
 }
 
+function vs_online_avatar_file_ok(_path)
+{
+    if (_path == undefined || _path == "") return false;
+    if (!file_exists(_path)) return false;
+    var bin = -1;
+    try { bin = file_bin_open(_path, 0); } catch (_e0) { return false; }
+    if (bin < 0) return false;
+    var n = -1;
+    try { n = file_bin_size(bin); } catch (_e1) { n = -1; }
+    try { file_bin_close(bin); } catch (_e2) {}
+    return n >= 64;
+}
+
 function vs_online_avatar_load_file(_playerId)
 {
     var p = vs_online_avatar_file(_playerId);
     if (p == "") return undefined;
+    if (!vs_online_avatar_file_ok(p))
+    {
+        try { file_delete(p); } catch (_eDel) {}
+        return undefined;
+    }
+    var cache = vs_online_avatar_cache();
     var spr = sprite_add(p, 1, false, false, 0, 0);
     if (spr == -1 || !sprite_exists(spr)) return undefined;
-    variable_struct_set(vs_online_avatar_cache(), _playerId, spr);
+    if (variable_struct_exists(cache, _playerId))
+    {
+        var old = variable_struct_get(cache, _playerId);
+        if (old != undefined && old != spr && sprite_exists(old))
+        {
+            try { sprite_delete(old); } catch (_eOld) {}
+        }
+    }
+    variable_struct_set(cache, _playerId, spr);
+    vs_online_avatar_order_touch(_playerId);
+    vs_online_avatar_evict();
     return spr;
 }
 
@@ -1575,7 +1700,10 @@ function vs_online_avatar_ensure(_playerId, _url)
     if (_playerId == undefined || _playerId == "" || _url == undefined || _url == "") return undefined;
     var cache = vs_online_avatar_cache();
     if (variable_struct_exists(cache, _playerId))
+    {
+        vs_online_avatar_order_touch(_playerId);
         return variable_struct_get(cache, _playerId);
+    }
     var loaded = vs_online_avatar_load_file(_playerId);
     if (loaded != undefined) return loaded;
     if (variable_struct_exists(global.vs_avatar_fail, _playerId)
@@ -1606,6 +1734,21 @@ function vs_online_avatar_pump()
     if (!directory_exists("vs_avatars")) directory_create("vs_avatars");
     var dest = vs_online_avatar_rel(job.id);
     global.vs_avatar_dest = dest;
+    // Truncated leftover from a prior cancel/fail must not be treated as ready.
+    if (file_exists(dest) && !vs_online_avatar_file_ok(dest))
+    {
+        try { file_delete(dest); } catch (_eBad) {}
+    }
+    var absDest = vs_songstore_install_path(dest);
+    if (absDest != "" && file_exists(absDest) && !vs_online_avatar_file_ok(absDest))
+    {
+        try { file_delete(absDest); } catch (_eBad2) {}
+    }
+    if (vs_online_avatar_file_ok(dest) || (absDest != "" && vs_online_avatar_file_ok(absDest)))
+    {
+        vs_online_avatar_finish(true);
+        return;
+    }
     global.vs_avatar_req = http_get_file(job.url, dest);
     if (global.vs_avatar_req == undefined || global.vs_avatar_req < 0)
     {
@@ -1676,6 +1819,7 @@ function vs_online_avatar_on_http()
 function vs_online_avatar_finish(_ok)
 {
     var pid = global.vs_avatar_cur;
+    var dest = global.vs_avatar_dest;
     if (_ok)
     {
         var spr = vs_online_avatar_load_file(pid);
@@ -1688,6 +1832,18 @@ function vs_online_avatar_finish(_ok)
             }
         }
         else _ok = false;
+    }
+    if (!_ok && dest != undefined && dest != "")
+    {
+        if (file_exists(dest))
+        {
+            try { file_delete(dest); } catch (_e0) {}
+        }
+        var abs = vs_songstore_install_path(dest);
+        if (abs != "" && file_exists(abs))
+        {
+            try { file_delete(abs); } catch (_e1) {}
+        }
     }
     if (pid != "")
     {

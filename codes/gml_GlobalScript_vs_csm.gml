@@ -301,6 +301,98 @@ function vs_csm_add_stream(_dir, _name)
     return a;
 }
 
+// Collect / free sprite_add + audio_create_stream handles from custom songs.
+// Callers must collect BEFORE rebuild and free AFTER a successful rebuild —
+// freeing first leaves dead handles in song_list if load_song_information fails.
+function vs_csm_try_free_sprite(_spr, _seen)
+{
+    if (_spr == undefined || _spr == -1) return;
+    if (_spr == song_generic) return;
+    var k = string(_spr);
+    if (variable_struct_exists(_seen, k)) return;
+    variable_struct_set(_seen, k, true);
+    if (!sprite_exists(_spr)) return;
+    try { sprite_delete(_spr); } catch (_e) {}
+}
+
+function vs_csm_try_free_stream(_snd, _seen)
+{
+    if (_snd == undefined || _snd == -1) return;
+    // Built-in assets are never audio_create_stream results; destroy is a no-op/throw.
+    var k = string(_snd);
+    if (variable_struct_exists(_seen, k)) return;
+    variable_struct_set(_seen, k, true);
+    try
+    {
+        if (audio_is_playing(_snd)) audio_stop_sound(_snd);
+    }
+    catch (_e0) {}
+    try { audio_destroy_stream(_snd); } catch (_e1) {}
+}
+
+function vs_csm_collect_song_assets(_song, _sprs, _auds)
+{
+    if (_song == undefined || !is_struct(_song)) return;
+    if (!variable_struct_exists(_song, "is_custom") || !_song.is_custom) return;
+    if (variable_struct_exists(_song, "jacket")) array_push(_sprs, _song.jacket);
+    if (variable_struct_exists(_song, "audio_id")) array_push(_auds, _song.audio_id);
+    if (variable_struct_exists(_song, "preview_id")) array_push(_auds, _song.preview_id);
+    if (variable_struct_exists(_song, "enc_data") && is_struct(_song.enc_data))
+    {
+        var enc = _song.enc_data;
+        if (variable_struct_exists(enc, "jacket")) array_push(_sprs, enc.jacket);
+        if (variable_struct_exists(enc, "audio_id")) array_push(_auds, enc.audio_id);
+        if (variable_struct_exists(enc, "preview_id")) array_push(_auds, enc.preview_id);
+    }
+}
+
+function vs_csm_collect_loaded_customs()
+{
+    var bag = { spr: [], aud: [] };
+    if (variable_global_exists("song_list") && is_array(global.song_list))
+    {
+        var i = 0;
+        repeat (array_length(global.song_list))
+        {
+            vs_csm_collect_song_assets(global.song_list[i], bag.spr, bag.aud);
+            i++;
+        }
+    }
+    if (variable_global_exists("shatter_list") && is_array(global.shatter_list))
+    {
+        var j = 0;
+        repeat (array_length(global.shatter_list))
+        {
+            vs_csm_collect_song_assets(global.shatter_list[j], bag.spr, bag.aud);
+            j++;
+        }
+    }
+    return bag;
+}
+
+function vs_csm_free_collected_customs(_bag)
+{
+    if (_bag == undefined || !is_struct(_bag)) return;
+    // Drop live refs before destroying streams those refs may point at.
+    if (variable_global_exists("loadaudio")) global.loadaudio = music_chart_desparola;
+    var seenSpr = {};
+    var seenAud = {};
+    var sprs = (variable_struct_exists(_bag, "spr") && is_array(_bag.spr)) ? _bag.spr : [];
+    var auds = (variable_struct_exists(_bag, "aud") && is_array(_bag.aud)) ? _bag.aud : [];
+    var si = 0;
+    repeat (array_length(sprs))
+    {
+        vs_csm_try_free_sprite(sprs[si], seenSpr);
+        si++;
+    }
+    var ai = 0;
+    repeat (array_length(auds))
+    {
+        vs_csm_try_free_stream(auds[ai], seenAud);
+        ai++;
+    }
+}
+
 function vs_csm_add_jacket(_dir, _src)
 {
     if (_src != undefined && _src != "" && file_exists(_dir + _src))

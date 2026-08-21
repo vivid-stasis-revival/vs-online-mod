@@ -261,9 +261,9 @@ function vs_dlbr_row_audio(_r)
 {
     if (_r == undefined) return "";
     if (vs_dlbr_is_pack(_r)) return "";
+    // Preview only — never fall back to full music.ogg (VRAM/CPU hitch + stream leak).
     if (variable_struct_exists(_r, "previewUrl") && _r.previewUrl != "") return string(_r.previewUrl);
-    if (variable_struct_exists(_r, "musicUrl") && _r.musicUrl != "") return string(_r.musicUrl);
-    return vs_media_audio_url("", vs_dlbr_row_jacket(_r), variable_struct_exists(_r, "id") ? _r.id : "");
+    return "";
 }
 
 function vs_dlbr_selected_refresh()
@@ -1301,6 +1301,7 @@ function vs_dlbr_on_close()
     vs_dlbr_drop_pending();
     vs_media_cancel();
     vs_media_stop_preview();
+    vs_media_purge_cache();
     vs_dlbr_dismiss_connect_error();
     var fromLobby = variable_global_exists("vs_dlbr_from_lobby") && global.vs_dlbr_from_lobby;
     global.vs_dlbr_from_lobby = false;
@@ -1570,8 +1571,7 @@ function vs_dlbr_on_detail(_ok, _data)
         vs_chartmeta_remember(_data);
         var ju = variable_struct_exists(_data, "jacketUrl") ? _data.jacketUrl : "";
         var pu = variable_struct_exists(_data, "previewUrl") ? _data.previewUrl : "";
-        var mu = variable_struct_exists(_data, "musicUrl") ? _data.musicUrl : "";
-        vs_media_select(detail_id, (ju != "") ? ju : vs_dlbr_row_jacket(vs_dlbr_detail_row()), (pu != "") ? pu : mu);
+        vs_media_select(detail_id, (ju != "") ? ju : vs_dlbr_row_jacket(vs_dlbr_detail_row()), pu);
         vs_dlbr_pick_detail_diff();
         vs_dlbr_request_chart_extras();
         var ai = vs_dlbr_row_all_index(detail_chart);
