@@ -530,6 +530,8 @@ function vs_csm_shatter_stats_draw()
 {
     vs_csm_shatter_stats_ensure();
     song_stat_page = lerp(song_stat_page, song_stat_page_target, 0.2);
+    if (abs(song_stat_page - song_stat_page_target) < 0.01)
+        song_stat_page = song_stat_page_target;
     var keys = ["note", "tech", "speed", "multi", "fill", "gimmick"];
     var ki = 0;
     repeat (array_length(keys))
@@ -540,10 +542,15 @@ function vs_csm_shatter_stats_draw()
         variable_struct_set(selected_song_stats, k, lerp(vs_csm_safe_real(cur, 0), vs_csm_safe_real(want, 0), 0.2));
         ki++;
     }
-    if (!surface_exists(song_stats_surf))
-        song_stats_surf = surface_create(111 * stat_page_count, 46);
+    var surf_w = 111 * max(1, stat_page_count);
+    if (!surface_exists(song_stats_surf) || surface_get_width(song_stats_surf) != surf_w)
+    {
+        if (surface_exists(song_stats_surf)) surface_free(song_stats_surf);
+        song_stats_surf = surface_create(surf_w, 46);
+    }
     surface_target(song_stats_surf);
     draw_clear_alpha(c_black, 0);
+    draw_set_font(global.default_font);
     // Page 0: record strip (shatter Draw used to hard-code this).
     var page_x = 0;
     var section_headers = ["RECORD", "COMBO", "BPM", "NOTES"];
@@ -562,7 +569,7 @@ function vs_csm_shatter_stats_draw()
         draw_text(page_x + 107, text_y, section_values[i]);
         i++;
     }
-    // Page 1: 五维 (same CHIP/TECH/... strip as freeplay).
+    // Page 1: 五维 — keep numbers inside the 111px page (freeplay's +120 clips).
     page_x = 111;
     section_headers = ["CHIP", "TECH", "STREAM", "CHORD", "BURST", "GIMMICK"];
     var section_keys = ["note", "tech", "speed", "multi", "fill", "gimmick"];
@@ -578,7 +585,7 @@ function vs_csm_shatter_stats_draw()
         draw_set_color(c_white);
         if (variable_global_exists("techstatfont")) draw_set_font(techstatfont);
         var gv = variable_global_exists(section_keys[i] + "_stat") ? variable_global_get(section_keys[i] + "_stat") : 0;
-        draw_text(page_x + 120, ty, round(vs_csm_safe_real(gv, 0)));
+        draw_text(page_x + 107, ty, round(vs_csm_safe_real(gv, 0)));
         draw_set_font(global.default_font);
         var val = variable_struct_exists(selected_song_stats, section_keys[i])
             ? vs_csm_safe_real(variable_struct_get(selected_song_stats, section_keys[i]), 0) : 0;
@@ -603,6 +610,8 @@ function vs_csm_shatter_stats_draw()
     var openness = 111 * song_stat_page;
     draw_surface_part(song_stats_surf, openness, 0, 111, 46, tech_x, 120);
     draw_set_halign(fa_left);
+    draw_set_valign(fa_top);
+    draw_set_font(global.default_font);
     draw_set_color(c_white);
 }
 
@@ -1067,6 +1076,38 @@ function vs_csm_song_is_custom(_id)
     if (_id == undefined || !is_real(_id) || _id < 0 || _id >= array_length(global.song_list)) return false;
     var s = global.song_list[_id];
     return s != undefined && s != 0 && variable_struct_exists(s, "is_custom");
+}
+
+// Unique custom_highscore section for shatter rows. chart_id alone collides when
+// two folders share it (ftv2026s10 + Tanshe both chart_id=Tanshe) — unplayed
+// entries then show the other's VS.
+function vs_csm_shatter_folder_name(_song)
+{
+    if (_song == undefined) return "";
+    var path = string(struct_get_fallback(_song, "chart_path", ""));
+    if (path == "") return string(struct_get_fallback(_song, "chart_id", ""));
+    path = string_replace_all(path, "\\", "/");
+    while (string_length(path) > 0 && string_char_at(path, string_length(path)) == "/")
+        path = string_copy(path, 1, string_length(path) - 1);
+    var slash = string_last_pos("/", path);
+    if (slash > 0) return string_copy(path, slash + 1, string_length(path) - slash);
+    return path;
+}
+
+function vs_csm_shatter_hs_section(_song)
+{
+    if (_song == undefined) return "";
+    var folder = vs_csm_shatter_folder_name(_song);
+    if (folder != "") return "sh_" + folder;
+    return "sh_" + string(struct_get_fallback(_song, "chart_id", "")) + "_" + string(struct_get_fallback(_song, "song_id", 0));
+}
+
+function vs_csm_shatter_hs_row(_song_id)
+{
+    if (!variable_global_exists("highscores") || _song_id == undefined || !is_real(_song_id) || _song_id < 0)
+        return undefined;
+    if (_song_id >= array_length(global.highscores.shatter)) return undefined;
+    return global.highscores.shatter[_song_id];
 }
 
 function vs_csm_hs_diff_index(_diff)

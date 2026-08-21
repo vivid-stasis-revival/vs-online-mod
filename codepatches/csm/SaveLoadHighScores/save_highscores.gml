@@ -39,7 +39,7 @@ for (var i = 0; i < array_length(global.highscores.shatter); i++)
 
         if (value != variable_struct_get(array_get(global.highscores_at_load.shatter, i), array_get(prop, 0)))
         {
-            ini_write_real(global.shatter_list[i].chart_id, global.shatter_list[i].difficulty_name + prop[1], value);
+            ini_write_real(vs_csm_shatter_hs_section(global.shatter_list[i]), global.shatter_list[i].difficulty_name + prop[1], value);
             variable_struct_set(array_get(global.highscores_at_load.shatter, i), array_get(prop, 0), value);
         }
     }

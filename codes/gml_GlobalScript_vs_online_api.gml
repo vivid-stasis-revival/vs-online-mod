@@ -1712,13 +1712,17 @@ function vs_online_lb_download(_inst, _mode)
     var diffName = diffs[di];
     var chartId = _inst.song.chart_id;
     var sha = vs_online_chart_sha1(chartId, diffName);
+    // Shatter charts often use custom difficulty_name (LEGACY / SLUMPAGE / …).
+    // Upload keeps that raw token via vs_online_diff_submit — LB must query the
+    // same name. Forcing "SHATTER" here made DNA/etc. boards always empty.
     if (vs_online_song_is_shatter(_inst.song))
     {
         var raw = diffName;
         if (variable_struct_exists(_inst.song, "difficulty_name") && string(_inst.song.difficulty_name) != "")
             raw = string(_inst.song.difficulty_name);
+        if (raw == "" || raw == " ") raw = "SHATTER";
         sha = vs_online_chart_sha1(chartId, raw);
-        diffName = "SHATTER";
+        diffName = raw;
     }
     if (!variable_global_exists("vs_lb_q"))
     {

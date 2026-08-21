@@ -1305,6 +1305,12 @@
         "Type": 1
     },
     {
+        "Entry": "gml_Object_o_songobject_shatter_Other_25",
+        "Find": "var grade = get_score_grade(global.highscores.shatter[song_id].score);\nvar fc_lamp = global.highscores.shatter[song_id].lamp;\nif (grade < UnknownEnum.Value_13)\n{\n    var grades = [\"VS\", \"V+\", \"V\", \"SS+\", \"SS\", \"S+\", \"S\", \"AA\", \"A\", \"B\", \"C\", \"D\", \"E\"];\n    draw_text_grade_colour(185, 2, grades[grade], grade);\n}\ndraw_sprite(sp_songobject_lamp, fc_lamp, 171, 12);\ndraw_set_color((o_songselect_shatter.cursor_pos == position) ? c_black : c_white);\ndraw_text(88, 2, global.shatter_list[song_id].name);\ndraw_set_color(c_white);\ndraw_text(88, 12, @@string@@(\"{0} {1}\", diff_name, global.shatter_list[song_id].difficulty_number));",
+        "ExternalFile": "csm/shatter_songobject_grade.gml",
+        "Type": 1
+    },
+    {
         "Entry": "gml_Object_o_songselect_shatter_Draw_0",
         "Find": "event_inherited();\nvar tech_x = song_info_x + 1;\nvar section_headers = [\"RECORD\", \"COMBO\", \"BPM\", \"NOTES\"];\nvar section_colors = [4500479, 4521945, 16757828, 13059327];\nvar section_values = [round(selected_song_score), selected_song_combo_record, selected_song.bpm_display, selected_song_notes];\nif (struct_exists(song_objects[cursor_pos], \"diff\"))\n{\n    var diff = song_objects[cursor_pos].diff;\n    section_values = [round(selected_song_score), selected_song_combo_record, song_get_info(selected_song, \"bpm_display\", diff), selected_song_notes];\n}\nfor (var i = 0; i < array_length(section_headers); i++)\n{\n    var text_y = 123 + (i * 10);\n    draw_set_halign(fa_left);\n    draw_set_color(section_colors[i]);\n    draw_text(tech_x + 4, text_y, section_headers[i]);\n    draw_set_color(c_white);\n    draw_set_halign(fa_right);\n    draw_text(tech_x + 107, text_y, section_values[i]);\n}",
         "ExternalFile": "csm/shatter_draw_stats.gml",
