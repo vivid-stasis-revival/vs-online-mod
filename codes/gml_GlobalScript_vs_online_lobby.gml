@@ -752,6 +752,36 @@ function vs_lobby_confirm_opt_is_autoplay(_opt)
     return false;
 }
 
+// selected_difficulty on newconfirm is an index into difficulties[], not the
+// difficulty id. Unlock checks and start_song need the .id (ENCORE-only WP
+// menus otherwise index OPENING unlock / start OPENING).
+function vs_confirm_selected_diff_id(_selected, _difficulties)
+{
+    var uid = _selected;
+    if (is_array(_difficulties) && is_real(_selected) && _selected >= 0 && _selected < array_length(_difficulties))
+    {
+        var d = _difficulties[_selected];
+        if (is_struct(d) && variable_struct_exists(d, "id"))
+            uid = d.id;
+    }
+    return uid;
+}
+
+function vs_confirm_diff_unlocked(_song, _selected, _difficulties, _bypass)
+{
+    if (_bypass) return true;
+    if (_song == undefined) return false;
+    var uid = vs_confirm_selected_diff_id(_selected, _difficulties);
+    var sid = variable_struct_exists(_song, "song_id") ? _song.song_id : -1;
+    if (!is_real(sid) || sid < 0) return true;
+    vs_lobby_unlock_pad_id(sid);
+    if (!variable_global_exists("unlocked_songs") || !is_array(global.unlocked_songs)) return true;
+    if (array_length(global.unlocked_songs) <= sid) return true;
+    var row = global.unlocked_songs[sid];
+    if (!is_array(row) || array_length(row) <= uid) return true;
+    return row[uid];
+}
+
 // Collapse duplicate Autoplay rows from stacked mods (BugFix + this one).
 // Add one in Worldcross if nobody else already did.
 function vs_lobby_confirm_ensure_autoplay()

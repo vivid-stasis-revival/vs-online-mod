@@ -964,6 +964,18 @@
         "Type": 1
     },
     {
+        "Entry": "gml_Object_o_songselect_newconfirm_Step_0",
+        "Find": "    if (bypass_unlocks || global.unlocked_songs[song.song_id][selected_difficulty])",
+        "Value": "    if (vs_confirm_diff_unlocked(song, selected_difficulty, difficulties, bypass_unlocks))",
+        "Type": 0
+    },
+    {
+        "Entry": "gml_Object_o_songselect_main_Create_0",
+        "Find": "    start_song(selected_song.song_id, confirm_menu.selected_difficulty);",
+        "Value": "    start_song(selected_song.song_id, vs_confirm_selected_diff_id(confirm_menu.selected_difficulty, confirm_menu.difficulties));",
+        "Type": 0
+    },
+    {
         "Entry": "gml_GlobalScript_StartCountdownPacket",
         "Find": "play_se(asset_get_index(@@string@@(\"sfx_count{0}\", arg0)));",
         "Value": "if (vs_online_is_custom()) vs_lobby_log(\"countdown n=\" + string(arg0)); play_se(vs_online_countdown_sound(arg0));",
@@ -1174,7 +1186,7 @@
     },
     {
         "Entry": "gml_Object_cc_Create_0",
-        "Find": "precise_audio_load_sound(global.loadaudio);",
+        "Find": "precise_audio_set_volume(global.op_music_volume);\n    precise_audio_load_sound(global.loadaudio);",
         "Value": "vs_csm_play_log(\"cc precise blocked\"); vs_csm_force_gm_audio(); if (!audio_exists(global.loadaudio)) global.loadaudio = music_chart_desparola; playback = audio_play_sound(global.loadaudio, 1, false, global.op_music_volume); audio_pause_sound(playback);",
         "Type": 1
     },
