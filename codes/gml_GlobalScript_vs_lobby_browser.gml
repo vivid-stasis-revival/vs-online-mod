@@ -27,7 +27,10 @@ function vs_lobby_browser_st()
             focus: 0,
             top_i: 0,
             list_i: 0,
-            page_size: 5
+            page_size: 5,
+            busy: false,
+            status: "",
+            status_until: 0
         };
     }
     var st = global.vs_lobby_br;
@@ -40,6 +43,9 @@ function vs_lobby_browser_st()
     if (!variable_struct_exists(st, "page_size")) st.page_size = 5;
     if (!variable_struct_exists(st, "loading")) st.loading = false;
     if (!variable_struct_exists(st, "inflight")) st.inflight = 0;
+    if (!variable_struct_exists(st, "busy")) st.busy = false;
+    if (!variable_struct_exists(st, "status")) st.status = "";
+    if (!variable_struct_exists(st, "status_until")) st.status_until = 0;
     return st;
 }
 
@@ -51,12 +57,32 @@ function vs_lobby_browser_boot()
     st.top_i = 0;
     st.list_i = 0;
     st.page = 0;
+    st.busy = false;
+    st.status = "";
+    st.status_until = 0;
     vs_lobby_browser_refresh(true);
 }
 
+// Shift held: Host→Private, Join→Paste (same actions as Shift+confirm).
 function vs_lobby_browser_labels()
 {
-    return ["Quick", "Host", "Join", "Refresh"];
+    if (keyboard_check(vk_shift))
+        return ["Match", "Private", "Paste"];
+    return ["Match", "Host", "Join"];
+}
+
+function vs_lobby_browser_set_status(_msg)
+{
+    var st = vs_lobby_browser_st();
+    st.status = string(_msg);
+    st.status_until = current_time + 4000;
+}
+
+function vs_lobby_browser_need_account()
+{
+    if (vs_online_is_account()) return true;
+    vs_online_show_account_required();
+    return false;
 }
 
 function vs_lobby_browser_filter_name(_f)
@@ -188,29 +214,49 @@ function vs_lobby_browser_enter_fx()
 
 function vs_lobby_browser_after_enter(_ok, _data)
 {
+    var st = vs_lobby_browser_st();
+    st.busy = false;
     if (_ok) vs_lobby_browser_enter_fx();
+    else vs_lobby_browser_set_status("Could not join / match.  无法加入或匹配。");
 }
 
 function vs_lobby_browser_do_top()
 {
     var st = vs_lobby_browser_st();
+    if (st.busy || st.loading) return;
     switch (st.top_i)
     {
         case 0:
+            if (!vs_lobby_browser_need_account()) return;
             vs_lobby_log("ui browser matchmake");
+            st.busy = true;
             vs_lobby_matchmake(vs_lobby_browser_after_enter);
             break;
         case 1:
-            // Shift+Host = private (same as legacy hostlobby patch).
+            // Shift+Host = private (hostlobby patch reads vk_shift).
+            if (!vs_lobby_browser_need_account()) return;
             if (instance_exists(obj_multiplayer_lobby))
                 obj_multiplayer_lobby.do_multiplayer_lobby_button("hostlobby");
             break;
         case 2:
-            if (instance_exists(obj_multiplayer_lobby))
-                obj_multiplayer_lobby.do_multiplayer_lobby_button("joinlobby");
-            break;
-        case 3:
-            vs_lobby_browser_refresh(true);
+            if (keyboard_check(vk_shift))
+            {
+                if (!vs_lobby_browser_need_account()) return;
+                var clip = string_upper(string_copy(clipboard_get_text(), 1, 6));
+                if (string_length(clip) != 6)
+                {
+                    vs_lobby_browser_set_status("Clipboard needs a 6-char code.  剪贴板需6位房间码。");
+                    return;
+                }
+                vs_lobby_log("ui browser paste join=" + clip);
+                st.busy = true;
+                vs_lobby_join(clip, vs_lobby_browser_after_enter);
+            }
+            else
+            {
+                if (instance_exists(obj_multiplayer_lobby))
+                    obj_multiplayer_lobby.do_multiplayer_lobby_button("joinlobby");
+            }
             break;
     }
 }
@@ -218,7 +264,8 @@ function vs_lobby_browser_do_top()
 function vs_lobby_browser_do_list()
 {
     var st = vs_lobby_browser_st();
-    if (st.loading) return;
+    if (st.loading || st.busy) return;
+    if (!vs_lobby_browser_need_account()) return;
     var rows = vs_lobby_browser_filtered();
     var idx = st.page * st.page_size + st.list_i;
     if (idx < 0 || idx >= array_length(rows)) return;
@@ -229,6 +276,7 @@ function vs_lobby_browser_do_list()
     if (variable_struct_exists(row, "code")) invite = string(variable_struct_get(row, "code"));
     if (invite == "") return;
     vs_lobby_log("ui browser join code=" + invite);
+    st.busy = true;
     vs_lobby_join(invite, vs_lobby_browser_after_enter);
 }
 
@@ -249,6 +297,7 @@ function vs_lobby_browser_step()
         st.page = 0;
         st.list_i = 0;
         vs_lobby_browser_clamp();
+        vs_lobby_browser_set_status("Filter: " + vs_lobby_browser_filter_name(st.filter) + "  (F)");
         play_se(sfx_songsel_cursor);
     }
 
@@ -339,8 +388,8 @@ function vs_lobby_browser_draw()
     vs_lobby_browser_clamp();
     var labels = vs_lobby_browser_labels();
     var nbtn = array_length(labels);
-    var bw = 70;
-    var gap = 4;
+    var bw = 88;
+    var gap = 6;
     var total = nbtn * bw + (nbtn - 1) * gap;
     var bx0 = floor((320 - total) / 2);
     var by = 4;
@@ -394,8 +443,18 @@ function vs_lobby_browser_draw()
         draw_set_font(global.default_font);
         draw_set_color(c_white);
         draw_set_halign(fa_center);
-        draw_text(mid_x, 118, "Refreshing...");
+        draw_text(mid_x, 118, st.busy ? "Working..." : "Refreshing...");
         draw_set_halign(fa_left);
+        draw_set_color(c_white);
+    }
+    else if (st.busy)
+    {
+        draw_set_halign(fa_center);
+        draw_set_color(c_aqua);
+        draw_set_font(fnt_monacovs);
+        draw_text(mid_x, 80, "Working...");
+        draw_set_halign(fa_left);
+        draw_set_font(global.default_font);
         draw_set_color(c_white);
     }
     else
@@ -460,10 +519,17 @@ function vs_lobby_browser_draw()
             draw_set_font(global.default_font);
             draw_text(mid_x, 136, "Page " + string(st.page + 1) + "/" + string(pages)
                 + "  " + vs_lobby_browser_filter_name(st.filter)
-                + "  " + string(n) + " rooms"
-                + "  " + string(left) + "s");
+                + "  " + string(n) + "  " + string(left) + "s");
             draw_set_color(c_gray);
-            draw_text(mid_x, 148, "F: filter   Shift+Host: private");
+            if (st.focus == 0)
+                draw_text(mid_x, 148, "Shift+Host: private   Shift+Join: paste   F: filter");
+            else
+                draw_text(mid_x, 148, "F: filter   Confirm: join room");
+            if (st.status != "" && current_time < st.status_until)
+            {
+                draw_set_color(c_yellow);
+                draw_text(mid_x, 158, st.status);
+            }
             draw_set_halign(fa_left);
         }
     }
