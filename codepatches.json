@@ -531,13 +531,31 @@
     {
         "Entry": "gml_GlobalScript_rating_functions",
         "Find": "function create_rating_array_for_window()\n{\n    global.rsw_table = [];\n    global.rsw_ex_table = [];",
-        "Value": "function create_rating_array_for_window()\n{\n    if (vs_online_is_custom())\n    {\n        vs_online_rating_ensure_window_arrays();\n        vs_online_rating_window_refresh();\n        return;\n    }\n    global.rsw_table = [];\n    global.rsw_ex_table = [];",
+        "Value": "function create_rating_array_for_window()\n{\n    if (vs_online_is_custom())\n    {\n        vs_online_rating_ensure_window_arrays();\n        if (!vs_online_rating_gen_busy()) vs_online_rating_window_refresh();\n        return;\n    }\n    global.rsw_table = [];\n    global.rsw_ex_table = [];",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_Object_obj_ratingWindow_Step_0",
+        "Find": "if (!active)\n    exit;\n\nif (page == 5 && cursor_pos == 2)",
+        "Value": "if (!active)\n    exit;\nif (vs_online_rating_gen_step(id))\n    exit;\n\nif (page == 5 && cursor_pos == 2)",
         "Type": 1
     },
     {
         "Entry": "gml_Object_obj_ratingWindow_Step_0",
         "Find": "            case 3:\n                var file = \"rating.png\";\n                generate_rating_image(rate_background + 1, incl_title, incl_constants, file);\n                \n                if (steam_initialised())\n                    steam_send_screenshot(file, 1081, 1332);\n                \n                break;",
-        "Value": "            case 3:\n                var file = \"rating.png\";\n                generate_rating_image(rate_background + 1, incl_title, incl_constants, file);\n                if (vs_online_is_custom())\n                    vs_online_rating_open_image(file);\n                else if (steam_initialised())\n                    steam_send_screenshot(file, 1081, 1332);\n                break;",
+        "Value": "            case 3:\n                if (vs_online_is_custom())\n                    vs_online_rating_gen_begin(id);\n                else\n                {\n                    var file = \"rating.png\";\n                    generate_rating_image(rate_background + 1, incl_title, incl_constants, file);\n                    if (steam_initialised())\n                        steam_send_screenshot(file, 1081, 1332);\n                }\n                break;",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_Object_obj_ratingWindow_Draw_64",
+        "Find": "draw_text_ext(x + 160, y + 31, \"This will save an image summarizing your player rating as a Steam screenshot.\", 10, 280);",
+        "Value": "draw_text_ext(x + 160, y + 31, vs_online_is_custom() ? \"This will save your rating image as a local picture in your save folder.\" : \"This will save an image summarizing your player rating as a Steam screenshot.\", 10, 280);",
+        "Type": 1
+    },
+    {
+        "Entry": "gml_Object_obj_ratingWindow_Draw_64",
+        "Find": "draw_text_o(x + 313, y + 3, page_names[(page + 1) % array_length(page_names)]);\n\nenum UnknownEnum",
+        "Value": "draw_text_o(x + 313, y + 3, page_names[(page + 1) % array_length(page_names)]);\nvs_online_rating_gen_draw();\n\nenum UnknownEnum",
         "Type": 1
     },
     {
