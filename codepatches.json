@@ -34,7 +34,6 @@
         "Value": "global.highscore_file = vs_online_highscore_file(\"profile\" + string(cursor_pos + 1) + \"/highscore_table\");",
         "Type": 0
     },
-
     {
         "Entry": "gml_GlobalScript_receive_packet",
         "Find": "steam_lobby_get_owner_id()",
@@ -47,14 +46,12 @@
         "Value": "vs_lobby_owner_id()",
         "Type": 0
     },
-
     {
         "Entry": "gml_Object_o_options2025_Step_0",
         "Find": "if (input_check_pressed(",
         "Value": "if (instance_exists(vs_auth_panel)) exit; if (input_check_pressed(",
         "Type": 1
     },
-
     {
         "Entry": "gml_Object_obj_multiplayer_lobby_Create_0",
         "Find": "steam_lobby_create(2, 8);",
@@ -91,7 +88,6 @@
         "Value": "vs_lobby_is_owner()",
         "Type": 0
     },
-
     {
         "Entry": "gml_Object_obj_multiplayer_lobby_Step_0",
         "Find": "steam_lobby_is_owner()",
@@ -128,7 +124,6 @@
         "Value": "case \"startgame\": if (vs_lobby_block_start()) break;",
         "Type": 0
     },
-
     {
         "Entry": "gml_Object_obj_multiplayer_lobby_Draw_64",
         "Find": "draw_set_default();",
@@ -147,32 +142,11 @@
         "Value": "vs_lobby_lobby_id()",
         "Type": 0
     },
-
     {
         "Entry": "gml_Object_obj_multiplayer_lobby_Draw_0",
-        "Find": "if (steam_lobby_get_lobby_id() <= 0)\n{\n    var height = 19;",
-        "Value": "if (vs_lobby_lobby_id() <= 0)\n{\n    if (vs_lobby_browser_active())\n    {\n        vs_lobby_browser_draw();\n    }\n    else\n    {\n    var height = 19;",
-        "Type": 1
+        "ExternalFile": "lobby_draw0.gml",
+        "Type": 2
     },
-    {
-        "Entry": "gml_Object_obj_multiplayer_lobby_Draw_0",
-        "Find": "steam_lobby_get_lobby_id()",
-        "Value": "vs_lobby_lobby_id()",
-        "Type": 0
-    },
-    {
-        "Entry": "gml_Object_obj_multiplayer_lobby_Draw_0",
-        "Find": "steam_is_user_logged_on()",
-        "Value": "vs_online_is_connected()",
-        "Type": 0
-    },
-    {
-        "Entry": "gml_Object_obj_multiplayer_lobby_Draw_0",
-        "Find": "draw_text(2, 170, \"Steamworks:\");",
-        "Value": "if (vs_online_is_custom()) { draw_text(2, 170, \"Server:\"); } else { draw_text(2, 170, \"Steamworks:\"); }",
-        "Type": 1
-    },
-
     {
         "Entry": "gml_Object_obj_multiplayer_waiting_room_Step_0",
         "Find": "if (steam_lobby_is_owner() && !transition)",
@@ -347,7 +321,6 @@
         "Value": "                diff_disp = song.difficulty_display_4;\n                diff_const = song.difficulty_constant_4;\n                break;\n            case 5:\n                diff_color = 1753599;\n                diff_name = \"Prelude\";\n                diff_disp = struct_get_fallback(song, \"difficulty_display_1\", \"PRELUDE\");\n                diff_const = struct_get_fallback(song, \"difficulty_constant_1\", 0);\n                diff_img = 0;\n                break;\n        }\n        if (global.rsw_ex_top10[i].song_id != 0)",
         "Type": 1
     },
-
     {
         "Entry": "gml_Object_o_st_handle_Create_0",
         "Find": "steamId = steam_get_user_steam_id();",
@@ -467,7 +440,6 @@
         "ExternalFile": "leaderboard_friends.gml",
         "Type": 1
     },
-
     {
         "Entry": "gml_GlobalScript_unix_timestamp",
         "Find": "if (arg0 != undefined || !steam_is_user_logged_on())",
@@ -581,7 +553,6 @@
         "Value": "updateButtons();\n            if (vs_online_is_custom()) { vs_lobby_log(\"hostlobby skip SendPlayerInfo until welcome\"); } else send_packet(SendPlayerInfoPacket);\n            global.winner = \"\";\n            member_y_offset = 0;",
         "Type": 1
     },
-
     {
         "Entry": "gml_Object_o_tamasatchi_master_Step_0",
         "Find": "steam_upload_score(\"bmode_tamasatchi\", stats[UnknownEnum.Value_4]);",
@@ -648,7 +619,6 @@
         "Value": "lbIdTop100 = vs_online_is_custom() ? -1 : steam_download_scores(\"sentinel_ascent\", 2, 101);",
         "Type": 0
     },
-
     {
         "Entry": "gml_Object_o_2023res_songwindow_Draw_0",
         "Find": "var members = o_st_handle.lobbyMembers;",
@@ -713,12 +683,6 @@
         "Entry": "gml_Object_obj_multiplayer_lobby_Create_0",
         "ExternalFile": "bwp_lobby_init.gml",
         "Type": 3
-    },
-    {
-        "Entry": "gml_Object_obj_multiplayer_lobby_Draw_0",
-        "Find": "if (entering_code)",
-        "Value": "draw_set_color(c_white);draw_set_halign(fa_center);draw_text_o(160, startY + totalHeight + 7, string(\"Total Lobbies: {0}\\nHold Shift and Press \\\"Paste Code\\\" to join random lobby\", lobbyCount)); }\n    if (entering_code && !vs_lobby_browser_active())",
-        "Type": 1
     },
     {
         "Entry": "gml_Object_obj_multiplayer_lobby_Create_0",
