@@ -88,20 +88,27 @@ function vs_online_song_is_shatter(_song)
     return false;
 }
 
+// Shatter API difficulty token: standard names (incl. ENCORE.vsc on disk)
+// collapse to "SHATTER"; custom names (LEGACY / SLUMPAGE / …) stay as-is.
+// Upload and LB query must use the same mapping.
+function vs_online_diff_shatter_token(_diff)
+{
+    var raw = string(_diff);
+    if (raw == "" || raw == " ") raw = "SHATTER";
+    var low = string_lower(raw);
+    if (low == "opening" || low == "middle" || low == "finale"
+        || low == "encore" || low == "backstage" || low == "prelude"
+        || low == "shatter")
+    {
+        return "SHATTER";
+    }
+    return raw;
+}
+
 function vs_online_diff_submit(_diff)
 {
     if (variable_global_exists("song_shatter") && global.song_shatter)
-    {
-        var raw = string(_diff);
-        if (raw == "") raw = "SHATTER";
-        var low = string_lower(raw);
-        if (low == "opening" || low == "middle" || low == "finale"
-            || low == "encore" || low == "backstage" || low == "prelude")
-        {
-            return "SHATTER";
-        }
-        return raw;
-    }
+        return vs_online_diff_shatter_token(_diff);
     return vs_online_diff_api(_diff);
 }
 
@@ -1712,17 +1719,18 @@ function vs_online_lb_download(_inst, _mode)
     var diffName = diffs[di];
     var chartId = _inst.song.chart_id;
     var sha = vs_online_chart_sha1(chartId, diffName);
-    // Shatter charts often use custom difficulty_name (LEGACY / SLUMPAGE / …).
-    // Upload keeps that raw token via vs_online_diff_submit — LB must query the
-    // same name. Forcing "SHATTER" here made DNA/etc. boards always empty.
+    // Shatter: hash the on-disk chart (ENCORE.vsc / LEGACY.vsc / …) but query
+    // the same API token upload uses. Standard names → SHATTER; custom names
+    // (LEGACY / …) stay. Do not force SHATTER for every shatter (emptied DNA),
+    // and do not query raw ENCORE (misses rows uploaded as SHATTER).
     if (vs_online_song_is_shatter(_inst.song))
     {
         var raw = diffName;
         if (variable_struct_exists(_inst.song, "difficulty_name") && string(_inst.song.difficulty_name) != "")
             raw = string(_inst.song.difficulty_name);
-        if (raw == "" || raw == " ") raw = "SHATTER";
         sha = vs_online_chart_sha1(chartId, raw);
-        diffName = raw;
+        if (sha == "") sha = vs_online_chart_sha1(chartId, diffName);
+        diffName = vs_online_diff_shatter_token(raw);
     }
     if (!variable_global_exists("vs_lb_q"))
     {
