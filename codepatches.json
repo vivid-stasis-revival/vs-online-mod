@@ -1535,7 +1535,7 @@
     {
         "Entry": "gml_GlobalScript_start_song",
         "Find": "var song = global.song_list[arg0];",
-        "Value": "var song = vs_online_song_from_id(arg0);\nif (song == undefined) { show_debug_message(\"VS Online: start_song skip missing idx=\" + string(arg0)); return; }\nglobal.currentSongInfo=song;",
+        "Value": "var song = vs_online_song_from_id(arg0);\nif (song == undefined) { vs_csm_play_log(\"start_song skip missing idx=\" + string(arg0)); show_debug_message(\"VS Online: start_song skip missing idx=\" + string(arg0)); return; }\nglobal.currentSongInfo=song;",
         "Type": 0
     },
     {

@@ -770,6 +770,8 @@ function vs_confirm_selected_diff_id(_selected, _difficulties)
 function vs_confirm_diff_unlocked(_song, _selected, _difficulties, _bypass)
 {
     if (_bypass) return true;
+    // Custom Server freeplay: do not soft-reject Enter on stale unlock rows.
+    if (vs_online_is_custom()) return true;
     if (_song == undefined) return false;
     var uid = vs_confirm_selected_diff_id(_selected, _difficulties);
     var sid = variable_struct_exists(_song, "song_id") ? _song.song_id : -1;

@@ -1,29 +1,34 @@
-var filePath = working_directory + "Charts/" + arg0 + "/" + arg1 + ".vsb";
+var filePath = vs_csm_official_vsb_path(arg0, arg1);
 var chart = undefined;
 // Custom Gimmicks processLanes uses chartPath + diff + ".vsv" and later
-// cc.chartPath. Leaving "" for official .vsb made SV cache / gimmick I/O blow
-// up after prepare-menu Enter (keyboard softlock). Custom .vsc was fine
-// because the else-branch set chartPath. Worldcross uses the same LoadSong.
+// cc.chartPath. Official .vsb must resolve under program_directory when the
+// AppData Charts/ stub has no .vsb (sandbox working_directory) — otherwise
+// we fall through to empty .vsc load and softlock after prepare-menu Enter.
 var chartPath = get_chart_path_from_chart(arg0);
 if (chartPath == undefined || chartPath == "")
     chartPath = "Charts/" + arg0 + "/";
 if (string_char_at(chartPath, string_length(chartPath)) != "/" && string_char_at(chartPath, string_length(chartPath)) != "\\")
     chartPath += "/";
-// Official .vsb: absolute path so CG/SV I/O does not depend on cwd.
-// Custom .vsc: keep relative / chart_load_dir as-is — CG and load_text_chart
-// may already prefix working_directory / save area.
-if (file_exists(filePath))
+if (filePath != "")
 {
-    if (string_pos(":", chartPath) != 2 && string_char_at(chartPath, 1) != "/" && string_char_at(chartPath, 1) != "\\")
-        chartPath = working_directory + chartPath;
+    // Directory that actually contains the .vsb (install or save).
+    var cut = string_length(string(arg1)) + 4;
+    chartPath = string_copy(filePath, 1, string_length(filePath) - cut);
+}
+else
+{
+    var offDir = vs_csm_official_chart_dir(arg0);
+    if (offDir != "") chartPath = offDir;
 }
 if (variable_global_exists("song_id_last") && variable_global_exists("song_list")
     && global.song_id_last >= 0 && global.song_id_last < array_length(global.song_list)
     && variable_struct_exists(global.song_list[global.song_id_last], "is_custom"))
     vs_csm_force_gm_audio();
-vs_csm_play_log("LoadSong chart=" + string(arg0) + " diff=" + string(arg1) + " vsb=" + string(file_exists(filePath)) + " path=" + string(chartPath) + " gm=" + string(global.op_use_gamemaker_audio));
+else if (vs_online_is_custom())
+    vs_csm_force_gm_audio();
+vs_csm_play_log("LoadSong chart=" + string(arg0) + " diff=" + string(arg1) + " vsb=" + string(filePath != "") + " path=" + string(chartPath) + " gm=" + string(global.op_use_gamemaker_audio));
 
-if (file_exists(filePath))
+if (filePath != "")
 {
     chart = read_binary_chart(filePath);
 }

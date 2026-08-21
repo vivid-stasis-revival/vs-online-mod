@@ -40,12 +40,63 @@ function vs_csm_save_songs_root()
     return vs_csm_save_area() + "Custom Songs/";
 }
 
-function vs_csm_steam_songs_root()
+function vs_csm_steam_root()
 {
     var s = "";
     try { s = program_directory; } catch (_e) { s = ""; }
     if (s == undefined || s == "") return "";
-    return vs_csm_norm_dir(s) + "Custom Songs/";
+    return vs_csm_norm_dir(s);
+}
+
+function vs_csm_steam_songs_root()
+{
+    var s = vs_csm_steam_root();
+    if (s == "") return "";
+    return s + "Custom Songs/";
+}
+
+// Official .vsb live next to the exe (Steam install). Sandbox working_directory
+// is AppData — often has Charts/<id> stubs (.stats only) without .vsb. Prefer
+// the install copy whenever the save-area file is missing.
+function vs_csm_official_vsb_path(_chartId, _diff)
+{
+    if (_chartId == undefined || _chartId == "" || _diff == undefined || _diff == "") return "";
+    var rel = "Charts/" + string(_chartId) + "/" + string(_diff) + ".vsb";
+    var cands = [];
+    array_push(cands, working_directory + rel);
+    var save = vs_csm_save_area();
+    if (save != "") array_push(cands, save + rel);
+    var steam = vs_csm_steam_root();
+    if (steam != "") array_push(cands, steam + rel);
+    var i = 0;
+    repeat (array_length(cands))
+    {
+        if (file_exists(cands[i])) return cands[i];
+        i++;
+    }
+    return "";
+}
+
+function vs_csm_official_chart_dir(_chartId)
+{
+    if (_chartId == undefined || _chartId == "") return "";
+    var diffs = ["OPENING", "MIDDLE", "FINALE", "ENCORE", "PRELUDE"];
+    var i = 0;
+    repeat (array_length(diffs))
+    {
+        var p = vs_csm_official_vsb_path(_chartId, diffs[i]);
+        if (p != "")
+        {
+            // Strip "DIFF.vsb"
+            var cut = string_length(diffs[i]) + 4;
+            return string_copy(p, 1, string_length(p) - cut);
+        }
+        i++;
+    }
+    var steam = vs_csm_steam_root();
+    if (steam != "" && directory_exists(steam + "Charts/" + string(_chartId) + "/"))
+        return steam + "Charts/" + string(_chartId) + "/";
+    return "";
 }
 
 function vs_csm_root_listed(_roots, _dir)
@@ -752,16 +803,21 @@ function vs_csm_start_song_guard(_song, _diffIdx)
     var want = (is_real(_diffIdx) && _diffIdx >= 0 && _diffIdx < 5) ? names[_diffIdx] : string(_diffIdx);
     var aud = song_get_info(_song, "audio_id", _diffIdx);
     var jk = song_get_info(_song, "jacket", _diffIdx);
-    vs_csm_play_log("start chart=" + string(struct_get_fallback(_song, "chart_id", "?"))
+    var cid = string(struct_get_fallback(_song, "chart_id", "?"));
+    var vsb = vs_csm_official_vsb_path(cid, want);
+    vs_csm_play_log("start chart=" + cid
         + " idx=" + string(_diffIdx)
         + " want=" + want
         + " dir=" + string(loadDir)
         + " vsc=" + string(file_exists(loadDir + want + ".vsc"))
+        + " vsb=" + string(vsb != "")
         + " audio=" + string(aud) + " ok=" + string(vs_csm_asset_ok_audio(aud))
         + " jacket=" + string(jk) + " ok=" + string(vs_csm_asset_ok_sprite(jk))
         + " bpm=" + string(struct_get_fallback(_song, "bpm_display", ""))
         + " encore=" + string(struct_get_fallback(_song, "has_encore", false)));
-    if (variable_struct_exists(_song, "is_custom"))
+    // Custom Server: always GM audio. Official charts used to skip force_gm
+    // (no is_custom) and then hit precise_audio / CG with a bad Charts path.
+    if (variable_struct_exists(_song, "is_custom") || vs_online_is_custom())
         vs_csm_force_gm_audio();
     if (!vs_csm_asset_ok_audio(global.loadaudio))
     {
