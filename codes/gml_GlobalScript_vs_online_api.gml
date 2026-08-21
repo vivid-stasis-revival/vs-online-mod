@@ -1868,8 +1868,8 @@ function vs_online_rating_cache_apply()
     var v = vs_online_rating_cache_read();
     if (!vs_online_rscore_ok(v) || v <= 0) return;
     global.rscore = v;
-    if (!variable_global_exists("rscore_last") || !vs_online_rscore_ok(global.rscore_last))
-        global.rscore_last = v;
+    global.rscore_last = v;
+    vs_online_rating_sync_class();
 }
 
 function vs_online_rating_cache_apply_steam()
@@ -1888,16 +1888,55 @@ function vs_online_rating_cache_apply_steam()
     // Do not fall back to bare ratinglast — after Custom it may be the server value.
     if (!vs_online_rscore_ok(v) || v <= 0) return;
     global.rscore = v;
+    global.rscore_last = v;
+    vs_online_rating_sync_class();
 }
 
 // --- B40 / rating (server projection) --------------------------------------
 
-function vs_online_rscore_keep_last()
+// Profile/home widgets often cache ratingclass once at Create. Refresh any
+// live holder when rscore changes so colour tracks the number.
+function vs_online_rating_sync_class()
+{
+    if (!variable_global_exists("rscore") || !vs_online_rscore_ok(global.rscore)) return;
+    var info = undefined;
+    try { info = get_rating_class_info(global.rscore); } catch (_e0) { return; }
+    if (info == undefined) return;
+    with (all)
+    {
+        if (variable_instance_exists(id, "ratingclass"))
+            ratingclass = info;
+    }
+}
+
+// Custom local B40 is incomplete (customs skipped, completion forced 0).
+// After get_current_ratingscore() wipes the display to 0.000, restore the
+// last known server/cache value immediately — not only on results screens.
+function vs_online_rscore_after_local()
 {
     if (!vs_online_is_custom()) return;
-    if (!variable_global_exists("rscore_last")) return;
-    if (!(instance_exists(o_2023results) || instance_exists(obj_results) || instance_exists(obj_resultsOld))) return;
-    global.rscore = global.rscore_last;
+    var local = 0;
+    if (variable_global_exists("rscore") && vs_online_rscore_ok(global.rscore))
+        local = global.rscore;
+    var cached = vs_online_rating_cache_read();
+    var last = 0;
+    if (variable_global_exists("rscore_last") && vs_online_rscore_ok(global.rscore_last))
+        last = global.rscore_last;
+    var keep = max(cached, last);
+    if (keep <= 0) return;
+    // Prefer cache/last whenever local calc is empty or clearly behind.
+    if (local <= 0 || local < keep)
+    {
+        global.rscore = keep;
+        global.rscore_last = keep;
+        vs_online_rating_sync_class();
+    }
+}
+
+function vs_online_rscore_keep_last()
+{
+    // Kept for older call sites / results; prefer after_local everywhere.
+    vs_online_rscore_after_local();
 }
 
 function vs_online_rating_refresh()
@@ -2023,6 +2062,7 @@ function vs_online_rating_lb_friends_done(_ok, _data, _status)
 
 function vs_online_rating_show_gain()
 {
+    vs_online_rating_sync_class();
     if (!instance_exists(o_2023results)) return;
     if (instance_exists(o_2023res_playerwindow))
     {
@@ -2048,7 +2088,10 @@ function vs_online_rating_card_done(_ok, _data, _status)
     {
         global.rscore = vs_online_rscore_from_card(_data);
         vs_online_rating_cache_write(global.rscore);
+        vs_online_rating_sync_class();
+        // show_gain compares against rscore_last — update last after the popup check.
         vs_online_rating_show_gain();
+        global.rscore_last = global.rscore;
         if (global.rscore >= 2000) unlock_achievement("rating_2000");
         if (global.rscore >= 5000) unlock_achievement("rating_5000");
         if (global.rscore >= 8000) unlock_achievement("rating_8000");
@@ -2071,6 +2114,15 @@ function vs_online_rscore_ok(_v)
     return is_real(_v) && _v == _v && _v >= 0 && _v < 30000;
 }
 
+function vs_online_rscore_norm_thousandths(_v)
+{
+    // Official rscore is thousandths (8.439 display == 8439). Some API fields
+    // arrive as display floats; class colour then stays at the grey unrated band.
+    if (!is_real(_v) || _v != _v || _v <= 0) return 0;
+    if (_v < 100) return round(_v * 1000);
+    return round(_v);
+}
+
 function vs_online_rscore_from_card(_data)
 {
     // Official rscore is thousandths (display / 1000). The old card field did
@@ -2079,13 +2131,16 @@ function vs_online_rscore_from_card(_data)
     // and get_rating_class_info then reads class_ranges[last+1] and crashes.
     var fromRating = 0;
     var hasRating = variable_struct_exists(_data, "rating");
-    if (hasRating) fromRating = vs_http_num(_data.rating, 0);
+    if (hasRating) fromRating = vs_online_rscore_norm_thousandths(vs_http_num(_data.rating, 0));
     var b30 = 0;
     var e10 = 0;
     if (variable_struct_exists(_data, "best30")) b30 = vs_http_num(_data.best30, 0);
     if (variable_struct_exists(_data, "ex10")) e10 = vs_http_num(_data.ex10, 0);
     // completion: 0 on custom server — do not fold it into the total.
-    var fromParts = round(b30 * 1000 + e10 * 1000);
+    // best30/ex10 may also be display floats.
+    if (b30 > 0 && b30 < 100) b30 = b30 * 1000;
+    if (e10 > 0 && e10 < 100) e10 = e10 * 1000;
+    var fromParts = round(b30 + e10);
     if (hasRating && vs_online_rscore_ok(fromRating)) return fromRating;
     if (vs_online_rscore_ok(fromParts)) return fromParts;
     return 0;

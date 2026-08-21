@@ -492,7 +492,7 @@
     {
         "Entry": "gml_GlobalScript_rating_functions",
         "Find": "global.rscore = get_current_ratingscore();",
-        "Value": "global.rscore = get_current_ratingscore();\n    vs_online_rscore_keep_last();",
+        "Value": "global.rscore = get_current_ratingscore();\n    vs_online_rscore_after_local();",
         "Type": 1
     },
     {
