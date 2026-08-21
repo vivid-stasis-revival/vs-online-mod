@@ -5,7 +5,7 @@ function vs_lobby_legacy_enabled()
 {
     if (variable_global_exists("op_vs_legacy_lobby"))
         return global.op_vs_legacy_lobby == 1;
-    // Options screen may not have run yet — read the saved preference.
+    // Options screen may not have run yet - read the saved preference.
     return vs_online_opt_read_legacy_lobby() == 1;
 }
 
