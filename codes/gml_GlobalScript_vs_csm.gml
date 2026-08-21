@@ -586,9 +586,12 @@ function readShatterInfo(dir, rel)
     songInfo.chart_load_dir = dir;
     songInfo.is_custom = true;
     songInfo.song_id = array_length(global.shatter_list);
+    // Shatter-only folders often ship ENCORE.vsc. Dual folders (info.json +
+    // shatterinfo.json) keep the song's ENCORE chart — do not claim it.
     if (!variable_struct_exists(songInfo, "difficulty_name") || string(songInfo.difficulty_name) == "")
     {
-        if (vs_csm_chart_file_exists(dir, "ENCORE")) songInfo.difficulty_name = "ENCORE";
+        if (!file_exists(dir + "info.json") && vs_csm_chart_file_exists(dir, "ENCORE"))
+            songInfo.difficulty_name = "ENCORE";
     }
 
     var audName = variable_struct_exists(songInfo, "audio_id") ? songInfo.audio_id : "music.ogg";
@@ -773,11 +776,10 @@ function CustomSongReader()
         {
             var e = entries[i];
             var key = string_lower(e.name);
-            if (file_exists(e.dir + "shatterinfo.json"))
-            {
-                continue;
-            }
-            else if (file_exists(e.dir + "info.json"))
+            // Dual folders ship info.json + shatterinfo.json together. Only
+            // shatter-only dirs are skipped here; CustomShatterReader still
+            // registers the paired shatter from the same path.
+            if (file_exists(e.dir + "info.json"))
             {
                 if (variable_struct_exists(seenCharts, key)) continue;
                 var songRel = "Custom Songs/" + e.name + "/";
@@ -790,6 +792,10 @@ function CustomSongReader()
                 if (cid != "") variable_struct_set(seenCharts, cid, true);
                 array_push(customSongList, array_length(global.song_list));
                 array_push(global.song_list, songInfo);
+            }
+            else if (file_exists(e.dir + "shatterinfo.json"))
+            {
+                continue;
             }
             else if (file_exists(e.dir + "songpack_info.json"))
             {
@@ -808,7 +814,6 @@ function CustomSongReader()
         for (var j = 0; j < array_length(children); j++)
         {
             var c = children[j];
-            if (file_exists(c.dir + "shatterinfo.json")) continue;
             if (!file_exists(c.dir + "info.json")) continue;
             var ck = string_lower(packJobs[p].name + "/" + c.name);
             if (variable_struct_exists(seenCharts, ck)) continue;
