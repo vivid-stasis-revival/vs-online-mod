@@ -1982,18 +1982,52 @@ function vs_online_rating_ensure_window_arrays()
         array_push(global.rsw_ex_top10, new ex_rating_entry(0, 0, 0, 1, 0));
 }
 
+// Resolve where surface_save("rating.png") actually landed.
+function vs_online_rating_image_path(_file)
+{
+    var name = filename_name(string(_file));
+    if (name == "") name = "rating.png";
+    var cands = [];
+    // Charts folder button uses game_save_id — prefer that first.
+    try
+    {
+        if (game_save_id != undefined && game_save_id != "")
+            array_push(cands, game_save_id + name);
+    }
+    catch (_e0) {}
+    array_push(cands, working_directory + name);
+    array_push(cands, working_directory + string(_file));
+    array_push(cands, string(_file));
+    var i = 0;
+    repeat (array_length(cands))
+    {
+        if (file_exists(cands[i])) return cands[i];
+        i++;
+    }
+    return "";
+}
+
 // Open a locally saved rating.png with the OS default viewer (custom share).
 function vs_online_rating_open_image(_file)
 {
     if (_file == undefined || _file == "") return;
-    var path = string(_file);
-    var abs = path;
-    if (!(string_pos(":", path) == 2 || string_char_at(path, 1) == "/" || string_char_at(path, 1) == "\\"))
-        abs = working_directory + path;
-    if (!file_exists(abs) && file_exists(path))
-        abs = path;
-    if (!file_exists(abs)) return;
-    execute_shell_simple(abs);
+    var abs = vs_online_rating_image_path(_file);
+    if (abs == "") return;
+    if (os_type == os_windows)
+    {
+        abs = string_replace_all(abs, "/", "\\");
+        // Match obj_open_file_directory_button — explorer on a full path.
+        execute_shell_simple("explorer.exe", abs);
+    }
+    else
+        execute_shell_simple(abs, "", "open");
+}
+
+function vs_online_rating_open_image_later()
+{
+    var st = vs_online_rating_gen_st();
+    var f = variable_struct_exists(st, "open_file") ? st.open_file : "rating.png";
+    vs_online_rating_open_image(f);
 }
 
 // --- custom generate: fetch server card → local PNG → open ---------------
@@ -2061,7 +2095,9 @@ function vs_online_rating_gen_on_card(_seq, _ok, _data)
         vs_online_rating_fill_window(_data);
         var file = "rating.png";
         generate_rating_image(st.bg, st.incl_title, st.incl_constants, file);
-        vs_online_rating_open_image(file);
+        // surface_save may not be visible to file_exists until next frame.
+        st.open_file = file;
+        call_later(2, time_source_units_frames, vs_online_rating_open_image_later);
     }
     // Only clear if this response still owns the wait (cancel bumps seq).
     if (_seq == st.seq)
