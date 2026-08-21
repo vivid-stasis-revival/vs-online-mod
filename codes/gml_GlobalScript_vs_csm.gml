@@ -979,6 +979,9 @@ function vs_csm_hs_store_combo(_id, _diff, _combo)
     save_highscores();
 }
 
+// Startup sync: overwrite local PB for download-manager (online) charts from
+// /scores/me. Manual/local customs and official songs are left alone. Failures
+// are silent. Persistence goes only to custom_highscore (never highscore_table).
 function vs_csm_scores_merge_start()
 {
     if (!vs_online_is_custom() || !vs_online_is_account()) return;
@@ -990,6 +993,7 @@ function vs_csm_scores_merge_start()
     {
         var song = global.song_list[i];
         if (song == undefined || !variable_struct_exists(song, "is_custom")) continue;
+        if (!vs_dlmgr_tracked(song.chart_id)) continue;
         for (var d = 0; d < 5; d++)
         {
             var row = undefined;
@@ -1016,6 +1020,7 @@ function vs_csm_scores_merge_start()
         {
             var sh = global.shatter_list[s];
             if (sh == undefined || !variable_struct_exists(sh, "is_custom")) continue;
+            if (!vs_dlmgr_tracked(sh.chart_id)) continue;
             var srow = (s < array_length(global.highscores.shatter)) ? global.highscores.shatter[s] : undefined;
             var sha2 = vs_online_chart_sha1(sh.chart_id, sh.difficulty_name);
             var loc2 = vs_csm_row_score(srow);
@@ -1032,54 +1037,124 @@ function vs_csm_scores_merge_start()
             });
         }
     }
-    global.vs_csm_merge = { jobs: jobs, idx: 0 };
+    if (array_length(jobs) <= 0) return;
+    var seq = 1;
+    if (variable_global_exists("vs_csm_merge_seq") && is_real(global.vs_csm_merge_seq))
+        seq = global.vs_csm_merge_seq + 1;
+    global.vs_csm_merge_seq = seq;
+    global.vs_csm_merge = { jobs: jobs, idx: 0, dirty: [], seq: seq };
     vs_csm_scores_merge_next();
+}
+
+function vs_csm_scores_merge_alive()
+{
+    if (!variable_global_exists("vs_csm_merge") || global.vs_csm_merge == undefined) return false;
+    if (!variable_global_exists("vs_csm_merge_seq")) return false;
+    var st = global.vs_csm_merge;
+    return variable_struct_exists(st, "seq") && st.seq == global.vs_csm_merge_seq;
 }
 
 function vs_csm_scores_merge_next()
 {
-    if (!variable_global_exists("vs_csm_merge")) return;
+    if (!vs_csm_scores_merge_alive()) return;
     var st = global.vs_csm_merge;
-    if (st.idx >= array_length(st.jobs)) return;
+    if (st.idx >= array_length(st.jobs))
+    {
+        vs_csm_scores_merge_flush();
+        return;
+    }
     var job = st.jobs[st.idx];
     vs_online_get_my_chart_score(job.chart_id, job.diff, job.sha1, vs_csm_scores_merge_done);
 }
 
 function vs_csm_scores_merge_apply(_job, _server)
 {
-    var local_ = _job.local_score;
-    if (local_ == undefined) local_ = 0;
-    if (_server > local_)
+    if (_job == undefined) return;
+    if (_server == undefined || !is_real(_server)) _server = 0;
+    _server = floor(real(_server));
+    if (_server < 0) _server = 0;
+
+    var row = undefined;
+    var at = undefined;
+    if (_job.kind == 0)
     {
-        var row = undefined;
-        if (_job.kind == 0)
-        {
-            if (_job.index < array_length(global.highscores.normal)
-                && _job.diff_i < array_length(global.highscores.normal[_job.index]))
-            {
-                row = global.highscores.normal[_job.index][_job.diff_i];
-                variable_struct_set(row, "score", _server);
-            }
-        }
-        else if (_job.index < array_length(global.highscores.shatter))
-        {
-            row = global.highscores.shatter[_job.index];
-            variable_struct_set(row, "score", _server);
-        }
+        if (_job.index < array_length(global.highscores.normal)
+            && _job.diff_i < array_length(global.highscores.normal[_job.index]))
+            row = global.highscores.normal[_job.index][_job.diff_i];
+        if (variable_global_exists("highscores_at_load")
+            && _job.index < array_length(global.highscores_at_load.normal)
+            && _job.diff_i < array_length(global.highscores_at_load.normal[_job.index]))
+            at = global.highscores_at_load.normal[_job.index][_job.diff_i];
     }
+    else if (_job.kind == 1)
+    {
+        if (_job.index < array_length(global.highscores.shatter))
+            row = global.highscores.shatter[_job.index];
+        if (variable_global_exists("highscores_at_load")
+            && _job.index < array_length(global.highscores_at_load.shatter))
+            at = global.highscores_at_load.shatter[_job.index];
+    }
+    if (row == undefined) return;
+
+    var cur = vs_csm_row_score(row);
+    if (cur == _server) return;
+
+    variable_struct_set(row, "score", _server);
+    if (at != undefined) variable_struct_set(at, "score", _server);
+
+    if (!vs_csm_scores_merge_alive()) return;
+    var st = global.vs_csm_merge;
+    if (!variable_struct_exists(st, "dirty") || !is_array(st.dirty)) st.dirty = [];
+    array_push(st.dirty, { chart_id: _job.chart_id, diff: _job.diff, score: _server });
+}
+
+function vs_csm_scores_merge_flush()
+{
+    if (!vs_csm_scores_merge_alive()) return;
+    var st = global.vs_csm_merge;
+    var dirty = variable_struct_exists(st, "dirty") ? st.dirty : undefined;
+    if (dirty == undefined || !is_array(dirty) || array_length(dirty) <= 0)
+    {
+        global.vs_csm_merge = undefined;
+        return;
+    }
+    try
+    {
+        ini_open(working_directory + "custom_highscore");
+        for (var i = 0; i < array_length(dirty); i++)
+        {
+            var e = dirty[i];
+            if (e == undefined) continue;
+            var cid = string(struct_get_fallback(e, "chart_id", ""));
+            var diff = string(struct_get_fallback(e, "diff", ""));
+            if (cid == "" || diff == "") continue;
+            ini_write_real(cid, diff, real(struct_get_fallback(e, "score", 0)));
+        }
+        ini_close();
+    }
+    catch (_e)
+    {
+        try { ini_close(); } catch (_e2) { }
+    }
+    global.vs_csm_merge = undefined;
 }
 
 function vs_csm_scores_merge_done(_ok, _data, _status)
 {
-    if (!variable_global_exists("vs_csm_merge")) return;
+    if (!vs_csm_scores_merge_alive()) return;
     var st = global.vs_csm_merge;
     if (st.idx >= array_length(st.jobs)) return;
     var job = st.jobs[st.idx];
-    var server_ = 0;
-    if (_ok && _data != undefined && variable_struct_exists(_data, "found") && _data.found)
-        server_ = variable_struct_get(_data, "score");
-    if (server_ == undefined) server_ = 0;
-    vs_csm_scores_merge_apply(job, server_);
+    // HTTP / parse failure: leave local alone (silent).
+    if (_ok)
+    {
+        var server_ = 0;
+        if (_data != undefined && variable_struct_exists(_data, "found") && _data.found)
+            server_ = variable_struct_get(_data, "score");
+        if (server_ == undefined || !is_real(server_)) server_ = 0;
+        vs_csm_scores_merge_apply(job, server_);
+    }
+    if (!vs_csm_scores_merge_alive()) return;
     st.idx += 1;
     vs_csm_scores_merge_next();
 }
