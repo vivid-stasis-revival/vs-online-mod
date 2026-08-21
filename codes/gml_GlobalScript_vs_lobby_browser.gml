@@ -120,6 +120,7 @@ function vs_lobby_browser_clamp()
     if (on_page <= 0)
     {
         st.list_i = 0;
+        if (st.focus == 1) st.focus = 0;
     }
     else if (st.list_i >= on_page)
     {
@@ -148,14 +149,19 @@ function vs_lobby_browser_list_done(_ok, _data, _status)
 {
     var st = vs_lobby_browser_st();
     st.inflight = max(0, st.inflight - 1);
+    // Drop late responses after leaving the landing (entered a room / closed UI).
+    if (!instance_exists(obj_multiplayer_lobby) || vs_lobby_lobby_id() > 0 || !vs_lobby_browser_active())
+    {
+        st.loading = st.inflight > 0;
+        return;
+    }
     var rows = [];
     if (_ok && _data != undefined && variable_struct_exists(_data, "lobbies") && is_array(_data.lobbies))
         rows = _data.lobbies;
     // HTTP is serialized; each response is applied. Last response wins.
     st.raw = rows;
     st.loading = st.inflight > 0;
-    if (instance_exists(obj_multiplayer_lobby))
-        obj_multiplayer_lobby.lobbyCount = array_length(rows);
+    obj_multiplayer_lobby.lobbyCount = array_length(rows);
     vs_lobby_browser_clamp();
     vs_lobby_count_schedule();
 }
@@ -211,10 +217,12 @@ function vs_lobby_browser_do_list()
     if (idx < 0 || idx >= array_length(rows)) return;
     var row = rows[idx];
     if (!vs_lobby_browser_row_joinable(row)) return;
-    var code = variable_struct_exists(row, "code") ? string(row.code) : "";
-    if (code == "") return;
-    vs_lobby_log("ui browser join code=" + code);
-    vs_lobby_join(code, vs_lobby_browser_after_enter);
+    // Avoid local name `code` — vsml has rewritten JSON keys from enclosing locals.
+    var invite = "";
+    if (variable_struct_exists(row, "code")) invite = string(variable_struct_get(row, "code"));
+    if (invite == "") return;
+    vs_lobby_log("ui browser join code=" + invite);
+    vs_lobby_join(invite, vs_lobby_browser_after_enter);
 }
 
 function vs_lobby_browser_step()
@@ -252,8 +260,13 @@ function vs_lobby_browser_step()
         }
         if (down)
         {
-            st.focus = 1;
-            play_se(sfx_songsel_cursor);
+            // Only enter list focus when there is something to select.
+            var rowsDown = vs_lobby_browser_filtered();
+            if (array_length(rowsDown) > 0 && !st.loading)
+            {
+                st.focus = 1;
+                play_se(sfx_songsel_cursor);
+            }
         }
         if (input_check_pressed(4))
         {
@@ -421,9 +434,11 @@ function vs_lobby_browser_draw()
                 if (string_length(host) > 14) host = string_copy(host, 1, 13) + ".";
                 var cur = variable_struct_exists(row, "memberCount") ? string(floor(row.memberCount)) : "0";
                 var mx = variable_struct_exists(row, "maxMembers") ? string(floor(row.maxMembers)) : "?";
-                var code = variable_struct_exists(row, "code") ? string(row.code) : "";
+                // Prefer struct_get for "code" — same vsml footgun as join JSON keys.
+                var invite = "";
+                if (variable_struct_exists(row, "code")) invite = string(variable_struct_get(row, "code"));
                 var mark = joinable ? "" : " [X]";
-                draw_text(16, ry + 4, host + "  " + cur + "/" + mx + "  " + code + mark);
+                draw_text(16, ry + 4, host + "  " + cur + "/" + mx + "  " + invite + mark);
                 ri++;
             }
         }
