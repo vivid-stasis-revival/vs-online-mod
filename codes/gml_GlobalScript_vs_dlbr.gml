@@ -1079,12 +1079,12 @@ function vs_dlbr_step()
             return;
         }
 
-        if (keyboard_check_pressed(vk_up))
+        if (keyboard_check_pressed(vk_up) || mouse_wheel_up())
         {
             sel = (sel + ln - 1) % ln;
             vs_dlbr_set_status(local_rows[sel].pack + "  " + local_rows[sel].name);
         }
-        else if (keyboard_check_pressed(vk_down))
+        else if (keyboard_check_pressed(vk_down) || mouse_wheel_down())
         {
             sel = (sel + 1) % ln;
             vs_dlbr_set_status(local_rows[sel].pack + "  " + local_rows[sel].name);
