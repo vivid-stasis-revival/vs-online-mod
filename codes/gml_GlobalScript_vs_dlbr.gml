@@ -1790,7 +1790,8 @@ function vs_dlbr_active_chart()
             }
             i++;
         }
-        if (array_length(detail.charts) > 0) return detail.charts[detail_diff_i];
+        if (detail_diff_i >= 0 && detail_diff_i < array_length(detail.charts))
+            return detail.charts[detail_diff_i];
     }
     return undefined;
 }

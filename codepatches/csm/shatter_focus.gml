@@ -14,6 +14,7 @@ if (want >= 0)
     for (var i = 0; i < array_length(songs); i++)
     {
         var idx = songs[i][0];
+        if (idx < 0 || idx >= array_length(song_list)) continue;
         var sh = song_list[idx];
         if (idx == want || (sh != undefined && sh.song_id == want))
         {
@@ -24,8 +25,12 @@ if (want >= 0)
     if (array_length(songs) > 0)
     {
         if (cursor_pos < 0 || cursor_pos >= array_length(songs)) cursor_pos = 0;
-        selected_song = song_list[songs[cursor_pos][0]];
-        play_preview(selected_song.preview_id);
+        var selIdx = songs[cursor_pos][0];
+        if (selIdx >= 0 && selIdx < array_length(song_list))
+        {
+            selected_song = song_list[selIdx];
+            play_preview(selected_song.preview_id);
+        }
     }
 }
 global.force_song_select = -1;

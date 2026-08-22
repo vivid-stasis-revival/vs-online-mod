@@ -316,6 +316,7 @@ function vs_chartmeta_shatter_http(_ok, _data, _status)
 
 function vs_chartmeta_finish(_ok)
 {
+    if (!vs_online_is_custom()) return;
     var st = vs_chartmeta_slot();
     var cid = st.pending;
     st.pending = "";
@@ -2085,11 +2086,14 @@ function vs_lobby_build_member(_mv)
 function vs_lobby_apply_roster(_members)
 {
     if (!instance_exists(o_st_handle)) return;
+    if (!is_array(_members)) _members = [];
     var prevById = {};
     var pidx = 0;
-    repeat (array_length(o_st_handle.lobbyMembers))
+    var prevMembers = o_st_handle.lobbyMembers;
+    if (!is_array(prevMembers)) prevMembers = [];
+    repeat (array_length(prevMembers))
     {
-        var pm = o_st_handle.lobbyMembers[pidx];
+        var pm = prevMembers[pidx];
         if (pm != undefined)
         {
             variable_struct_set(prevById, string(pm.id), pm);
@@ -2166,10 +2170,12 @@ function vs_lobby_json_true(_v)
 function vs_lobby_remove_member(_id)
 {
     if (!instance_exists(o_st_handle)) return;
+    if (!is_array(o_st_handle.lobbyMembers)) return;
     var i = 0;
     repeat (array_length(o_st_handle.lobbyMembers))
     {
-        if (o_st_handle.lobbyMembers[i].id != undefined && string(o_st_handle.lobbyMembers[i].id) == string(_id))
+        var m = o_st_handle.lobbyMembers[i];
+        if (m != undefined && m.id != undefined && string(m.id) == string(_id))
         {
             array_delete(o_st_handle.lobbyMembers, i, 1);
             vs_lobby_spi_unmark(_id);
@@ -2470,6 +2476,7 @@ function vs_lobby_fetch_members_done(_ok, _data, _status)
     global.vs_lobby_mem_http = false;
     var again = variable_global_exists("vs_lobby_mem_again") && global.vs_lobby_mem_again == true;
     global.vs_lobby_mem_again = false;
+    if (!vs_online_is_custom()) return;
     if (_ok && _data != undefined && variable_struct_exists(_data, "members") && is_array(_data.members) && instance_exists(o_st_handle) && vs_lobby_has_code())
     {
         vs_lobby_apply_roster(_data.members);

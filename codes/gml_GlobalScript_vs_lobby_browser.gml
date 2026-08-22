@@ -52,6 +52,8 @@ function vs_lobby_browser_st()
 function vs_lobby_browser_boot()
 {
     if (!vs_lobby_browser_active()) return;
+    if (variable_global_exists("op_autoplay"))
+        global.hadAutoplay = global.op_autoplay;
     var st = vs_lobby_browser_st();
     st.focus = 0;
     st.top_i = 0;
@@ -317,7 +319,8 @@ function vs_lobby_browser_leave_landing()
     with (obj_multiplayer_lobby)
     {
         global.multiplayerLobby = false;
-        global.op_autoplay = global.hadAutoplay;
+        if (variable_global_exists("hadAutoplay"))
+            global.op_autoplay = global.hadAutoplay;
         global.hadAutoplay = undefined;
         audio_stop_all();
         play_se(sfx_songsel_beginsong);

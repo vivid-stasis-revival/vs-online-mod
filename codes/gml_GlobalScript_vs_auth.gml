@@ -20,7 +20,8 @@ function vs_auth_note(_msg)
 function vs_auth_flow_started(_ok, _data, _status)
 {
     busy = false;
-    if (_ok && _data != undefined)
+    if (_ok && _data != undefined
+        && variable_struct_exists(_data, "device_code") && variable_struct_exists(_data, "user_code"))
     {
         stage = 1;
         device_code = _data.device_code;

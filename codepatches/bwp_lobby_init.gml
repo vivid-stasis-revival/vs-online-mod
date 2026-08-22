@@ -14,7 +14,7 @@ if (vs_online_is_custom())
         vs_lobby_refresh_count();
     if (vs_lobby_has_code())
     {
-        vs_lobby_log("ui lobby return members=" + string(array_length(o_st_handle.lobbyMembers)));
+        vs_lobby_log("ui lobby return members=" + string(is_array(o_st_handle.lobbyMembers) ? array_length(o_st_handle.lobbyMembers) : 0));
         vs_lobby_ws_ensure();
         if (vs_lobby_is_owner()) vs_lobby_host_sync("lobby room");
     }

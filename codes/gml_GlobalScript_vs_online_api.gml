@@ -852,7 +852,7 @@ function vs_http_finish(_job, _ok, _text, _status)
     }
     if (after == "create_player")
     {
-        if (_ok && data != undefined)
+        if (_ok && data != undefined && variable_struct_exists(data, "playerId") && variable_struct_exists(data, "token"))
         {
             var cfg = vs_online_get_config();
             cfg.playerId = data.playerId;
@@ -1317,6 +1317,12 @@ function vs_online_score_log(_msg)
     vs_songstore_log("SCORE " + string(_msg));
 }
 
+function vs_online_score_count(_gname)
+{
+    if (!variable_global_exists(_gname)) return 0;
+    return variable_global_get(_gname);
+}
+
 function vs_online_score_play_flags()
 {
     var gauge = "";
@@ -1328,7 +1334,9 @@ function vs_online_score_play_flags()
     }
     var judged = 0;
     if (variable_global_exists("count_miss"))
-        judged = global.count_acrit + global.count_crit + global.count_great + global.count_good + global.count_miss;
+        judged = vs_online_score_count("count_acrit") + vs_online_score_count("count_crit")
+            + vs_online_score_count("count_great") + vs_online_score_count("count_good")
+            + vs_online_score_count("count_miss");
     var notes = variable_global_exists("notecount") ? global.notecount : -1;
     return "failed=" + string(variable_global_exists("failed") && global.failed)
         + " autoplay=" + string(variable_global_exists("op_autoplay") && global.op_autoplay)
@@ -1374,7 +1382,7 @@ function vs_online_score_clear_type()
 {
     if (variable_global_exists("failed") && global.failed) return 0;
     if (!variable_global_exists("count_miss") || global.count_miss != 0) return 0;
-    if (global.count_great == 0 && global.count_good == 0) return 2;
+    if (vs_online_score_count("count_great") == 0 && vs_online_score_count("count_good") == 0) return 2;
     return 1;
 }
 
@@ -1432,11 +1440,11 @@ function vs_online_score_body_json(_chartId, _difficulty, _sha1, _pts, _verified
         var nc = vs_online_score_note_count();
         if (nc > 0)
         {
-            var ac = floor(real(global.count_acrit));
-            var cr = floor(real(global.count_crit));
-            var gr = floor(real(global.count_great));
-            var gd = floor(real(global.count_good));
-            var ms = floor(real(global.count_miss));
+            var ac = floor(real(vs_online_score_count("count_acrit")));
+            var cr = floor(real(vs_online_score_count("count_crit")));
+            var gr = floor(real(vs_online_score_count("count_great")));
+            var gd = floor(real(vs_online_score_count("count_good")));
+            var ms = floor(real(vs_online_score_count("count_miss")));
             var mc = variable_global_exists("maxcombo") ? floor(real(global.maxcombo)) : 0;
             var ct = vs_online_score_clear_type();
             out += ",\"acrit\":" + string(ac)
@@ -1840,6 +1848,7 @@ function vs_online_lb_download(_inst, _mode)
     {
         return;
     }
+    if (!is_struct(_inst.song) || !variable_struct_exists(_inst.song, "chart_id")) return;
     var diffs = ["OPENING", "MIDDLE", "FINALE", "ENCORE", "PRELUDE"];
     var di = _inst.difficulty;
     if (di < 0 || di >= array_length(diffs)) return;
@@ -1936,6 +1945,7 @@ function vs_online_highscore_file(_orig)
 
 function vs_online_highscore_is_dev()
 {
+    if (!variable_global_exists("highscore_file")) return false;
     return string_pos("highscore_table_dev", string(global.highscore_file)) > 0;
 }
 
@@ -2201,6 +2211,7 @@ function vs_online_rating_lb_friends_done(_ok, _data, _status)
 
 function vs_online_rating_show_gain()
 {
+    if (!variable_global_exists("rscore") || !vs_online_rscore_ok(global.rscore)) return;
     vs_online_rating_sync_class();
     if (!instance_exists(o_2023results)) return;
     if (instance_exists(o_2023res_playerwindow))

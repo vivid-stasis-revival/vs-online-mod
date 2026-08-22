@@ -323,7 +323,7 @@ function vs_ws_dispatch_payload()
     // Classify by payload, not message_type. Runner WSS often tags binary
     // relay frames as text; sender-len 36 is ASCII `$`, which is not JSON.
     var first = 0;
-    if (dataSize > 0)
+    if (dataSize > 0 && dataBuf != undefined && buffer_exists(dataBuf))
     {
         first = buffer_peek(dataBuf, 0, buffer_u8);
     }
@@ -334,7 +334,7 @@ function vs_ws_dispatch_payload()
     }
 
     var payload = buffer_create(max(dataSize, 1), buffer_fixed, 1);
-    if (dataSize > 0)
+    if (dataSize > 0 && dataBuf != undefined && buffer_exists(dataBuf))
     {
         buffer_copy(dataBuf, 0, dataSize, payload, 0);
     }

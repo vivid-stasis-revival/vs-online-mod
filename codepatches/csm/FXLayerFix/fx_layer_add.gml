@@ -28,7 +28,9 @@ fx_set_parameter(hueFX, "g_HueShift", 0);
 fx_set_parameter(hueFX, "g_HueSaturation",1);
 
 //chorma Init
-fx_set_parameter(layer_get_fx("FX_chroma"), "g_Distort2Amount", 0.01);
+var chromaFx = layer_get_fx("FX_chroma");
+if (chromaFx != undefined)
+    fx_set_parameter(chromaFx, "g_Distort2Amount", 0.01);
 
 layer_set_fx(redLayer, fx_create("_filter_colourise"));
 layer_set_fx(twirlLayer, fx_create("_filter_twirl_distort"));
