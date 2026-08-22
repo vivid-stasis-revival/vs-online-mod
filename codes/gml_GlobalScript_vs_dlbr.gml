@@ -1013,13 +1013,13 @@ function vs_dlbr_step()
             return;
         }
 
-        if (keyboard_check_pressed(vk_up))
+        if (keyboard_check_pressed(vk_up) || mouse_wheel_up())
         {
             note = "";
             sel = (sel + n - 1) % n;
             vs_dlbr_selected_refresh();
         }
-        else if (keyboard_check_pressed(vk_down))
+        else if (keyboard_check_pressed(vk_down) || mouse_wheel_down())
         {
             note = "";
             sel = (sel + 1) % n;
