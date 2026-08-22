@@ -115,7 +115,7 @@
     {
         "Entry": "gml_Object_obj_multiplayer_lobby_Create_0",
         "Find": "case \"hostlobby\":",
-        "Value": "case \"kick\": vs_lobby_ops_begin(\"kick\"); break;\n        case \"downloadchart\": vs_lobby_dl_go(); break;\n        case \"opendownloader\": vs_dlbr_open_from_lobby(); break;\n        case \"hostlobby\":",
+        "Value": "case \"kick\": if (vs_online_is_custom()) vs_lobby_ops_begin(\"kick\"); break;\n        case \"downloadchart\": if (vs_online_is_custom()) vs_lobby_dl_go(); break;\n        case \"opendownloader\": if (vs_online_is_custom()) vs_dlbr_open_from_lobby(); break;\n        case \"hostlobby\":",
         "Type": 0
     },
     {
@@ -199,7 +199,7 @@
     {
         "Entry": "gml_GlobalScript_SendQueuePacket",
         "Find": "        o_st_handle.songQueue = arg0;",
-        "Value": "        o_st_handle.songQueue = arg0; vs_lobby_dl_on_queue(); if (vs_online_is_custom()) vs_lobby_log(\"queue recv n=\" + string(array_length(arg0)));",
+        "Value": "        o_st_handle.songQueue = arg0; if (vs_online_is_custom()) { vs_lobby_dl_on_queue(); vs_lobby_fix_queue_diff(); vs_lobby_refresh_ui(); vs_lobby_log(\"queue recv n=\" + string(array_length(arg0))); }",
         "Type": 1
     },
     {
@@ -265,13 +265,13 @@
     {
         "Entry": "gml_Object_obj_multiplayer_lobby_Draw_64",
         "Find": "        var song = global.song_list[nextSong.songId];",
-        "Value": "        var song = vs_online_song_from_id(nextSong.songId);\n        if (song == undefined) song = vs_online_missing_song(vs_online_queue_chart_id(nextSong));",
+        "Value": "        var song = undefined;\n        if (vs_online_is_custom())\n        {\n            song = vs_online_song_from_id(nextSong.songId);\n            if (song == undefined) song = vs_online_missing_song(vs_online_queue_chart_id(nextSong));\n        }\n        else song = global.song_list[nextSong.songId];",
         "Type": 1
     },
     {
         "Entry": "gml_Object_obj_multiplayer_lobby_Draw_64",
         "Find": "        var song = global.song_list[lastSong.songId];",
-        "Value": "        var song = vs_online_song_from_id(lastSong.songId);\n        if (song == undefined) song = vs_online_missing_song(vs_online_queue_chart_id(lastSong));",
+        "Value": "        var song = undefined;\n        if (vs_online_is_custom())\n        {\n            song = vs_online_song_from_id(lastSong.songId);\n            if (song == undefined) song = vs_online_missing_song(vs_online_queue_chart_id(lastSong));\n        }\n        else song = global.song_list[lastSong.songId];",
         "Type": 1
     },
     {
@@ -385,13 +385,13 @@
     {
         "Entry": "gml_Object_o_st_handle_Create_0",
         "Find": "lobbyId = undefined;\nlobbyCode = undefined;\ncurrentMember = undefined;",
-        "Value": "lobbyId = undefined;\nlobbyCode = undefined;\nvs_hostId = undefined;\nsuggestQueue = [];\ncurrentMember = undefined;",
+        "Value": "lobbyId = undefined;\nlobbyCode = undefined;\nvs_hostId = undefined;\nsuggestQueue = [];\nsuggestTimer = 0;\ncurrentMember = undefined;",
         "Type": 1
     },
     {
         "Entry": "gml_Object_o_st_handle_Create_0",
         "Find": "lobbyId = undefined;\nlobbyCode = undefined;\nlobbyMembers = [];",
-        "Value": "lobbyId = undefined;\nlobbyCode = undefined;\nvs_hostId = undefined;\nsuggestQueue = [];\nlobbyMembers = [];",
+        "Value": "lobbyId = undefined;\nlobbyCode = undefined;\nvs_hostId = undefined;\nsuggestQueue = [];\nsuggestTimer = 0;\nlobbyMembers = [];",
         "Type": 1
     },
     {
@@ -695,13 +695,13 @@
     {
         "Entry": "gml_Object_obj_multiplayer_lobby_Create_0",
         "Find": "var s = o_st_handle.songQueue[0];",
-        "Value": "var q = vs_lobby_queue_confirm_song(); if (q == undefined) return; var s = o_st_handle.songQueue[0]; var song = struct_copy(q.song); if (!vs_lobby_song_has_diff(song, 3)) song.has_encore = false; if (variable_struct_exists(song, \"enc_data\")) song.allowed_difficulties = (s.difficulty == 3) ? [3] : [0, 1, 2];",
+        "Value": "var s = o_st_handle.songQueue[0]; var song = undefined; if (vs_online_is_custom()) { var q = vs_lobby_queue_confirm_song(); if (q == undefined) return; song = struct_copy(q.song); if (!vs_lobby_song_has_diff(song, 3)) song.has_encore = false; if (variable_struct_exists(song, \"enc_data\")) song.allowed_difficulties = (s.difficulty == 3) ? [3] : [0, 1, 2]; } else song = global.song_list[s.songId];",
         "Type": 0
     },
     {
         "Entry": "gml_Object_obj_multiplayer_lobby_Create_0",
         "Find": "select_difficulties: false",
-        "Value": "select_difficulties: !(variable_struct_exists(song, \"enc_data\") && s.difficulty == 3)",
+        "Value": "select_difficulties: vs_online_is_custom() && !(variable_struct_exists(song, \"enc_data\") && s.difficulty == 3)",
         "Type": 0
     },
     {
@@ -924,7 +924,7 @@
     {
         "Entry": "gml_Object_obj_multiplayer_lobby_Create_0",
         "Find": "case \"choosesong\":",
-        "Value": "case \"choosesong\":send_packet(SendReadyPacket, false);",
+        "Value": "case \"choosesong\":if (!vs_lobby_is_owner()) send_packet(SendReadyPacket, false);",
         "Type": 0
     },
     {
@@ -1007,13 +1007,13 @@
     {
         "Entry": "gml_GlobalScript_StartGamePacket",
         "Find": "                start_song(song.songId, song.difficulty, ",
-        "Value": "                if (vs_online_is_custom()) vs_lobby_resolve_song_ref(song);\n                if (vs_online_song_from_id(song.songId) == undefined) { if (vs_online_is_custom()) { vs_lobby_log(\"start_game skip missing songId=\" + string(song.songId)); send_packet(ReportScorePacket, { score_: 0, flag: 1 }); } }\n                else start_song(song.songId, global.songselect_difficulty, ",
+        "Value": "                if (vs_online_is_custom()) vs_lobby_resolve_song_ref(song);\n                if (vs_online_is_custom() && vs_online_song_from_id(song.songId) == undefined) { vs_lobby_log(\"start_game skip missing songId=\" + string(song.songId)); send_packet(ReportScorePacket, { score_: 0, flag: 1 }); }\n                else start_song(song.songId, vs_online_is_custom() ? global.songselect_difficulty : song.difficulty, ",
         "Type": 1
     },
     {
         "Entry": "gml_GlobalScript_SendPlayerInfoPacket",
         "Find": "        buffer_write(buffer, buffer_u8, global.highest_class);\n        return buffer;",
-        "Value": "        buffer_write(buffer, buffer_u8, global.highest_class);\n        buffer_write(buffer, buffer_bool, true);if (vs_online_is_custom()) { buffer_write(buffer, buffer_s8, vs_lobby_local_play_diff());buffer_write(buffer, buffer_u8, vs_lobby_local_autoplay() ? 1 : 0);buffer_write(buffer, buffer_u8, vs_lobby_local_need_dl() ? 1 : 0); }return buffer;",
+        "Value": "        buffer_write(buffer, buffer_u8, global.highest_class);\n        if (vs_online_is_custom()) { buffer_write(buffer, buffer_bool, true); buffer_write(buffer, buffer_s8, vs_lobby_local_play_diff()); buffer_write(buffer, buffer_u8, vs_lobby_local_autoplay() ? 1 : 0); buffer_write(buffer, buffer_u8, vs_lobby_local_need_dl() ? 1 : 0); }\n        return buffer;",
         "Type": 1
     },
     {
@@ -1469,13 +1469,13 @@
     {
         "Entry": "gml_GlobalScript_AddSongPacket",
         "Find": "return buffer;",
-        "Value": "buffer_write(buffer, buffer_string, vs_online_queue_chart_id(arg0));return buffer;",
+        "Value": "if (vs_online_is_custom()) buffer_write(buffer, buffer_string, vs_online_queue_chart_id(arg0));return buffer;",
         "Type": 1
     },
     {
         "Entry": "gml_GlobalScript_AddSongPacket",
         "Find": "buffer_delete(arg0);",
-        "Value": "try{obj.chart_id = buffer_read(arg0, buffer_string); obj.songId = vs_online_song_id_from_chart(obj.chart_id);}catch (ex){}buffer_delete(arg0);",
+        "Value": "if (vs_online_is_custom()) { try{obj.chart_id = buffer_read(arg0, buffer_string); obj.songId = vs_online_song_id_from_chart(obj.chart_id);}catch (ex){} }buffer_delete(arg0);",
         "Type": 1
     },
     {
@@ -1487,13 +1487,13 @@
     {
         "Entry": "gml_GlobalScript_ShadowSongPacket",
         "Find": "return buffer;",
-        "Value": "buffer_write(buffer, buffer_string, vs_online_queue_chart_id(arg0));return buffer;",
+        "Value": "if (vs_online_is_custom()) buffer_write(buffer, buffer_string, vs_online_queue_chart_id(arg0));return buffer;",
         "Type": 1
     },
     {
         "Entry": "gml_GlobalScript_ShadowSongPacket",
         "Find": "buffer_delete(arg0);",
-        "Value": "try{obj.chart_id = buffer_read(arg0, buffer_string); obj.songId = vs_online_song_id_from_chart(obj.chart_id);}catch (ex){}buffer_delete(arg0);",
+        "Value": "if (vs_online_is_custom()) { try{obj.chart_id = buffer_read(arg0, buffer_string); obj.songId = vs_online_song_id_from_chart(obj.chart_id);}catch (ex){} }buffer_delete(arg0);",
         "Type": 1
     },
     {

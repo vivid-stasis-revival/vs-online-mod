@@ -1,1 +1,2 @@
 suggestQueue = [];
+suggestTimer = 0;

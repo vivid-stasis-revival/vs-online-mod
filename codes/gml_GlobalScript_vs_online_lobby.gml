@@ -86,7 +86,33 @@ function vs_online_song_id_from_chart(_chart)
         }
         i++;
     }
-    return -1;
+    return vs_localcharts_song_id_in_list(want);
+}
+
+function vs_lobby_bind_queue_song_id(_s)
+{
+    if (_s == undefined) return false;
+    var cid = vs_online_queue_chart_id(_s);
+    if (cid != "") _s.chart_id = cid;
+    var sid = variable_struct_exists(_s, "songId") ? _s.songId : -1;
+    if (vs_online_song_from_id(sid) != undefined) return true;
+    if (cid == "") return false;
+    sid = vs_online_song_id_from_chart(cid);
+    if (sid >= 0)
+    {
+        _s.songId = sid;
+        return true;
+    }
+    if (vs_csm_has_official_chart(cid))
+    {
+        sid = vs_localcharts_song_id_in_list(cid);
+        if (sid >= 0)
+        {
+            _s.songId = sid;
+            return true;
+        }
+    }
+    return false;
 }
 
 function vs_online_song_from_id(_songId)
@@ -249,6 +275,7 @@ function vs_chartmeta_ingest_list(_data, _key)
 
 function vs_chartmeta_want(_cid)
 {
+    if (!vs_online_is_custom()) return;
     var cid = string(_cid);
     if (cid == "") return;
     if (vs_chartmeta_get(cid) != "") return;
@@ -339,6 +366,7 @@ function vs_lobby_queued_chart_id()
 
 function vs_lobby_resolve_queued_songs()
 {
+    if (!vs_online_is_custom()) return;
     if (!instance_exists(o_st_handle)) return;
     var i = 0;
     if (is_array(o_st_handle.songQueue))
@@ -356,13 +384,11 @@ function vs_lobby_resolve_queued_songs()
 
 function vs_lobby_resolve_song_ref(_s)
 {
+    if (!vs_online_is_custom()) return;
     if (_s == undefined) return;
+    if (vs_lobby_bind_queue_song_id(_s)) return;
     var cid = vs_online_queue_chart_id(_s);
-    if (cid == "") return;
-    _s.chart_id = cid;
-    var sid = vs_online_song_id_from_chart(cid);
-    if (sid >= 0) _s.songId = sid;
-    else vs_chartmeta_want(cid);
+    if (cid != "") vs_chartmeta_want(cid);
 }
 
 // After a lobby download, song_list grows but process_song_unlocks may not
@@ -535,6 +561,11 @@ function vs_lobby_sender_ok(_id)
     return true;
 }
 
+function vs_lobby_suggest_timeout_frames()
+{
+    return 60 * 30; // 30s @ 60fps
+}
+
 function vs_lobby_suggest_q()
 {
     if (!instance_exists(o_st_handle)) return [];
@@ -545,10 +576,70 @@ function vs_lobby_suggest_q()
     return o_st_handle.suggestQueue;
 }
 
+function vs_lobby_suggest_timer_reset()
+{
+    if (!instance_exists(o_st_handle)) return;
+    o_st_handle.suggestTimer = vs_lobby_suggest_timeout_frames();
+}
+
+function vs_lobby_suggest_timer_clear()
+{
+    if (!instance_exists(o_st_handle)) return;
+    o_st_handle.suggestTimer = 0;
+}
+
 function vs_lobby_suggest_clear()
 {
     if (!instance_exists(o_st_handle)) return;
     o_st_handle.suggestQueue = [];
+    vs_lobby_suggest_timer_clear();
+}
+
+function vs_lobby_suggest_is_mine(_s)
+{
+    if (_s == undefined || !variable_struct_exists(_s, "member")) return false;
+    return string(_s.member) == string(vs_online_player_id());
+}
+
+function vs_lobby_suggest_dismiss(_why)
+{
+    if (!instance_exists(o_st_handle)) return;
+    var had = array_length(vs_lobby_suggest_q()) > 0;
+    vs_lobby_suggest_clear();
+    if (!had) return;
+    vs_lobby_log("suggest dismiss " + string(_why));
+    send_packet(SuggestSongPacket, { songId: -1, difficulty: -1, chart_id: "" });
+}
+
+function vs_lobby_suggest_escape_pressed()
+{
+    if (input_check_pressed(5) || keyboard_check_pressed(vk_escape)) return true;
+    if (variable_global_exists("menu_cancel") && keyboard_check_pressed(global.menu_cancel)) return true;
+    return false;
+}
+
+function vs_lobby_suggest_room_ok()
+{
+    if (!vs_lobby_has_code()) return false;
+    if (vs_online_is_custom()) return vs_lobby_in_lobby();
+    return steam_lobby_get_lobby_id() != 0;
+}
+
+function vs_lobby_suggest_active()
+{
+    return vs_lobby_suggest_room_ok()
+        && array_length(vs_lobby_suggest_q()) > 0;
+}
+
+function vs_lobby_suggest_on_member_gone(_id)
+{
+    var q = vs_lobby_suggest_q();
+    if (array_length(q) <= 0) return;
+    var s = q[0];
+    if (s == undefined || !variable_struct_exists(s, "member")) return;
+    if (string(s.member) != string(_id)) return;
+    vs_lobby_log("suggest clear member gone id=" + string(_id));
+    vs_lobby_suggest_clear();
 }
 
 function vs_lobby_suggest_item_name(_s)
@@ -588,6 +679,7 @@ function vs_lobby_suggest_push(_s, _from)
         difficulty: variable_struct_exists(_s, "difficulty") ? _s.difficulty : 0,
         chart_id: cid
     }];
+    vs_lobby_suggest_timer_reset();
     vs_lobby_log("suggest recv chart=" + cid + " from=" + string(_from) + " songId=" + string(sid));
 }
 
@@ -597,10 +689,12 @@ function vs_lobby_suggest_accept()
     var q = vs_lobby_suggest_q();
     if (array_length(q) <= 0) return;
     var item = q[0];
-    array_delete(q, 0, 1);
     play_se(sfx_songsel_beginsong);
     vs_lobby_log("suggest accept chart=" + vs_online_queue_chart_id(item)
         + " songId=" + string(item.songId));
+    // Dismiss first so a lost AddSong does not leave the suggest overlay up.
+    send_packet(SuggestSongPacket, { songId: -1, difficulty: -1, chart_id: "" });
+    vs_lobby_suggest_clear();
     send_packet(AddSongPacket, item);
 }
 
@@ -611,31 +705,84 @@ function vs_lobby_suggest_ignore()
     if (array_length(q) <= 0) return;
     play_se(sfx_songsel_select);
     vs_lobby_log("suggest ignore chart=" + vs_online_queue_chart_id(q[0]));
-    vs_lobby_suggest_clear();
-    send_packet(SuggestSongPacket, { songId: -1, difficulty: -1, chart_id: "" });
+    vs_lobby_suggest_dismiss("host ignore");
+}
+
+function vs_lobby_suggest_tick()
+{
+    if (!instance_exists(o_st_handle)) return false;
+    if (!vs_lobby_suggest_room_ok())
+    {
+        if (array_length(vs_lobby_suggest_q()) > 0) vs_lobby_suggest_clear();
+        return false;
+    }
+    if (!variable_instance_exists(o_st_handle, "suggestTimer")) o_st_handle.suggestTimer = 0;
+    var q = vs_lobby_suggest_q();
+    if (array_length(q) <= 0)
+    {
+        vs_lobby_suggest_timer_clear();
+        return false;
+    }
+    if (o_st_handle.suggestTimer <= 0)
+    {
+        var s = q[0];
+        if (vs_lobby_is_owner())
+        {
+            vs_lobby_log("suggest timeout host auto-ignore");
+            vs_lobby_suggest_dismiss("timeout host");
+        }
+        else if (vs_lobby_suggest_is_mine(s))
+        {
+            vs_lobby_log("suggest timeout guest auto-cancel");
+            vs_lobby_suggest_dismiss("timeout guest");
+        }
+        else
+        {
+            vs_lobby_suggest_clear();
+        }
+        return array_length(vs_lobby_suggest_q()) > 0;
+    }
+    o_st_handle.suggestTimer -= 1;
+    return true;
 }
 
 function vs_lobby_suggest_step()
 {
-    if (!vs_online_is_custom()) return false;
-    if (!vs_lobby_is_owner()) return false;
+    var active = vs_lobby_suggest_tick();
     var q = vs_lobby_suggest_q();
-    if (array_length(q) <= 0) return false;
-    if (input_check_pressed(4) || keyboard_check_pressed(vk_enter))
+    if (array_length(q) <= 0) return active;
+    var s = q[0];
+    if (vs_lobby_is_owner())
     {
-        vs_lobby_suggest_accept();
+        if (input_check_pressed(4) || keyboard_check_pressed(vk_enter))
+        {
+            vs_lobby_suggest_accept();
+        }
+        else if (vs_lobby_suggest_escape_pressed())
+        {
+            vs_lobby_suggest_ignore();
+        }
+        return true;
     }
-    else if (input_check_pressed(5) || keyboard_check_pressed(vk_escape))
+    if (vs_lobby_suggest_is_mine(s) && vs_lobby_suggest_escape_pressed())
     {
-        vs_lobby_suggest_ignore();
+        play_se(sfx_songsel_select);
+        vs_lobby_log("suggest cancel guest chart=" + vs_online_queue_chart_id(s));
+        vs_lobby_suggest_dismiss("guest cancel");
+        return true;
+    }
+    if (vs_lobby_suggest_escape_pressed())
+    {
+        vs_lobby_log("suggest hide spectator chart=" + vs_online_queue_chart_id(s));
+        vs_lobby_suggest_clear();
+        return active;
     }
     return true;
 }
 
 function vs_lobby_suggest_draw()
 {
-    if (!vs_online_is_custom()) return;
-    if (vs_lobby_lobby_id() <= 0) return;
+    if (!vs_lobby_suggest_active()) return;
     var q = vs_lobby_suggest_q();
     if (array_length(q) <= 0) return;
     var s = q[0];
@@ -651,7 +798,25 @@ function vs_lobby_suggest_draw()
     {
         sub = who + "  (not local)";
     }
-    var hint = vs_lobby_is_owner() ? "CONFIRM / ESCAPE" : "waiting for host";
+    var secs = 0;
+    if (instance_exists(o_st_handle) && variable_instance_exists(o_st_handle, "suggestTimer") && o_st_handle.suggestTimer > 0)
+    {
+        secs = ceil(o_st_handle.suggestTimer / game_get_speed(gamespeed_fps));
+    }
+    var hint = "";
+    if (vs_lobby_is_owner())
+    {
+        hint = "CONFIRM / ESCAPE";
+    }
+    else if (vs_lobby_suggest_is_mine(s))
+    {
+        hint = "ESCAPE to cancel";
+    }
+    else
+    {
+        hint = "waiting for host  ESCAPE to hide";
+    }
+    if (secs > 0) hint += "  " + string(secs) + "s";
     var cw = display_get_gui_width();
     var ch = display_get_gui_height();
     var pw = min(220, max(120, cw - 8));
@@ -865,8 +1030,8 @@ function vs_lobby_local_missing()
 {
     if (!vs_lobby_has_queued_song()) return false;
     var s = o_st_handle.songQueue[0];
-    var sid = variable_struct_exists(s, "songId") ? s.songId : -1;
-    return vs_online_song_from_id(sid) == undefined;
+    if (vs_lobby_bind_queue_song_id(s)) return false;
+    return true;
 }
 
 function vs_lobby_local_need_dl()
@@ -2641,6 +2806,7 @@ function vs_lobby_enter(_lobbyJson)
         vs_lobby_log("enter skip no data " + vs_lobby_flags());
         return;
     }
+    vs_lobby_suggest_clear();
     vs_lobby_log("enter " + vs_lobby_fmt(_lobbyJson) + " " + vs_lobby_flags());
     var newCode = variable_struct_exists(_lobbyJson, "code") ? string(_lobbyJson.code) : "";
     if (vs_lobby_has_code())
@@ -2720,6 +2886,7 @@ function vs_lobby_ws_retry()
 function vs_lobby_ws_on_drop(_why)
 {
     vs_lobby_log("ws drop " + string(_why) + " " + vs_lobby_flags());
+    vs_lobby_suggest_clear();
     vs_lobby_send_q_clear();
     vs_ws_reset();
     if (!vs_lobby_has_code()) return;
@@ -2732,6 +2899,7 @@ function vs_lobby_ws_on_drop(_why)
 function vs_lobby_reset()
 {
     vs_lobby_log("reset " + vs_lobby_flags());
+    vs_lobby_suggest_clear();
     vs_lobby_set_create_pending(false);
     if (variable_global_exists("vs_lobby_cb") && is_struct(global.vs_lobby_cb))
     {
@@ -2972,7 +3140,7 @@ function vs_lobby_handle_control(_j)
             break;
         case "member_left":
             var leftId = variable_struct_exists(_j, "playerId") ? string(_j.playerId) : "";
-            if (leftId != "") { vs_lobby_remove_member(leftId); }
+            if (leftId != "") { vs_lobby_suggest_on_member_gone(leftId); vs_lobby_remove_member(leftId); }
             if (variable_struct_exists(_j, "hostId") && instance_exists(o_st_handle))
             {
                 o_st_handle.vs_hostId = _j.hostId;
@@ -2988,6 +3156,7 @@ function vs_lobby_handle_control(_j)
             {
                 o_st_handle.vs_hostId = _j.hostId;
                 vs_lobby_refresh_host_flags(_j.hostId);
+                vs_lobby_suggest_clear();
                 vs_lobby_log("host_changed host=" + string(_j.hostId) + " owner=" + string(vs_lobby_is_owner()));
                 if (!vs_lobby_is_owner()) vs_lobby_ops_end();
                 vs_lobby_refresh_ui();

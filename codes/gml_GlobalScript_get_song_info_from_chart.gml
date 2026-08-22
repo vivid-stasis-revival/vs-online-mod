@@ -19,5 +19,7 @@ function get_chart_path_from_chart(chart)
 
     var found = vs_csm_search_load_dir(chart);
     if (found != "") return found;
+    var off = vs_csm_official_chart_dir(chart);
+    if (off != "") return off;
     return "Charts/" + chart + "/";
 }

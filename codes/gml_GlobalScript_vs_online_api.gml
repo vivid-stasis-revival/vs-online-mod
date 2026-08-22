@@ -167,6 +167,27 @@ function vs_online_chart_file(_chartId, _diff, _ext)
     }
     p = working_directory + "Charts/" + _chartId + "/" + fileDiff + _ext;
     if (file_exists(p)) return p;
+    if (rawDiff != "" && rawDiff != fileDiff)
+    {
+        p = working_directory + "Charts/" + _chartId + "/" + rawDiff + _ext;
+        if (file_exists(p)) return p;
+    }
+    var offDir = vs_csm_official_chart_dir(_chartId);
+    if (offDir != "")
+    {
+        p = vs_online_chart_file_in_dir(offDir, _diff, _ext);
+        if (p != "") return p;
+    }
+    if (_ext == ".vsb")
+    {
+        p = vs_csm_official_vsb_path(_chartId, fileDiff);
+        if (p != "") return p;
+        if (rawDiff != "" && rawDiff != fileDiff)
+        {
+            p = vs_csm_official_vsb_path(_chartId, rawDiff);
+            if (p != "") return p;
+        }
+    }
     return "";
 }
 

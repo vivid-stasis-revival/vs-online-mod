@@ -63,18 +63,32 @@ function vs_csm_official_vsb_path(_chartId, _diff)
     if (_chartId == undefined || _chartId == "" || _diff == undefined || _diff == "") return "";
     var rel = "Charts/" + string(_chartId) + "/" + string(_diff) + ".vsb";
     var cands = [];
+    // Official LoadSong uses working_directory + Charts/…; relative Charts/… also
+    // resolves against program_directory (install) when the save stub has no .vsb.
+    array_push(cands, rel);
     array_push(cands, working_directory + rel);
     var save = vs_csm_save_area();
-    if (save != "") array_push(cands, save + rel);
+    if (save != "" && !vs_csm_same_dir(save, working_directory))
+        array_push(cands, save + rel);
     var steam = vs_csm_steam_root();
     if (steam != "") array_push(cands, steam + rel);
     var i = 0;
     repeat (array_length(cands))
     {
-        if (file_exists(cands[i])) return cands[i];
+        if (cands[i] != "" && file_exists(cands[i])) return cands[i];
         i++;
     }
     return "";
+}
+
+function vs_csm_has_official_chart(_chartId)
+{
+    if (_chartId == undefined || _chartId == "") return false;
+    if (vs_csm_official_chart_dir(_chartId) != "") return true;
+    var relDir = "Charts/" + string(_chartId) + "/";
+    if (directory_exists(relDir)) return true;
+    var steam = vs_csm_steam_root();
+    return steam != "" && directory_exists(steam + relDir);
 }
 
 function vs_csm_official_chart_dir(_chartId)
@@ -93,9 +107,11 @@ function vs_csm_official_chart_dir(_chartId)
         }
         i++;
     }
+    var relDir = "Charts/" + string(_chartId) + "/";
+    if (directory_exists(relDir)) return relDir;
     var steam = vs_csm_steam_root();
-    if (steam != "" && directory_exists(steam + "Charts/" + string(_chartId) + "/"))
-        return steam + "Charts/" + string(_chartId) + "/";
+    if (steam != "" && directory_exists(steam + relDir))
+        return steam + relDir;
     return "";
 }
 

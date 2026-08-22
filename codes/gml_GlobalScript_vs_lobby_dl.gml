@@ -401,7 +401,7 @@ function vs_lobby_dl_begin(_cid)
         vs_lobby_dl_arm_check();
         return;
     }
-    if (vs_songstore_has_chart(st.chartId) && !vs_dlmgr_tracked(st.chartId))
+    if (vs_songstore_has_chart(st.chartId) && !vs_dlmgr_tracked(st.chartId) && !vs_csm_has_official_chart(st.chartId))
     {
         vs_lobby_dl_fail("local chart");
         return;
@@ -425,7 +425,7 @@ function vs_lobby_dl_begin(_cid)
 function vs_lobby_dl_try_local(_cid)
 {
     if (vs_lobby_dl_st().need_upd) return false;
-    if (!vs_songstore_has_chart(_cid)) return false;
+    if (!vs_songstore_has_chart(_cid) && !vs_csm_has_official_chart(_cid)) return false;
     vs_localcharts_refresh();
     vs_lobby_resolve_queued_songs();
     send_packet(SendPlayerInfoPacket);

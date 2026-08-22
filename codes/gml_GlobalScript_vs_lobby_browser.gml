@@ -95,15 +95,9 @@ function vs_lobby_browser_filter_name(_f)
 function vs_lobby_browser_row_joinable(_row)
 {
     if (_row == undefined || !is_struct(_row)) return false;
-    var started = variable_struct_exists(_row, "started") && _row.started;
-    var cur = 0;
-    if (variable_struct_exists(_row, "connectedMemberCount"))
-        cur = floor(_row.connectedMemberCount);
-    else if (variable_struct_exists(_row, "memberCount"))
-        cur = floor(_row.memberCount);
-    var mx = variable_struct_exists(_row, "maxMembers") ? floor(_row.maxMembers) : 0;
-    if (mx <= 0) mx = 8;
-    return (!started) && (cur < mx);
+    if (variable_struct_exists(_row, "joinable"))
+        return _row.joinable;
+    return false;
 }
 
 function vs_lobby_browser_row_member_count(_row)
@@ -666,7 +660,7 @@ function vs_lobby_browser_draw()
                 draw_set_halign(fa_left);
                 var host = variable_struct_exists(row, "hostName") ? string(row.hostName) : "?";
                 if (string_length(host) > 12) host = string_copy(host, 1, 11) + ".";
-                var cur = variable_struct_exists(row, "memberCount") ? string(floor(row.memberCount)) : "0";
+                var cur = vs_lobby_browser_row_member_count(row);
                 var mx = variable_struct_exists(row, "maxMembers") ? string(floor(row.maxMembers)) : "?";
                 var invite = "";
                 if (variable_struct_exists(row, "code")) invite = string(variable_struct_get(row, "code"));
