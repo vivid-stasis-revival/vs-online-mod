@@ -483,6 +483,7 @@ function vs_lobby_clamp_diff(_song, _d)
 
 function vs_lobby_fix_queue_diff()
 {
+    if (!vs_online_is_custom()) return;
     if (!instance_exists(o_st_handle)) return;
     if (!is_array(o_st_handle.songQueue) || array_length(o_st_handle.songQueue) <= 0) return;
     var s = o_st_handle.songQueue[0];
