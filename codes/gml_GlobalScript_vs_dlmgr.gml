@@ -460,7 +460,15 @@ function vs_dlmgr_dl_step()
         vs_dlmgr_dl_file_done(true, f.localPath);
         return;
     }
-    vs_songstore_download_file(f.url, f.localPath, vs_dlmgr_dl_file_done);
+    var dlUrl = variable_struct_exists(f, "url") ? string(f.url) : "";
+    if (dlUrl == "")
+    {
+        st.failed = true;
+        vs_songstore_set_err("no url for " + string(f.name));
+        vs_dlmgr_dl_finish(false);
+        return;
+    }
+    vs_songstore_download_file(dlUrl, f.localPath, vs_dlmgr_dl_file_done);
 }
 
 function vs_dlmgr_is_busy()

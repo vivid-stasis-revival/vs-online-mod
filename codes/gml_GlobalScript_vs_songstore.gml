@@ -478,6 +478,7 @@ function vs_songstore_diff(_files, _chartId)
     if (_files == undefined) return need;
     vs_songstore_clear_save_songs();
     var dir = vs_songstore_local_dir(_chartId);
+    var seen = {};
     for (var i = 0; i < array_length(_files); i++)
     {
         var f = _files[i];
@@ -487,6 +488,9 @@ function vs_songstore_diff(_files, _chartId)
             if (rel == "") show_debug_message("VS Songstore: skip unsafe file name -> " + string(f.name));
             continue;
         }
+        var relKey = string_lower(rel);
+        if (variable_struct_exists(seen, relKey)) continue;
+        variable_struct_set(seen, relKey, true);
         var localPath = dir + rel;
         var localHash = vs_songstore_hash_rel(localPath);
         var atTarget = vs_songstore_file_exists_rel(localPath);
