@@ -1773,6 +1773,7 @@ function vs_online_lb_bind_download()
     data = [];
     if (vs_online_is_custom())
     {
+        lbId = -1;
         vs_online_lb_download(id, false);
         canExtend = false;
         return;
@@ -1786,6 +1787,7 @@ function vs_online_lb_bind_download_friends()
     data = [];
     if (vs_online_is_custom())
     {
+        lbId = -1;
         vs_online_lb_download(id, 1);
         canExtend = false;
         return;
@@ -1799,6 +1801,7 @@ function vs_online_lb_bind_download_around()
     data = [];
     if (vs_online_is_custom())
     {
+        lbId = -1;
         vs_online_lb_download(id, 2);
         canExtend = false;
         return;
