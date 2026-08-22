@@ -326,6 +326,10 @@ function vs_songstore_safe_relpath(_name)
         n = string_replace_all(n, "//", "/");
     }
     if (string_copy(n, 1, 1) == "/") n = string_copy(n, 2, string_length(n));
+    while (string_length(n) > 0 && string_char_at(n, string_length(n)) == "/")
+    {
+        n = string_copy(n, 1, string_length(n) - 1);
+    }
     if (n == "" || n == "." || n == "..") return "";
     // Reject .. segments and empty components.
     var out = "";
@@ -337,14 +341,14 @@ function vs_songstore_safe_relpath(_name)
         var c = string_char_at(n, i);
         if (c == "/")
         {
-            if (seg == "" || seg == "." || seg == "..") return "";
+            if (seg == "" || seg == "." || seg == ".." || string_pos(":", seg) > 0) return "";
             out = (out == "") ? seg : (out + "/" + seg);
             seg = "";
         }
         else seg += c;
         i++;
     }
-    if (seg == "" || seg == "." || seg == "..") return "";
+    if (seg == "" || seg == "." || seg == ".." || string_pos(":", seg) > 0) return "";
     return (out == "") ? seg : (out + "/" + seg);
 }
 

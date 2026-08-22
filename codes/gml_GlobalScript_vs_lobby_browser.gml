@@ -96,10 +96,24 @@ function vs_lobby_browser_row_joinable(_row)
 {
     if (_row == undefined || !is_struct(_row)) return false;
     var started = variable_struct_exists(_row, "started") && _row.started;
-    var cur = variable_struct_exists(_row, "memberCount") ? floor(_row.memberCount) : 0;
+    var cur = 0;
+    if (variable_struct_exists(_row, "connectedMemberCount"))
+        cur = floor(_row.connectedMemberCount);
+    else if (variable_struct_exists(_row, "memberCount"))
+        cur = floor(_row.memberCount);
     var mx = variable_struct_exists(_row, "maxMembers") ? floor(_row.maxMembers) : 0;
     if (mx <= 0) mx = 8;
     return (!started) && (cur < mx);
+}
+
+function vs_lobby_browser_row_member_count(_row)
+{
+    if (_row == undefined || !is_struct(_row)) return "0";
+    if (variable_struct_exists(_row, "connectedMemberCount"))
+        return string(floor(_row.connectedMemberCount));
+    if (variable_struct_exists(_row, "memberCount"))
+        return string(floor(_row.memberCount));
+    return "0";
 }
 
 function vs_lobby_browser_filtered()

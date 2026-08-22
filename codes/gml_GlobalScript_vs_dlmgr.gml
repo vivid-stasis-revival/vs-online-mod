@@ -444,8 +444,16 @@ function vs_dlmgr_dl_step()
         var ok = vs_songstore_relocate_file(src, f.localPath);
         if (!ok)
         {
+            var url = variable_struct_exists(f, "url") ? string(f.url) : "";
+            if (url == "")
+            {
+                st.failed = true;
+                vs_songstore_set_err("relocate miss, no url for " + string(f.name));
+                vs_dlmgr_dl_finish(false);
+                return;
+            }
             vs_songstore_log("relocate miss, download " + string(f.name));
-            vs_songstore_download_file(f.url, f.localPath, vs_dlmgr_dl_file_done);
+            vs_songstore_download_file(url, f.localPath, vs_dlmgr_dl_file_done);
             return;
         }
         vs_songstore_log("relocate " + src + " -> " + string(f.localPath));
