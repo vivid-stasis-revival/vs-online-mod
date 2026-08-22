@@ -949,6 +949,12 @@ function vs_dlbr_step()
     {
         vs_media_stop_preview();
         query = keyboard_string;
+
+        if (keyboard_check(vk_control)){
+            if(keyboard_check_pressed(ord("V")))
+                keyboard_string+=clipboard_get_text();
+        }
+
         if (keyboard_check_pressed(vk_enter))
         {
             searching = false;
