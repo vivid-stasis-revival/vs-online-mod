@@ -166,8 +166,30 @@ function vs_songstore_ensure_dir(_dir)
     var d = string_replace_all(string(_dir), "\\", "/");
     if (d != "" && string_char_at(d, string_length(d)) == "/") d = string_copy(d, 1, string_length(d) - 1);
     if (d == "") return;
-    if (!directory_exists("Custom Songs")) directory_create("Custom Songs");
-    if (d != "Custom Songs" && !directory_exists(d)) directory_create(d);
+    var cur = "";
+    var seg = "";
+    var i = 1;
+    var n = string_length(d);
+    while (i <= n)
+    {
+        var c = string_char_at(d, i);
+        if (c == "/")
+        {
+            if (seg != "")
+            {
+                cur = (cur == "") ? seg : (cur + "/" + seg);
+                if (!directory_exists(cur)) directory_create(cur);
+                seg = "";
+            }
+        }
+        else seg += c;
+        i++;
+    }
+    if (seg != "")
+    {
+        cur = (cur == "") ? seg : (cur + "/" + seg);
+        if (!directory_exists(cur)) directory_create(cur);
+    }
 }
 
 function vs_songstore_remove_chart(_chartId)
@@ -284,7 +306,18 @@ function vs_songstore_install_from_zip(_zip, _chartId)
     return true;
 }
 
-function vs_songstore_flatten_name(_name)
+function vs_songstore_basename(_name)
+{
+    if (_name == undefined) return "";
+    var n = string_replace_all(string(_name), "\\", "/");
+    var cut = string_last_pos("/", n);
+    if (cut > 0) return string_copy(n, cut + 1, string_length(n));
+    return n;
+}
+
+// Sanitize a server files[].name entry. Keeps safe relative subpaths
+// (images/cover.png) so info.json jacket paths resolve after download.
+function vs_songstore_safe_relpath(_name)
 {
     if (_name == undefined) return "";
     var n = string_replace_all(string(_name), "\\", "/");
@@ -293,17 +326,42 @@ function vs_songstore_flatten_name(_name)
         n = string_replace_all(n, "//", "/");
     }
     if (string_copy(n, 1, 1) == "/") n = string_copy(n, 2, string_length(n));
-    if (n == "" || n == "." || n == ".." || string_pos("..", n) > 0)
-    {
-        return "";
-    }
-    // CSM reads info.json / *.vsc at the folder root. Nested names
-    // (Cui/info.json) would write Custom Songs/Cui/Cui/info.json, then
-    // has_chart misses it and cleanup_stub deletes the install.
-    var cut = string_last_pos("/", n);
-    if (cut > 0) n = string_copy(n, cut + 1, string_length(n));
     if (n == "" || n == "." || n == "..") return "";
-    return n;
+    // Reject .. segments and empty components.
+    var out = "";
+    var seg = "";
+    var i = 1;
+    var len = string_length(n);
+    while (i <= len)
+    {
+        var c = string_char_at(n, i);
+        if (c == "/")
+        {
+            if (seg == "" || seg == "." || seg == "..") return "";
+            out = (out == "") ? seg : (out + "/" + seg);
+            seg = "";
+        }
+        else seg += c;
+        i++;
+    }
+    if (seg == "" || seg == "." || seg == "..") return "";
+    return (out == "") ? seg : (out + "/" + seg);
+}
+
+function vs_songstore_file_exists_rel(_relPath)
+{
+    if (_relPath == undefined || _relPath == "") return false;
+    if (file_exists(_relPath)) return true;
+    return file_exists(vs_songstore_install_path(_relPath));
+}
+
+function vs_songstore_hash_rel(_relPath)
+{
+    if (_relPath == undefined || _relPath == "") return "";
+    var p = vs_songstore_install_path(_relPath);
+    if (!file_exists(p)) p = _relPath;
+    if (!file_exists(p)) return "";
+    return sha1_file(p);
 }
 
 function vs_songstore_ends_with(_s, _suf)
@@ -322,10 +380,17 @@ function vs_songstore_ends_with(_s, _suf)
 function vs_songstore_skip_file(_name)
 {
     var n = string_lower(string(_name));
-    if (n == "vs-chart.json" || n == ".vs_download.json") return true;
+    var base = string_lower(vs_songstore_basename(_name));
+    if (base == "vs-chart.json" || base == ".vs_download.json") return true;
     if (vs_songstore_ends_with(n, ".stats_custom")) return true;
     if (vs_songstore_ends_with(n, ".stats")) return true;
     return false;
+}
+
+function vs_songstore_is_root_info(_rel)
+{
+    var n = string_lower(string(_rel));
+    return n == "info.json" || n == "shatterinfo.json";
 }
 
 // Detail GET is one-at-a-time with a FIFO of callbacks. A single global
@@ -412,25 +477,60 @@ function vs_songstore_diff(_files, _chartId)
     for (var i = 0; i < array_length(_files); i++)
     {
         var f = _files[i];
-        var flat = vs_songstore_flatten_name(f.name);
-        if (flat == "" || vs_songstore_skip_file(flat))
+        var rel = vs_songstore_safe_relpath(f.name);
+        if (rel == "" || vs_songstore_skip_file(rel))
         {
-            if (flat == "") show_debug_message("VS Songstore: skip unsafe file name -> " + string(f.name));
+            if (rel == "") show_debug_message("VS Songstore: skip unsafe file name -> " + string(f.name));
             continue;
         }
-        var localPath = dir + flat;
-        var readPath = vs_songstore_install_path(localPath);
-        if (!file_exists(readPath)) readPath = localPath;
-        var localHash = file_exists(readPath) ? sha1_file(readPath) : "";
-        if (string_lower(localHash) != string_lower(f.sha1))
+        var localPath = dir + rel;
+        var localHash = vs_songstore_hash_rel(localPath);
+        var atTarget = vs_songstore_file_exists_rel(localPath);
+        // Pre-nested installs stored images/cover.png as cover.png at chart root.
+        var legacyPath = "";
+        if (!atTarget && rel != vs_songstore_basename(rel))
+        {
+            legacyPath = dir + vs_songstore_basename(rel);
+            if (localHash == "") localHash = vs_songstore_hash_rel(legacyPath);
+        }
+        var serverHash = string_lower(string(f.sha1));
+        var matched = (localHash != "" && serverHash != "" && string_lower(localHash) == serverHash);
+        if (!matched)
         {
             var item = { name: f.name, url: f.url, localPath: localPath };
-            if (string_lower(flat) == "info.json" || string_lower(flat) == "shatterinfo.json") info = item;
+            if (vs_songstore_is_root_info(rel)) info = item;
             else array_push(need, item);
+        }
+        else if (!atTarget && legacyPath != "")
+        {
+            var mv = { name: f.name, url: f.url, localPath: localPath, relocateOnly: true, relocateFrom: legacyPath };
+            if (vs_songstore_is_root_info(rel)) info = mv;
+            else array_push(need, mv);
         }
     }
     if (info != undefined) array_push(need, info);
     return need;
+}
+
+function vs_songstore_relocate_file(_from, _to)
+{
+    if (_from == undefined || _to == undefined || _from == "" || _to == "") return false;
+    var src = vs_songstore_install_path(_from);
+    if (!file_exists(src)) src = _from;
+    if (!file_exists(src)) return false;
+    vs_songstore_ensure_dir(vs_songstore_parent(_to));
+    var put = vs_songstore_install_path(_to);
+    if (file_exists(_to)) file_delete(_to);
+    if (file_exists(put)) file_delete(put);
+    file_copy(src, _to);
+    if (!file_exists(_to) && !file_exists(put)) file_copy(src, put);
+    var ok = file_exists(_to) || file_exists(put);
+    if (!ok) return false;
+    // Move off the legacy flat path so a/x.txt and b/x.txt cannot both
+    // claim the same root basename during one update batch.
+    if (file_exists(_from)) file_delete(_from);
+    if (file_exists(src) && src != _to && src != put) file_delete(src);
+    return true;
 }
 
 function vs_songstore_abs_url(_url)

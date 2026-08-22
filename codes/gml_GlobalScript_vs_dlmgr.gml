@@ -434,9 +434,24 @@ function vs_dlmgr_dl_step()
         return;
     }
     var f = st.need[st.idx];
-    st.fileName = vs_songstore_flatten_name(f.name);
+    st.fileName = vs_songstore_safe_relpath(f.name);
+    if (st.fileName == "") st.fileName = string(f.name);
     st.fileGot = 0;
     st.fileTotal = 0;
+    if (variable_struct_exists(f, "relocateOnly") && f.relocateOnly)
+    {
+        var src = variable_struct_exists(f, "relocateFrom") ? string(f.relocateFrom) : "";
+        var ok = vs_songstore_relocate_file(src, f.localPath);
+        if (!ok)
+        {
+            vs_songstore_log("relocate miss, download " + string(f.name));
+            vs_songstore_download_file(f.url, f.localPath, vs_dlmgr_dl_file_done);
+            return;
+        }
+        vs_songstore_log("relocate " + src + " -> " + string(f.localPath));
+        vs_dlmgr_dl_file_done(true, f.localPath);
+        return;
+    }
     vs_songstore_download_file(f.url, f.localPath, vs_dlmgr_dl_file_done);
 }
 
